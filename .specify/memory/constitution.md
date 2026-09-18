@@ -1,50 +1,129 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# CesiumJS WebGPU Renderer Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. 上游兼容优先（Upstream Compatibility First，NON-NEGOTIABLE）
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+- 绝不修改（patch）或 fork CesiumJS 内部实现；禁止 vendored 源码拷贝、禁止 `patch-package` 式补丁、
+  禁止依赖非公开（私有/下划线前缀）内部 API。
+- 一切扩展必须通过 CesiumJS 公开 API、官方扩展点与外部模块适配层完成。
+- 耦合面必须收敛到 adapter 层：任何依赖 CesiumJS 版本细节的逻辑集中在适配层，
+  上层业务与渲染抽象代码不得直接 import 上游内部模块。
+- CesiumJS 基线版本为 1.145.0（当前稳定版），以 peer dependency 引入。
+- 上游版本升级必须在不修改 adapter 层以外代码的前提下通过既有全量验证；
+  若升级导致必须改写 adapter 以外代码，该升级视为破坏性变更，须先修订计划并说明迁移方案。
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Rationale**：外部模块形态意味着上游发布节奏不由本项目控制；只有把耦合面限制在公开 API 与
+adapter 层，版本升级才是例行操作而非重写。
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. 渐进式接管（Progressive Takeover）
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+- WebGL2 为兜底后端，任何时刻必须可作为可用默认后端；WebGPU 不得成为唯一可运行路径。
+- WebGPU 后端必须先经能力探测（`navigator.gpu` 存在性、adapter/device 请求结果、
+  必需特性与限制项如纹理格式与最大纹理尺寸）方可启用；探测失败必须无异常回退 WebGL2，
+  且回退路径本身必须被测试覆盖。
+- 上层 API 唯一：同一上层接口在两种后端下渲染结果与行为必须保持一致（视觉等价 + 语义等价）；
+  无法消除的差异必须在契约中显式声明并附测试断言。
+- 后端切换必须能在配置层或运行时完成，调用方代码不得出现后端分支，
+  不得直接引用具体后端类型。
+- 渲染后端抽象（Backend Abstraction）：上层只依赖抽象接口（资源创建、管线与管线缓存、
+  命令编码与提交、帧生命周期）；后端实现不得被上层反向 import。
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Rationale**：CesiumJS 生态必须继续兼容仅有 WebGL2 的设备与浏览器；渐进接管把新后端的风险
+限制在可随时回退的范围内。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. 可验证渲染（Verifiable Rendering）
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- 每项渲染特性必须附带自动化验证：像素/截图对比（黄金图像 + 显式容差阈值），
+  或数值化帧统计（覆盖率、颜色/深度直方图、几何与 draw call 统计）。
+- 仅凭肉眼确认的特性不得标记完成，不得合入主干。
+- 视觉回归用例必须固定相机、时间、随机种子、视口尺寸与设备像素比；
+  无法消除的非确定性来源必须量化并记录。
+- 容差阈值必须写在测试代码中且可追溯来源；禁止"任意像素差异均通过"式的宽松判据。
+- 视觉与数值断言必须覆盖两种后端（WebGL2 兜底路径与 WebGPU 路径）。
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**：GPU 渲染的失败模式通常是静默的（黑屏、丢三角形、颜色空间错位、
+深度精度退化），只有自动化像素或数值断言能在 CI 中稳定捕获。
+
+### IV. 性能以数据驱动（Data-Driven Performance）
+
+- 任何优化必须由基准数据支撑：先提交基线，再提交优化；无基线对比的优化不予合入。
+- 基准必须记录帧时间（frame time，至少 p50 与 p95）、GPU 显存占用与 draw call 数；
+  指标口径与采集方法必须版本化并随仓库维护。
+- 基准必须可复现：固定场景与数据集、固定 warm-up 与采样次数，硬件环境必须固定或明确标注。
+- 性能回归门槛必须量化（例如帧时间或显存劣化超过既定阈值即判定失败）；
+  阈值变更必须记录理由与影响。
+- 优化提交必须附"基线 vs 优化后"的实测数据对比。
+
+**Rationale**：WebGPU 相对 WebGL2 的收益必须可证明；没有数字支撑的性能主张会掩盖真实的
+架构成本与回归。
+
+### V. CI 为唯一事实来源（CI as the Single Source of Truth）
+
+- 每次提交（含 PR）必须在 CI 中完成构建、测试与基准；三者任一未通过不得合入主干。
+- 主干必须始终可构建、可运行、可回退；禁止合入使主干破损的提交。
+- CI 产物（构建日志、测试报告、基准数据、视觉差异图）是判定"完成"的唯一权威依据；
+  本地通过不等于通过。
+- 必须维护与真实浏览器和 GPU 环境匹配的 CI 运行环境；若某类验证在 CI 中只能降级运行，
+  该降级策略与其盲区必须显式记录，并规定本地复现步骤。
+- 开源交付所需的依赖与许可证检查纳入 CI。
+
+**Rationale**：分布式协作与开源交付场景下，CI 是唯一人人可见、可复现、可审计的判定依据。
+
+## 附加技术约束（Additional Constraints）
+
+技术栈与交付形态：
+
+- 语言：TypeScript（`strict` 模式开启）；构建：Rollup；产物：以 ESM 为主并附带类型声明。
+- 运行时：Node.js >= 22（开发、构建与 CI 环境要求）。
+- 集成形态：外部模块（npm 包 + 可选插件注册），不 fork、不 vendor、不修改上游源码。
+- 交付方式：开源项目，须包含 LICENSE、CONTRIBUTING 与可复现构建说明；
+  整体采用持续集成模式（无长期分支，短生命周期 PR 合入主干）。
+- 首个里程碑（MVP）判据：跑通地形渲染 —— 在同一上层 API 下可加载并渲染地形瓦片，
+  WebGL2 与 WebGPU 两个后端均可运行，且通过可验证渲染断言（原则 III）与基准记录（原则 IV）。
+
+## 测试与验证策略（Testing & Quality Gates）
+
+- 分层测试：单元测试（纯 CPU 逻辑：抽象层契约、能力探测决策、参数校验）；
+  契约测试（同一套用例参数化跑双后端）；视觉回归测试（像素/截图对比）；基准测试（性能指标）。
+- 双后端契约测试必须参数化执行：同一测试体在 WebGL2 与 WebGPU 上运行，
+  行为差异必须在测试中显式断言，禁止以条件跳过（skip）代替断言。
+- 视觉回归必须输出差异图（diff artifact）作为 CI 产物，以支持失败定位。
+- 基准数据必须作为 CI 产物存档，形成历史序列以支持趋势判断。
+- 质量门禁顺序：构建通过 → 单元与契约测试通过 → 视觉回归通过 → 基准不劣化 →
+  依赖与许可证检查通过；任一失败阻断合入。
+- 跳过测试必须附理由并在 PR 中显式说明；禁止长期存在的无条件跳过。
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+章程优先与合规校验：
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+- 本 constitution 优先于其他一切实践与约定；当章程与既有实践、模板或习惯冲突时，以章程为准。
+- 所有 PR 与评审必须校验合规性：至少给出对应原则（I–V）的合规性说明，
+  并列出验证证据路径（测试、基准数据、视觉差异产物）。
+- 违反原则的例外与额外复杂度必须在 plan 或 PR 中显式论证，
+  并记录被否决的替代方案及理由。
+
+修订流程（Amendment Procedure）：
+
+- 修订提案必须以书面形式给出：变更内容、理由（Why）、影响范围（需调整的既有产物与代码）、
+  迁移方案（Migration Plan）与生效日期。
+- 修订须经维护者评审通过后方可合入。
+- 原则 I 属 `NON-NEGOTIABLE`；其删除、放宽或重定义属破坏性治理变更，
+  必须单独说明并给出完整迁移路径。
+- 修订完成后必须更新 `Last Amended` 日期，并按语义化版本递增章程版本号。
+
+版本策略（Versioning Policy）：
+
+- 章程版本遵循语义化版本 MAJOR.MINOR.PATCH：
+  - MAJOR：原则的删除、重定义，或向后不兼容的治理变更。
+  - MINOR：新增原则或章节，或对既有条款的实质性扩展。
+  - PATCH：措辞澄清、错别字修正等非语义性调整。
+- 版本变更记录于 `Last Amended` 与提交信息中（例如 `docs: amend constitution to vX.Y.Z`）。
+
+运行时开发指引：
+
+- 章程负责治理规则；具体设计与技术决策由 `specs/NNN-*/plan.md` 承载。
+- 运行时的开发约定与 Spec Kit 工作流见 `AGENTS.md`；章程修订属于需上报用户的变更类型。
+
+**Version**: 1.0.0 | **Ratified**: 2026-09-18 | **Last Amended**: 2026-09-18
