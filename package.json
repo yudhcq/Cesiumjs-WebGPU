@@ -1,0 +1,37 @@
+{
+  "name": "cesium-webgpu-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CesiumJS WebGPU renderer backend replacement (controlled fork / patch layer) - monorepo root",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "node tools/scripts/run.mjs build",
+    "typecheck": "node tools/scripts/run.mjs typecheck",
+    "lint": "node tools/scripts/run.mjs lint",
+    "test:unit": "node tools/scripts/run.mjs test:unit",
+    "test:contract": "node tools/scripts/run.mjs test:contract",
+    "test:visual": "node tools/scripts/run.mjs test:visual",
+    "bench": "node tools/scripts/run.mjs bench",
+    "demo": "node tools/scripts/run.mjs demo",
+    "ci:local": "node tools/scripts/run.mjs ci:local"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "16.0.3",
+    "@rollup/plugin-typescript": "12.3.0",
+    "@webgpu/types": "0.1.72",
+    "playwright": "1.63.0",
+    "rollup": "4.63.3",
+    "rollup-plugin-dts": "6.5.1",
+    "tslib": "2.8.1",
+    "typescript": "5.9.3",
+    "yaml": "2.9.1"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "packageName": "@cesium/engine",
+  "version": "26.3.0",
+  "cesiumVersion": "1.145.0",
+  "integrity": "sha512-jtgOewm/IZoypmqpbeTlYhMOKhQg+XPwUXoYat84vhIU8l8SfVSEat4Lc/Y4Fb7ypi3z1YmElKjVYvoI5CH6Pw==",
+  "license": "Apache-2.0",
+  "recordedAt": "2026-09-19T01:34:07+08:00",
+  "notes": "Upstream baseline for the WebGPU renderer-backend replacement. The package is installed unmodified from the public registry (pinned exact version + integrity hash above, recorded in package-lock.json); no file under node_modules/@cesium/engine is ever edited by this repository. Only Source/Renderer/** modules listed in packages/cesium-webgpu/backend-webgpu/manifest.json are replaced at build time by the alias plugin (tools/rollup-plugin-engine-patch.mjs), so the logic layer (Scene / Globe / QuadtreePrimitive scheduling / Camera / layers / DrawCommand) stays byte-identical by dependency integrity. A version change MUST trigger tools/upgrade-drill.mjs and a re-evaluation of the MVP estimate (FR-028/FR-032).",
+  "toolchain": {
+    "glslang": {
+      "version": "16.6.0",
+      "kind": "khronos-prebuilt-linux-x86_64",
+      "notes": "Official prebuilt release archive glslang-16.6.0-linux-x86_64-release.zip; one-shot conversion drafts and CI shader validation only, never a runtime dependency."
+    },
+    "naga-cli": {
+      "version": "30.0.1",
+      "kind": "cargo-install",
+      "installCommand": "cargo install naga-cli --version 30.0.1 --locked",
+      "notes": "No prebuilt binary exists (wgpu release assets empty; naga-cli / @webgpu/naga are not on npm). Version MUST be pinned explicitly with --version and dependents with --locked; CI caches ~/.cargo."
+    },
+    "@webgpu/glslang": {
+      "version": "0.0.15",
+      "entry": "dist/web-devel-onefile",
+      "notes": "If used at all, MUST import dist/web-devel-onefile explicitly: the default Node entry was measured hanging for >120 s."
+    }
+  }
+}

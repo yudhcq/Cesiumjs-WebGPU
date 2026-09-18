@@ -8,6 +8,12 @@ build/
 out/
 *.tsbuildinfo
 
+# Verification / CI artifacts (audit JSON, benchmark history, diff images, test reports)
+artifacts/
+
+# Gate experiment outputs (machine-checkable gate verdicts; the gate sources live in experiments/gates/**)
+experiments/gates/out/
+
 # Env & secrets
 .env
 .env.*

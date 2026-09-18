@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>地形渲染后端替换 — 演示页</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0e13;
+        color: #e6e9ef;
+      }
+      #app {
+        display: grid;
+        grid-template-columns: 1fr 20rem;
+        height: 100%;
+      }
+      #scene-container {
+        position: relative;
+        min-width: 0;
+        background: #05070a;
+      }
+      #scene-container canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #hud {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 0.9rem;
+        border-left: 1px solid #1d2430;
+        overflow: auto;
+      }
+      section {
+        border: 1px solid #1d2430;
+        border-radius: 0.5rem;
+        padding: 0.6rem 0.7rem;
+        background: #10151d;
+      }
+      h2 {
+        margin: 0 0 0.4rem;
+        font-size: 0.78rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #8ea0b8;
+      }
+      dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 7.5rem 1fr;
+        gap: 0.15rem 0.5rem;
+        font-size: 0.82rem;
+      }
+      dt {
+        color: #8ea0b8;
+      }
+      dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+      }
+      button {
+        font: inherit;
+        padding: 0.35rem 0.6rem;
+        border-radius: 0.4rem;
+        border: 1px solid #2b3444;
+        background: #182030;
+        color: inherit;
+        cursor: pointer;
+      }
+      button[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      progress {
+        width: 100%;
+        height: 0.6rem;
+      }
+      .muted {
+        color: #8ea0b8;
+        font-size: 0.78rem;
+        margin: 0.35rem 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app">
+      <!-- 场景容器：演示页只把容器交给包入口，画布与上下文由包内部创建 -->
+      <div id="scene-container" data-demo-container></div>
+
+      <aside id="hud">
+        <section data-demo-status>
+          <h2>渲染路径状态</h2>
+          <dl>
+            <dt>状态</dt>
+            <dd data-field="state">Phase 1 骨架（尚未接入渲染实现）</dd>
+            <dt>当前路径</dt>
+            <dd data-field="active">—</dd>
+            <dt>原因类别</dt>
+            <dd data-field="reason">—</dd>
+            <dt>是否降级</dt>
+            <dd data-field="degraded">—</dd>
+            <dt>盲区备注</dt>
+            <dd data-field="notes">—</dd>
+          </dl>
+          <p class="muted" data-field="message"></p>
+        </section>
+
+        <section data-demo-progress>
+          <h2>地形瓦片加载进度</h2>
+          <progress data-field="tiles-progress" value="0" max="1"></progress>
+          <dl>
+            <dt>已加载 / 待加载</dt>
+            <dd data-field="tiles">— / —</dd>
+            <dt>数据集</dt>
+            <dd data-field="dataset">—</dd>
+          </dl>
+        </section>
+
+        <section data-demo-attribution>
+          <h2>数据源署名</h2>
+          <p class="muted" data-field="attribution">
+            地形数据署名随固定数据集一同交付（见 packages/cesium-webgpu/fixtures/&lt;datasetId&gt;/manifest.json）。
+          </p>
+        </section>
+
+        <section data-demo-controls>
+          <h2>控制</h2>
+          <button type="button" data-action="simulate-device-loss">模拟设备丢失</button>
+          <p class="muted">
+            占位入口：设备丢失的「停止提交 → 销毁 → 重新探测 → 整体重建」由设备丢失恢复阶段接入。
+          </p>
+        </section>
+      </aside>
+    </main>
+    <script type="module" src="./dist/main.js"></script>
+  </body>
+</html>

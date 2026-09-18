@@ -1,0 +1,15 @@
+{
+  "name": "cesium-webgpu-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo page for the WebGPU renderer backend replacement (imports the package entry only)",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "node ../../tools/scripts/run.mjs build",
+    "typecheck": "node ../../tools/scripts/run.mjs typecheck"
+  },
+  "dependencies": {
+    "cesium-webgpu": "0.1.0"
+  }
+}

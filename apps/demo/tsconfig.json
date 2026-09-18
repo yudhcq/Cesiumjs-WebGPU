@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "cesium-webgpu": ["../../packages/cesium-webgpu/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

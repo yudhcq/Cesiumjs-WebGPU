@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist/types",
+    "types": ["@webgpu/types"]
+  },
+  "include": ["src/**/*.ts", "types/**/*.d.ts", "backend-webgpu/**/*.ts"]
+}
