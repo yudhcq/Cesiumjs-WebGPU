@@ -1,0 +1,21 @@
+{
+  "//": "Gate-local tsconfig. Deliberately standalone: the gate must compile before Phase 2 (T009) creates tsconfig.base.json, and without node_modules (Cesium is consumed as a published artifact).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noImplicitOverride": false,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "useDefineForClassFields": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "sourceMap": false,
+    "removeComments": false,
+    "outDir": "./js",
+    "rootDir": "."
+  },
+  "include": ["g1-layering.ts", "g1-cesium.d.ts", "g1-webgpu.d.ts"]
+}

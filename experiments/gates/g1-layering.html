@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>G-1 gate — dual-canvas layering + transparent upstream terrain + custom TerrainProvider</title>
+    <!-- Published cesium@1.145.0 artifact, mounted at /cesium/ by serve-g1.mjs.
+         No repository src/** code and no node_modules are involved (tasks.md T001). -->
+    <link rel="stylesheet" href="/cesium/Widgets/widgets.css" />
+    <script>
+      // Must be set before the Cesium module graph evaluates (workers + assets live next to it).
+      window.CESIUM_BASE_URL = "/cesium/";
+    </script>
+    <script type="importmap">
+      {
+        "imports": {
+          "cesium": "/cesium/index.js"
+        }
+      }
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #05070a;
+        color: #c9d4e0;
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      #g1-page {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+        align-items: flex-start;
+      }
+
+      /* T001: relative container; both canvases absolutely positioned, stacked. */
+      #g1-container {
+        position: relative;
+        width: 900px;
+        height: 640px;
+        overflow: hidden;
+        /* Distinctive page colour: if the upstream canvas ever becomes transparent where the
+           terrain is, this is what would show through — which is exactly the failure mode
+           the gate must be able to detect. */
+        background: #12ff00;
+      }
+
+      #g1-container canvas {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      /* Canvas A — upstream CesiumJS WebGL2 canvas. */
+      #g1-container canvas.g1-upstream {
+        z-index: 0;
+      }
+
+      /* Canvas B — this library's WebGPU canvas. Above, but never eats pointer events. */
+      #g1-container canvas.g1-own {
+        z-index: 1;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="g1-page">
+      <div id="g1-container"></div>
+      <p>
+        G-1 gate (tasks.md T001/T002). Console prints the two canvases' <code>getContext</code> types.
+        Structured evidence is written by <code>collect-g1.mjs</code>.
+      </p>
+    </div>
+    <script type="module" src="./js/g1-layering.js"></script>
+  </body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "file": "g1-level0-1-0.f32",
+  "format": "float32-le",
+  "grid": 65,
+  "width": 65,
+  "height": 65,
+  "tile": {
+    "level": 0,
+    "x": 1,
+    "y": 0,
+    "tilingScheme": "GeographicTilingScheme"
+  },
+  "structure": {
+    "heightScale": 1,
+    "heightOffset": 0,
+    "elementsPerHeight": 1,
+    "stride": 1,
+    "elementMultiplier": 256,
+    "isBigEndian": false,
+    "lowestEncodedHeight": 0,
+    "highestEncodedHeight": 8800
+  },
+  "bytes": 16900,
+  "fnv1a32": 1741053710,
+  "fnv1a32Hex": "0x67c65f0e",
+  "source": "synthetic-deterministic (make-fixture.mjs); no external data source, no network",
+  "provenance": "G-1 gate fixture, see docs/gate-g1-conclusion.md"
+}
