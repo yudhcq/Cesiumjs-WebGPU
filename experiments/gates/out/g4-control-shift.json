@@ -1,0 +1,85 @@
+{
+  "gate": "g4-control-shift",
+  "task": "T019 (negative control)",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T20:39:32.939Z",
+  "notes": "G-4 阴性对照：把 CPU 布局表中 \"czm_currentFrustum\" 的标量偏移**故意整体后移 4 字节**（其余不变），再跑同一套真机断言。verdict=pass 的含义是：**判定器确实能识别偏移错误**（真机回读与 CPU 期望不一致）。若此处 mismatch=0，则 G-4 的正向结论不可信。对照运行不写 g4-gpu.json，也不改变门禁结论。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": [],
+      "note": "zero launch flags; hardware WebGPU adapter"
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+    },
+    "preferredFormat": "bgra8unorm",
+    "deviceLimits": {
+      "maxUniformBufferBindingSize": 65536,
+      "maxBindingsPerBindGroup": 1000,
+      "maxColorAttachments": 8
+    }
+  },
+  "checks": [
+    {
+      "id": "control-probe-ran",
+      "ok": true,
+      "detail": "the control run compiled the same generated WGSL (errors=0) and produced a readback"
+    },
+    {
+      "id": "control-detects-shifted-byte-offset",
+      "ok": true,
+      "detail": "with \"czm_currentFrustum\" written 4 bytes later than the table claims, the device readback MUST disagree with the CPU expectation: mismatching component(s)=2 (first: [{\"slot\":0,\"member\":\"czm_currentFrustum\",\"element\":0,\"column\":0,\"component\":0,\"expected\":1,\"actual\":0},{\"slot\":0,\"member\":\"czm_currentFrustum\",\"element\":0,\"column\":0,\"component\":1,\"expected\":38,\"actual\":1}])"
+    },
+    {
+      "id": "control-localises-the-error-to-the-shifted-member",
+      "ok": true,
+      "detail": "the mismatching slots MUST be exactly the shifted member's slots: mismatching=[0] vs shifted member \"czm_currentFrustum\" slots=[0] (the readback comparison localises a wrong byteOffset to the affected field instead of failing globally)"
+    },
+    {
+      "id": "control-render-is-deterministic",
+      "ok": true,
+      "detail": "re-writing the same (shifted) plan changed 0 slot(s) — the comparison itself stays deterministic"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/out/g4-control-shift-input.json",
+      "what": "the corrupted byte-write plan (member 0 shifted by +4 bytes) together with the uncorrupted expectation"
+    },
+    {
+      "path": "experiments/gates/out/g4-control-shift.json",
+      "what": "this artefact"
+    },
+    {
+      "path": "experiments/gates/out/g4-gpu.json",
+      "what": "the gate's real-device assertion this control underpins"
+    }
+  ],
+  "measurements": {
+    "shiftedMember": "czm_currentFrustum",
+    "shiftedSlots": [
+      0
+    ],
+    "mismatchingSlots": [
+      0
+    ],
+    "mismatchCount": 2,
+    "control": {
+      "changedSlots": [],
+      "note": "same plan written twice: the comparison MUST report zero changed slots"
+    },
+    "compilation": {
+      "messages": [],
+      "errors": 0,
+      "warnings": 0
+    }
+  }
+}

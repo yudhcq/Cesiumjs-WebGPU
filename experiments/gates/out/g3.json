@@ -1,0 +1,1148 @@
+{
+  "gate": "g3",
+  "task": "T020/T021",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T19:40:18.982Z",
+  "notes": "G-3 通过：上游原版 WebGL2 globe/地形路径的单帧平台调用序列被完整录制（仅包装 WebGL2RenderingContext.prototype，未改上游、未读 @private），并按派生式通道身份 (colorTargets, depthStencilTarget, sampleCount, viewport, scissorRect) 分区：9 个通道、24 次目标切换（含 3 次多采样解析 blit）、9 次绘制 / 8 次清除；全部目标切换都恰好落在通道边界上，通道边界与 clear/draw 序列一一对应，帧末通道落在呈现目标（默认 framebuffer）上，endFrame 只需闭合一个通道。身份只使用平台可见状态（Pass/PassState/程序/uniform/RenderState 的变化不构成边界），与 research §5.2 一致。边界：本门禁只录制**上游原始** WebGL2 路径（不涉及我们的后端）；真机像素/跨后端一致性属 G-6。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "engine": {
+      "packageName": "@cesium/engine",
+      "version": "26.3.0",
+      "lock": "upstream/engine-26.3.0.lock.json"
+    },
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": [],
+      "note": "zero launch flags; WebGL2 via the upstream Context"
+    },
+    "webgl": {
+      "contextConstructor": "Context",
+      "webgl2": true,
+      "drawingBufferWidth": 300,
+      "drawingBufferHeight": 150,
+      "msaaSupported": true,
+      "msaaSamples": 4,
+      "logarithmicDepthBuffer": true,
+      "depthTexture": true,
+      "stencilBuffer": true,
+      "maximumSamples": 8,
+      "maximumDrawBuffers": 8,
+      "maximumColorAttachments": 8,
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "globeTilesLoaded": true,
+      "terrainProvider": "EllipsoidTerrainProvider",
+      "tilesLoadedAfterFrame": true
+    },
+    "adapter": null,
+    "preferredFormat": null
+  },
+  "checks": [
+    {
+      "id": "upstream-baseline-version",
+      "ok": true,
+      "detail": "installed @cesium/engine 26.3.0 (upstream/engine-26.3.0.lock.json)",
+      "phase": "build"
+    },
+    {
+      "id": "no-replacement-applied",
+      "ok": true,
+      "detail": "gate-local modules in the graph=[experiments/gates/g3-pass-trace/entry.js, experiments/gates/g3-pass-trace/frame-driver.js, experiments/gates/g3-pass-trace/platform-trace.js] (none may be a Renderer replacement); repo modules=[] (MUST be empty) — T020 records the upstream original, so the alias plugin is not part of this build at all",
+      "phase": "build"
+    },
+    {
+      "id": "upstream-context-and-scene-in-graph",
+      "ok": true,
+      "detail": "upstream Renderer/Context.js in graph=true (47 upstream Renderer module(s)), upstream Scene/Scene.js in graph=true; bundle text contains the upstream Context snippet=true and the upstream Scene snippet=true",
+      "phase": "build"
+    },
+    {
+      "id": "cjs-interop-plugin-is-the-real-one",
+      "ok": true,
+      "detail": "@rollup/plugin-commonjs 29.0.3 (pinned devDependency, finding F-1) — same dependency set as the product build",
+      "phase": "build"
+    },
+    {
+      "id": "protobufjs-named-export-resolved",
+      "ok": true,
+      "detail": "MISSING_EXPORT warnings: 0 (G-1's default-only wrapper produced one for the protobufjs Reader member; the real plugin synthesises named exports)",
+      "phase": "build"
+    },
+    {
+      "id": "no-unresolved-imports",
+      "ok": true,
+      "detail": "21 rollup warning(s), codes=[\"CIRCULAR_DEPENDENCY\"]",
+      "phase": "build"
+    },
+    {
+      "id": "upstream-disk-unchanged",
+      "ok": true,
+      "detail": "aggregate sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033 → sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033 over 1891 file(s); changed=[]",
+      "phase": "build"
+    },
+    {
+      "id": "frame-recorded",
+      "ok": true,
+      "detail": "83 platform operation(s): 9 draw, 8 clear, 3 blit, 21 bindFramebuffer, 8 viewport, 2290 triangle(s), 0 program(s)",
+      "phase": "runtime"
+    },
+    {
+      "id": "upstream-webgl2-path-confirmed",
+      "ok": true,
+      "detail": "context constructor=\"Context\", webgl2=true, bundle carries the upstream Context=true, GL version=WebGL 2.0 (OpenGL ES 3.0 Chromium), drawing buffer=300x150, MSAA supported=true (samples=4, max=8), depthTexture=true",
+      "phase": "runtime"
+    },
+    {
+      "id": "tracer-uses-platform-apis-only",
+      "ok": true,
+      "detail": "upstream @private-style member access in the recording code (excluding the GL context handle): 0",
+      "phase": "runtime"
+    },
+    {
+      "id": "scene-path-is-the-terrain-path",
+      "ok": true,
+      "detail": "terrain provider=EllipsoidTerrainProvider, globe tiles loaded before the recorded frame=true, triangles drawn=2290 (Globe/QuadtreePrimitive/GlobeSurfaceTile path)",
+      "phase": "runtime"
+    },
+    {
+      "id": "no-uncaught-page-errors",
+      "ok": true,
+      "detail": "1 uncaught page error(s): [\"RequestErrorEvent\"] — the only tolerated shape is Cesium's own `RequestErrorEvent` raised for a MISSING PACKAGE ASSET, and it is tolerated only when the corresponding HTTP 404 is on the allow-list (3 tolerated 404(s) in this run)",
+      "phase": "runtime"
+    },
+    {
+      "id": "no-console-errors",
+      "ok": true,
+      "detail": "3 console message(s); 3 error(s) for 3 tolerated missing-asset 404(s); texts=[\"Failed to load resource: the server responded with a status of 404 (Not Found)\",\"Failed to load resource: the server responded with a status of 404 (Not Found)\",\"Failed to load resource: the server responded with a status of 404 (Not Found)\"]",
+      "phase": "runtime"
+    },
+    {
+      "id": "worker-requests-all-served",
+      "ok": true,
+      "detail": "failed worker request(s): []; all HTTP error(s) in this run: [\"http://127.0.0.1:32610/experiments/gates/out/g3-base/Assets/Images/ion-credit.png (HTTP 404)\",\"http://127.0.0.1:32610/experiments/gates/out/g3-base/Assets/approximateTerrainHeights.json (HTTP 404)\",\"http://127.0.0.1:32610/experiments/gates/out/g3-base/Assets/IAU2006_XYS/IAU2006_XYS_18.json (HTTP 404)\"] — the gate builds module-worker bundles of the upstream worker sources into its own base directory (n/a); a worker the page requests but the gate did not build MUST fail loudly instead of silently degrading the terrain path",
+      "phase": "runtime"
+    },
+    {
+      "id": "no-unexpected-http-errors",
+      "ok": true,
+      "detail": "3 HTTP error response(s); 3 tolerated missing-package-asset 404(s) [Images/ion-credit.png, approximateTerrainHeights.json, IAU2006_XYS/IAU2006_XYS_18.json]; unexpected=[]. Rationale: the published ESM package ships only Source/ (no Assets/**, no Workers/**), so these three asset URLs cannot be served by any gate-local means; they are unrelated to the terrain render path (no imagery, no GroundPrimitive, sun/moon hidden) and Cesium treats them as non-fatal. Any OTHER HTTP error is a hard failure.",
+      "phase": "runtime"
+    },
+    {
+      "id": "environment-recorded",
+      "ok": true,
+      "detail": "node=v22.20.0, browser=153.0.8010.36 (headless=true), engine 26.3.0, GL WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "phase": "runtime"
+    },
+    {
+      "id": "all-target-switches-covered",
+      "ok": true,
+      "detail": "24 target-switch operation(s) recorded (21 bindFramebuffer, 3 blitFramebuffer); 4 redundant re-bind(s) of the already-current target (no state change); 20 effective switch(es), of which 0 are NOT at a pass boundary; an effective switch MUST separate two work operations with different identities, otherwise the WebGPU backend would have to split a pass in the middle",
+      "phase": "runtime"
+    },
+    {
+      "id": "multisample-resolve-switch-covered",
+      "ok": true,
+      "detail": "3 resolve blit(s) crossing targets (fb-3 -> fb-4 [sampleCount 1 -> 1], fb-3 -> fb-4 [sampleCount 1 -> 1], fb-3 -> fb-4 [sampleCount 1 -> 1]) — all of them sit at a pass boundary; research §5.2 maps the multisample resolve to colorAttachments[i].resolveTarget",
+      "phase": "runtime"
+    },
+    {
+      "id": "partition-boundaries-match-clear-draw-sequence",
+      "ok": true,
+      "detail": "17 clear/draw operation(s) in 9 pass(es); boundaries=8 (each one between two consecutive work ops with different identities, justified by recorded state operations=true); unassigned work operations=0; empty passes=0; state changes that produced no work are NOT counted as passes (the backend defers opening a pass until the first draw), which is what makes (c) achievable",
+      "phase": "runtime"
+    },
+    {
+      "id": "clears-are-first-in-their-pass",
+      "ok": true,
+      "detail": "0 pass(es) have a clear that is not the first work operation  (research §5.1 maps the first operation of a pass to loadOp:\"clear\" and any later clear to the clearBuffer fallback)",
+      "phase": "runtime"
+    },
+    {
+      "id": "no-unclosed-pass-before-endframe",
+      "ok": true,
+      "detail": "last derived pass #8 ends at work op seq 80 (frame end seq 83) on target default (default-framebuffer); it writes into the presentation target=true; 1 target switch(es) and 2 state operation(s) follow it [useProgram, bindFramebuffer] — every earlier pass is closed by the identity change that starts the next one, so endFrame closes exactly one pass",
+      "phase": "runtime"
+    },
+    {
+      "id": "identity-uses-only-platform-state",
+      "ok": true,
+      "detail": "every pass key is built from exactly the platform-visible identity fields (colorTargets, depthStencilTarget, sampleCount, viewport, scissorRect); sample key: colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+      "phase": "runtime"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/out/g3-trace.json",
+      "what": "T020 recording: the upstream WebGL2 platform call sequence of one complete frame (bindFramebuffer/draw/clear/viewport/scissor/blitFramebuffer)"
+    },
+    {
+      "path": "experiments/gates/out/g3-runtime.json",
+      "what": "raw page report (scene facts, frame timing, console/page errors, tracer summary)"
+    },
+    {
+      "path": "experiments/gates/out/g3-build.json",
+      "what": "build evidence: upstream modules in the graph, no replacement applied, CJS plugin, warnings"
+    },
+    {
+      "path": "experiments/gates/out/g3-run.log",
+      "what": "runner transcript of this execution"
+    },
+    {
+      "path": "experiments/gates/g3-pass-trace/platform-trace.js",
+      "what": "the platform-API tracer (wraps WebGL2RenderingContext.prototype only)"
+    },
+    {
+      "path": "experiments/gates/g3-pass-trace/partition.mjs",
+      "what": "T021 derived-pass partition + judgement"
+    },
+    {
+      "path": "experiments/gates/g3-pass-trace/partition.test.mjs",
+      "what": "T021 unit test (positive + negative synthetic traces)"
+    },
+    {
+      "path": "experiments/gates/g3-pass-trace/frame-driver.js",
+      "what": "page driver: one complete frame of the upstream globe/terrain path"
+    },
+    {
+      "path": "experiments/gates/g1-alias/upstream-integrity.mjs",
+      "what": "upstream content-hash snapshot/diff reused from G-1 (sanctioned reuse)"
+    },
+    {
+      "path": "docs/gate-g3-conclusion.md",
+      "what": "human-readable conclusion (basis, evidence paths, verdict, consequences)"
+    }
+  ],
+  "gateCriteria": {
+    "source": "plan.md「实现前的验证门」G-3 行；tasks.md T020/T021",
+    "requirements": [
+      "T020: 通过包装平台 API 录制上游原版 WebGL2 单帧 clear/draw 与目标切换序列（不改上游、不改 @private）",
+      "T021(a): 全部目标切换序列都被覆盖（含多采样解析的目标切换）",
+      "T021(b): 分区边界与 clear/draw 序列一一对应",
+      "T021(c): endFrame 前无未闭合通道"
+    ],
+    "requiredVerdict": "pass",
+    "failureAction": "在后端层内部引入显式通道提示（不改逻辑层），或在 endFrame 前强制拆通道 → STOP 上报入口 Agent 修订 plan"
+  },
+  "measurements": {
+    "upstreamIntegrity": {
+      "unchanged": true,
+      "aggregateBefore": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "aggregateAfter": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "fileCountBefore": 1891,
+      "fileCountAfter": 1891,
+      "changedDetails": [],
+      "detailsAdded": [],
+      "detailsRemoved": [],
+      "detailsBefore": {
+        "Source/Renderer/AutomaticUniforms.js": "sha256-fd57375edf8e9b21ec49f018a7157b6cc40dc1083b67b891f2cb3407c89238fe",
+        "Source/Renderer/Buffer.js": "sha256-110cce1938c2a3c530ab52c6545fdb5ab3a8e9da728f81178682dd8a932e5ebc",
+        "Source/Renderer/BufferUsage.js": "sha256-5a883ca1dfb4d3989695c841f57c25d9bbb5ea272fa7eedc95b56d662b0d9db6",
+        "Source/Renderer/ClearCommand.js": "sha256-8fe47e6de7194d8af7e38c8e8b1d68dc5e90ec8b2df439577312faf8e82aab6c",
+        "Source/Renderer/ComputeCommand.js": "sha256-e531a391c99657cb1a8e42683134516d4af0d5df29e81df3bd668a6e58289af8",
+        "Source/Renderer/ComputeEngine.js": "sha256-d5b0c0d4853ffda6178504286d97b4c77742481bcb9052b49d0daa8f0e2bbb94",
+        "Source/Renderer/Context.js": "sha256-3d7fa4ec0c97df6c9e1a2142f6b7ee527c37ce339f744b22edee402d60d90b83",
+        "Source/Renderer/ContextLimits.js": "sha256-b24965ae722646629ab80da5bd1185be920d17370518653350320211c64cbb89",
+        "Source/Renderer/CubeMap.js": "sha256-8dc4f3c5a6963aed75513e9a7896d9bfd0c571f9d15d30040fc7d64fc54cbeb5",
+        "Source/Renderer/CubeMapFace.js": "sha256-ab8bc1fb0668902a6b3e57f6eff685a63e7ecfb1a418c9b835da683c5d4d68e9",
+        "Source/Renderer/DrawCommand.js": "sha256-7264cecd7f062a55d8bfd159a602775d459ca983a743a0553f496c7a8102a7b6",
+        "Source/Renderer/Framebuffer.js": "sha256-9779f0740817e99b28428e81596d17dee4cab1ff992c75ce5ec7fa0036863ec1",
+        "Source/Renderer/FramebufferManager.js": "sha256-8289584a486decaebcf2c318f176f7e58e8b6000988309755ed3ae11015bfd5b",
+        "Source/Renderer/MipmapHint.js": "sha256-6b5ca2eb75c272709bdec174e4250299f30f2f7175ab8ae5c3028bdc79de0821",
+        "Source/Renderer/MultisampleFramebuffer.js": "sha256-b364eb1d71f37b0f662a9ee2e60396d2c28896dda915c8af41ae955b8a2478aa",
+        "Source/Renderer/Pass.js": "sha256-5b231da76955383455bc64deed470d464022216c130c05e51bf76e0ff13e6d1c",
+        "Source/Renderer/PassState.js": "sha256-60e6caf56451cb7b26b04d472dd10309ac1fb39791cf3fb9ad7516b178f994c3",
+        "Source/Renderer/PickId.js": "sha256-e7cde4170d6ff73dcbb97b4a533266ebe1ec819c8a84d08283989da47b01cd30",
+        "Source/Renderer/PixelDatatype.js": "sha256-ea1a2b8f4e8a725816c633fdc01926f52a7cf691b675ad3986e80ec60c4becbb",
+        "Source/Renderer/RenderState.js": "sha256-39c29a732e36593c12154df8a130e0bb50a72ad568af42f4b7e153184e285a30",
+        "Source/Renderer/Renderbuffer.js": "sha256-096bf88e4a3a8f1f752640eec88f2c7c5d5cd600c050184a50d4ee9e3928a227",
+        "Source/Renderer/RenderbufferFormat.js": "sha256-ecbba5b6689febe4a69aa2ffdb36a547a2017e050ed44669a19a2d3c19238ef0",
+        "Source/Renderer/Sampler.js": "sha256-fb65fced667103116bc5b3e8a7c4a005805a4bf0975f9da4359f6147864320b1",
+        "Source/Renderer/ShaderBuilder.js": "sha256-c887183c13753e11f5201cc2de826fe73b8e52119e1d9765546afe8c1b786e7f",
+        "Source/Renderer/ShaderCache.js": "sha256-897695313fe04cf4237e5a02cd522c223b4b1567fdd1e6fa6a7b514f437fa8ce",
+        "Source/Renderer/ShaderDestination.js": "sha256-f11f2ed44ef5e69e06fc0d93faa2569a55589e8f7f35b395c4f6a550c66bd90d",
+        "Source/Renderer/ShaderFunction.js": "sha256-cbc2174f42ecb1b95fd057c4d3dcc3455501ef38e430c7a89e989f808f302c2d",
+        "Source/Renderer/ShaderProgram.js": "sha256-b0ae609324f012437311fc443f483802917be375e3015c647173080dd15dba4f",
+        "Source/Renderer/ShaderSource.js": "sha256-50f6f111843ac677af41be2d2231e78a412ef158d24d89e5a0802c602107ab47",
+        "Source/Renderer/ShaderStruct.js": "sha256-5855dcaf0957c45bb02e5b58227e272cad3f81e52e9b152fa3ae0ca5dd872000",
+        "Source/Renderer/SharedContext.js": "sha256-b52aa496829a661dc20784c28cc515adffe547a753e6df477e8ef5dc6df59315",
+        "Source/Renderer/Sync.js": "sha256-78f93116bfdddb530bdfc5e1c7162c9d990b2d606eb9fc3562275289527b64c3",
+        "Source/Renderer/Texture.js": "sha256-39fe8aee366ccdbccfdee8ad2662316a17c06193ec8288416456b9e367aeba42",
+        "Source/Renderer/Texture3D.js": "sha256-a942bf4f9afcb094a67ec0cc6f903d349592972dc9d8d91dfd50fff7e0e3304b",
+        "Source/Renderer/TextureAtlas.js": "sha256-42ec7a99c52b2506781a2599d3ca28edae30c5a98eda302c2494e03c5c6bbdb1",
+        "Source/Renderer/TextureCache.js": "sha256-9ebba22337dbe3110d418c91523706d56a36b77fc38dc3b2cadecbbc38e34f6d",
+        "Source/Renderer/TextureMagnificationFilter.js": "sha256-4e0f87ce250ff9f478a62c12e3bda889cde2ad0152fe6a4a57ba7f7dc39e8a9e",
+        "Source/Renderer/TextureMinificationFilter.js": "sha256-3586076b7384e7c955244db203ad33cfb59aad965dc47306e3dded71c4924aac",
+        "Source/Renderer/TextureWrap.js": "sha256-d4eb2208cc71f58f4638a92574886053b01733d6ef837317c3840058c1c53fad",
+        "Source/Renderer/UniformState.js": "sha256-365623296dfb9a27f7f43769c0b10242de680c9a864dcfbe5995e6b19a8805c6",
+        "Source/Renderer/VertexArray.js": "sha256-4064f982a4a2ee8a6abebb8a47dd8603d21643efebcc05b1c66c21926fe21a42",
+        "Source/Renderer/VertexArrayFacade.js": "sha256-eb2c223e9b89e580228b8669029a266917421327ea366c59725237b0a378a530",
+        "Source/Renderer/createUniform.js": "sha256-312594d8b4269a76c5ca147455b761f4f2cf80933894f2eeafe1767f3a6fb16b",
+        "Source/Renderer/createUniformArray.js": "sha256-7e8bccfbe39d035faf8029ab46f91102b368ed20062ff376dc2d173d8d6615f5",
+        "Source/Renderer/demodernizeShader.js": "sha256-ecae6df4a5e083cf7d8acb1bb0a4926e3eee3cff637bae43b79eab7b76e7c0a0",
+        "Source/Renderer/freezeRenderState.js": "sha256-19fc5c80f01d4d8cbd0a6c2da10ab5d7251c25e7f420a96a20a747b5f7f31688",
+        "Source/Renderer/loadCubeMap.js": "sha256-06814e1ffd9ea0052f5f2bc32d230a68331a46860d77da844d4297d71acfa36b",
+        "Source/Scene/Scene.js": "sha256-d7679e58a9c5349053209dac94592bbd554c4d686a81944466a045a6ad191a4a"
+      },
+      "detailsAfter": {
+        "Source/Renderer/AutomaticUniforms.js": "sha256-fd57375edf8e9b21ec49f018a7157b6cc40dc1083b67b891f2cb3407c89238fe",
+        "Source/Renderer/Buffer.js": "sha256-110cce1938c2a3c530ab52c6545fdb5ab3a8e9da728f81178682dd8a932e5ebc",
+        "Source/Renderer/BufferUsage.js": "sha256-5a883ca1dfb4d3989695c841f57c25d9bbb5ea272fa7eedc95b56d662b0d9db6",
+        "Source/Renderer/ClearCommand.js": "sha256-8fe47e6de7194d8af7e38c8e8b1d68dc5e90ec8b2df439577312faf8e82aab6c",
+        "Source/Renderer/ComputeCommand.js": "sha256-e531a391c99657cb1a8e42683134516d4af0d5df29e81df3bd668a6e58289af8",
+        "Source/Renderer/ComputeEngine.js": "sha256-d5b0c0d4853ffda6178504286d97b4c77742481bcb9052b49d0daa8f0e2bbb94",
+        "Source/Renderer/Context.js": "sha256-3d7fa4ec0c97df6c9e1a2142f6b7ee527c37ce339f744b22edee402d60d90b83",
+        "Source/Renderer/ContextLimits.js": "sha256-b24965ae722646629ab80da5bd1185be920d17370518653350320211c64cbb89",
+        "Source/Renderer/CubeMap.js": "sha256-8dc4f3c5a6963aed75513e9a7896d9bfd0c571f9d15d30040fc7d64fc54cbeb5",
+        "Source/Renderer/CubeMapFace.js": "sha256-ab8bc1fb0668902a6b3e57f6eff685a63e7ecfb1a418c9b835da683c5d4d68e9",
+        "Source/Renderer/DrawCommand.js": "sha256-7264cecd7f062a55d8bfd159a602775d459ca983a743a0553f496c7a8102a7b6",
+        "Source/Renderer/Framebuffer.js": "sha256-9779f0740817e99b28428e81596d17dee4cab1ff992c75ce5ec7fa0036863ec1",
+        "Source/Renderer/FramebufferManager.js": "sha256-8289584a486decaebcf2c318f176f7e58e8b6000988309755ed3ae11015bfd5b",
+        "Source/Renderer/MipmapHint.js": "sha256-6b5ca2eb75c272709bdec174e4250299f30f2f7175ab8ae5c3028bdc79de0821",
+        "Source/Renderer/MultisampleFramebuffer.js": "sha256-b364eb1d71f37b0f662a9ee2e60396d2c28896dda915c8af41ae955b8a2478aa",
+        "Source/Renderer/Pass.js": "sha256-5b231da76955383455bc64deed470d464022216c130c05e51bf76e0ff13e6d1c",
+        "Source/Renderer/PassState.js": "sha256-60e6caf56451cb7b26b04d472dd10309ac1fb39791cf3fb9ad7516b178f994c3",
+        "Source/Renderer/PickId.js": "sha256-e7cde4170d6ff73dcbb97b4a533266ebe1ec819c8a84d08283989da47b01cd30",
+        "Source/Renderer/PixelDatatype.js": "sha256-ea1a2b8f4e8a725816c633fdc01926f52a7cf691b675ad3986e80ec60c4becbb",
+        "Source/Renderer/RenderState.js": "sha256-39c29a732e36593c12154df8a130e0bb50a72ad568af42f4b7e153184e285a30",
+        "Source/Renderer/Renderbuffer.js": "sha256-096bf88e4a3a8f1f752640eec88f2c7c5d5cd600c050184a50d4ee9e3928a227",
+        "Source/Renderer/RenderbufferFormat.js": "sha256-ecbba5b6689febe4a69aa2ffdb36a547a2017e050ed44669a19a2d3c19238ef0",
+        "Source/Renderer/Sampler.js": "sha256-fb65fced667103116bc5b3e8a7c4a005805a4bf0975f9da4359f6147864320b1",
+        "Source/Renderer/ShaderBuilder.js": "sha256-c887183c13753e11f5201cc2de826fe73b8e52119e1d9765546afe8c1b786e7f",
+        "Source/Renderer/ShaderCache.js": "sha256-897695313fe04cf4237e5a02cd522c223b4b1567fdd1e6fa6a7b514f437fa8ce",
+        "Source/Renderer/ShaderDestination.js": "sha256-f11f2ed44ef5e69e06fc0d93faa2569a55589e8f7f35b395c4f6a550c66bd90d",
+        "Source/Renderer/ShaderFunction.js": "sha256-cbc2174f42ecb1b95fd057c4d3dcc3455501ef38e430c7a89e989f808f302c2d",
+        "Source/Renderer/ShaderProgram.js": "sha256-b0ae609324f012437311fc443f483802917be375e3015c647173080dd15dba4f",
+        "Source/Renderer/ShaderSource.js": "sha256-50f6f111843ac677af41be2d2231e78a412ef158d24d89e5a0802c602107ab47",
+        "Source/Renderer/ShaderStruct.js": "sha256-5855dcaf0957c45bb02e5b58227e272cad3f81e52e9b152fa3ae0ca5dd872000",
+        "Source/Renderer/SharedContext.js": "sha256-b52aa496829a661dc20784c28cc515adffe547a753e6df477e8ef5dc6df59315",
+        "Source/Renderer/Sync.js": "sha256-78f93116bfdddb530bdfc5e1c7162c9d990b2d606eb9fc3562275289527b64c3",
+        "Source/Renderer/Texture.js": "sha256-39fe8aee366ccdbccfdee8ad2662316a17c06193ec8288416456b9e367aeba42",
+        "Source/Renderer/Texture3D.js": "sha256-a942bf4f9afcb094a67ec0cc6f903d349592972dc9d8d91dfd50fff7e0e3304b",
+        "Source/Renderer/TextureAtlas.js": "sha256-42ec7a99c52b2506781a2599d3ca28edae30c5a98eda302c2494e03c5c6bbdb1",
+        "Source/Renderer/TextureCache.js": "sha256-9ebba22337dbe3110d418c91523706d56a36b77fc38dc3b2cadecbbc38e34f6d",
+        "Source/Renderer/TextureMagnificationFilter.js": "sha256-4e0f87ce250ff9f478a62c12e3bda889cde2ad0152fe6a4a57ba7f7dc39e8a9e",
+        "Source/Renderer/TextureMinificationFilter.js": "sha256-3586076b7384e7c955244db203ad33cfb59aad965dc47306e3dded71c4924aac",
+        "Source/Renderer/TextureWrap.js": "sha256-d4eb2208cc71f58f4638a92574886053b01733d6ef837317c3840058c1c53fad",
+        "Source/Renderer/UniformState.js": "sha256-365623296dfb9a27f7f43769c0b10242de680c9a864dcfbe5995e6b19a8805c6",
+        "Source/Renderer/VertexArray.js": "sha256-4064f982a4a2ee8a6abebb8a47dd8603d21643efebcc05b1c66c21926fe21a42",
+        "Source/Renderer/VertexArrayFacade.js": "sha256-eb2c223e9b89e580228b8669029a266917421327ea366c59725237b0a378a530",
+        "Source/Renderer/createUniform.js": "sha256-312594d8b4269a76c5ca147455b761f4f2cf80933894f2eeafe1767f3a6fb16b",
+        "Source/Renderer/createUniformArray.js": "sha256-7e8bccfbe39d035faf8029ab46f91102b368ed20062ff376dc2d173d8d6615f5",
+        "Source/Renderer/demodernizeShader.js": "sha256-ecae6df4a5e083cf7d8acb1bb0a4926e3eee3cff637bae43b79eab7b76e7c0a0",
+        "Source/Renderer/freezeRenderState.js": "sha256-19fc5c80f01d4d8cbd0a6c2da10ab5d7251c25e7f420a96a20a747b5f7f31688",
+        "Source/Renderer/loadCubeMap.js": "sha256-06814e1ffd9ea0052f5f2bc32d230a68331a46860d77da844d4297d71acfa36b",
+        "Source/Scene/Scene.js": "sha256-d7679e58a9c5349053209dac94592bbd554c4d686a81944466a045a6ad191a4a"
+      }
+    },
+    "build": {
+      "checks": [
+        {
+          "id": "upstream-baseline-version",
+          "ok": true,
+          "detail": "installed @cesium/engine 26.3.0 (upstream/engine-26.3.0.lock.json)"
+        },
+        {
+          "id": "no-replacement-applied",
+          "ok": true,
+          "detail": "gate-local modules in the graph=[experiments/gates/g3-pass-trace/entry.js, experiments/gates/g3-pass-trace/frame-driver.js, experiments/gates/g3-pass-trace/platform-trace.js] (none may be a Renderer replacement); repo modules=[] (MUST be empty) — T020 records the upstream original, so the alias plugin is not part of this build at all"
+        },
+        {
+          "id": "upstream-context-and-scene-in-graph",
+          "ok": true,
+          "detail": "upstream Renderer/Context.js in graph=true (47 upstream Renderer module(s)), upstream Scene/Scene.js in graph=true; bundle text contains the upstream Context snippet=true and the upstream Scene snippet=true"
+        },
+        {
+          "id": "cjs-interop-plugin-is-the-real-one",
+          "ok": true,
+          "detail": "@rollup/plugin-commonjs 29.0.3 (pinned devDependency, finding F-1) — same dependency set as the product build"
+        },
+        {
+          "id": "protobufjs-named-export-resolved",
+          "ok": true,
+          "detail": "MISSING_EXPORT warnings: 0 (G-1's default-only wrapper produced one for the protobufjs Reader member; the real plugin synthesises named exports)"
+        },
+        {
+          "id": "no-unresolved-imports",
+          "ok": true,
+          "detail": "21 rollup warning(s), codes=[\"CIRCULAR_DEPENDENCY\"]"
+        }
+      ],
+      "graph": {
+        "moduleCount": 1407,
+        "upstreamEngineModules": 1297,
+        "gateLocalModules": [
+          "experiments/gates/g3-pass-trace/entry.js",
+          "experiments/gates/g3-pass-trace/frame-driver.js",
+          "experiments/gates/g3-pass-trace/platform-trace.js"
+        ],
+        "repoModules": [],
+        "thirdPartyModules": 107
+      },
+      "bundle": {
+        "file": "experiments/gates/out/g3-pass-trace/bundle.js",
+        "bytes": 11626031,
+        "containsUpstreamContextSnippet": true,
+        "containsUpstreamSceneSnippet": true
+      }
+    },
+    "scene": {
+      "contextConstructor": "Context",
+      "webgl2": true,
+      "drawingBufferWidth": 300,
+      "drawingBufferHeight": 150,
+      "msaaSupported": true,
+      "msaaSamples": 4,
+      "logarithmicDepthBuffer": true,
+      "depthTexture": true,
+      "stencilBuffer": true,
+      "maximumSamples": 8,
+      "maximumDrawBuffers": 8,
+      "maximumColorAttachments": 8,
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "globeTilesLoaded": true,
+      "terrainProvider": "EllipsoidTerrainProvider",
+      "tilesLoadedAfterFrame": true
+    },
+    "frame": {
+      "warmupFrames": 15,
+      "warmup": [
+        {
+          "index": 12,
+          "tilesLoaded": false
+        },
+        {
+          "index": 13,
+          "tilesLoaded": false
+        },
+        {
+          "index": 14,
+          "tilesLoaded": true
+        }
+      ],
+      "durationMs": 3.600000023841858,
+      "operationCount": 83,
+      "tilesLoadedBeforeFrame": true
+    },
+    "traceSummary": {
+      "operationCount": 83,
+      "drawCount": 9,
+      "clearCount": 8,
+      "blitCount": 3,
+      "bindFramebufferCount": 21,
+      "viewportCount": 8,
+      "scissorCount": 0,
+      "triangleCount": 2290,
+      "targets": [
+        "default",
+        "fb-3",
+        "fb-6",
+        "fb-4",
+        "fb-5",
+        "fb-7",
+        "fb-8"
+      ],
+      "programs": 0
+    },
+    "partition": {
+      "passCount": 9,
+      "switchCount": 24,
+      "effectiveSwitchCount": 20,
+      "redundantRebindCount": 4,
+      "resolveBlitCount": 3,
+      "resolveBlitCrossingCount": 3,
+      "drawCount": 9,
+      "clearCount": 8,
+      "passesWithMultipleDraws": 1,
+      "boundaries": [
+        {
+          "passIndex": 1,
+          "atSeq": 7,
+          "cause": "identity-change",
+          "justifiers": [
+            "disable@5",
+            "bindFramebuffer@6"
+          ]
+        },
+        {
+          "passIndex": 2,
+          "atSeq": 12,
+          "cause": "identity-change",
+          "justifiers": [
+            "disable@10",
+            "bindFramebuffer@11"
+          ]
+        },
+        {
+          "passIndex": 3,
+          "atSeq": 15,
+          "cause": "identity-change",
+          "justifiers": [
+            "disable@13",
+            "bindFramebuffer@14"
+          ]
+        },
+        {
+          "passIndex": 4,
+          "atSeq": 43,
+          "cause": "identity-change",
+          "justifiers": [
+            "bindFramebuffer@32",
+            "bindFramebuffer@33",
+            "blitFramebuffer@34",
+            "bindFramebuffer@35",
+            "bindFramebuffer@36",
+            "bindFramebuffer@37",
+            "disable@38",
+            "disable@39",
+            "disable@40",
+            "viewport@41",
+            "useProgram@42"
+          ]
+        },
+        {
+          "passIndex": 5,
+          "atSeq": 47,
+          "cause": "identity-change",
+          "justifiers": [
+            "disable@44",
+            "viewport@45",
+            "bindFramebuffer@46"
+          ]
+        },
+        {
+          "passIndex": 6,
+          "atSeq": 65,
+          "cause": "identity-change",
+          "justifiers": [
+            "bindFramebuffer@54",
+            "bindFramebuffer@55",
+            "blitFramebuffer@56",
+            "bindFramebuffer@57",
+            "bindFramebuffer@58",
+            "bindFramebuffer@59",
+            "disable@60",
+            "disable@61",
+            "disable@62",
+            "viewport@63",
+            "useProgram@64"
+          ]
+        },
+        {
+          "passIndex": 7,
+          "atSeq": 70,
+          "cause": "identity-change",
+          "justifiers": [
+            "bindFramebuffer@66",
+            "disable@67",
+            "viewport@68",
+            "useProgram@69"
+          ]
+        },
+        {
+          "passIndex": 8,
+          "atSeq": 80,
+          "cause": "identity-change",
+          "justifiers": [
+            "bindFramebuffer@71",
+            "bindFramebuffer@72",
+            "blitFramebuffer@73",
+            "bindFramebuffer@74",
+            "bindFramebuffer@75",
+            "bindFramebuffer@76",
+            "disable@77",
+            "viewport@78",
+            "useProgram@79"
+          ]
+        }
+      ],
+      "passes": [
+        {
+          "index": 0,
+          "key": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 4,
+          "endSeq": 4,
+          "firstWorkOp": "clear",
+          "lastWorkOp": "clear",
+          "clearOps": 1,
+          "drawOps": 0,
+          "triangleCount": 0,
+          "targetId": "default",
+          "targetKind": "default-framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        },
+        {
+          "index": 1,
+          "key": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 7,
+          "endSeq": 9,
+          "firstWorkOp": "clear",
+          "lastWorkOp": "clear",
+          "clearOps": 2,
+          "drawOps": 0,
+          "triangleCount": 0,
+          "targetId": "fb-3",
+          "targetKind": "framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        },
+        {
+          "index": 2,
+          "key": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=texture(untracked); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 12,
+          "endSeq": 12,
+          "firstWorkOp": "clear",
+          "lastWorkOp": "clear",
+          "clearOps": 1,
+          "drawOps": 0,
+          "triangleCount": 0,
+          "targetId": "fb-6",
+          "targetKind": "framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        },
+        {
+          "index": 3,
+          "key": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 15,
+          "endSeq": 31,
+          "firstWorkOp": "clear",
+          "lastWorkOp": "drawElements",
+          "clearOps": 3,
+          "drawOps": 4,
+          "triangleCount": 2280,
+          "targetId": "fb-3",
+          "targetKind": "framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        },
+        {
+          "index": 4,
+          "key": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 43,
+          "endSeq": 43,
+          "firstWorkOp": "drawElements",
+          "lastWorkOp": "drawElements",
+          "clearOps": 0,
+          "drawOps": 1,
+          "triangleCount": 2,
+          "targetId": "fb-5",
+          "targetKind": "framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        },
+        {
+          "index": 5,
+          "key": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 47,
+          "endSeq": 53,
+          "firstWorkOp": "clear",
+          "lastWorkOp": "drawElements",
+          "clearOps": 1,
+          "drawOps": 1,
+          "triangleCount": 2,
+          "targetId": "fb-3",
+          "targetKind": "framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        },
+        {
+          "index": 6,
+          "key": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 65,
+          "endSeq": 65,
+          "firstWorkOp": "drawElements",
+          "lastWorkOp": "drawElements",
+          "clearOps": 0,
+          "drawOps": 1,
+          "triangleCount": 2,
+          "targetId": "fb-7",
+          "targetKind": "framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        },
+        {
+          "index": 7,
+          "key": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 70,
+          "endSeq": 70,
+          "firstWorkOp": "drawElements",
+          "lastWorkOp": "drawElements",
+          "clearOps": 0,
+          "drawOps": 1,
+          "triangleCount": 2,
+          "targetId": "fb-8",
+          "targetKind": "framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        },
+        {
+          "index": 8,
+          "key": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "startSeq": 80,
+          "endSeq": 80,
+          "firstWorkOp": "drawElements",
+          "lastWorkOp": "drawElements",
+          "clearOps": 0,
+          "drawOps": 1,
+          "triangleCount": 2,
+          "targetId": "default",
+          "targetKind": "default-framebuffer",
+          "sampleCount": 1,
+          "viewport": {
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 150
+          },
+          "scissorRect": null
+        }
+      ],
+      "switches": [
+        {
+          "seq": 6,
+          "op": "bindFramebuffer",
+          "crossesTargets": "default -> fb-3",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 4,
+          "nextWorkSeq": 7
+        },
+        {
+          "seq": 11,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-3 -> fb-6",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=texture(untracked); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 9,
+          "nextWorkSeq": 12
+        },
+        {
+          "seq": 14,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-6 -> fb-3",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=texture(untracked); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 12,
+          "nextWorkSeq": 15
+        },
+        {
+          "seq": 32,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-3 -> fb-3",
+          "sampleTransition": null,
+          "effective": false,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 31,
+          "nextWorkSeq": 43
+        },
+        {
+          "seq": 33,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-3 -> fb-4",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 31,
+          "nextWorkSeq": 43
+        },
+        {
+          "seq": 34,
+          "op": "blitFramebuffer",
+          "crossesTargets": "fb-3 -> fb-4",
+          "sampleTransition": "1 -> 1",
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 31,
+          "nextWorkSeq": 43
+        },
+        {
+          "seq": 35,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-4 -> default",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 31,
+          "nextWorkSeq": 43
+        },
+        {
+          "seq": 36,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-4 -> default",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 31,
+          "nextWorkSeq": 43
+        },
+        {
+          "seq": 37,
+          "op": "bindFramebuffer",
+          "crossesTargets": "default -> fb-5",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 31,
+          "nextWorkSeq": 43
+        },
+        {
+          "seq": 46,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-5 -> fb-3",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 43,
+          "nextWorkSeq": 47
+        },
+        {
+          "seq": 54,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-3 -> fb-3",
+          "sampleTransition": null,
+          "effective": false,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 53,
+          "nextWorkSeq": 65
+        },
+        {
+          "seq": 55,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-3 -> fb-4",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 53,
+          "nextWorkSeq": 65
+        },
+        {
+          "seq": 56,
+          "op": "blitFramebuffer",
+          "crossesTargets": "fb-3 -> fb-4",
+          "sampleTransition": "1 -> 1",
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 53,
+          "nextWorkSeq": 65
+        },
+        {
+          "seq": 57,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-4 -> default",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 53,
+          "nextWorkSeq": 65
+        },
+        {
+          "seq": 58,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-4 -> default",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 53,
+          "nextWorkSeq": 65
+        },
+        {
+          "seq": 59,
+          "op": "bindFramebuffer",
+          "crossesTargets": "default -> fb-7",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 53,
+          "nextWorkSeq": 65
+        },
+        {
+          "seq": 66,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-7 -> fb-8",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 65,
+          "nextWorkSeq": 70
+        },
+        {
+          "seq": 71,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-8 -> fb-3",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 70,
+          "nextWorkSeq": 80
+        },
+        {
+          "seq": 72,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-8 -> fb-4",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 70,
+          "nextWorkSeq": 80
+        },
+        {
+          "seq": 73,
+          "op": "blitFramebuffer",
+          "crossesTargets": "fb-3 -> fb-4",
+          "sampleTransition": "1 -> 1",
+          "effective": true,
+          "previousKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 70,
+          "nextWorkSeq": 80
+        },
+        {
+          "seq": 74,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-4 -> default",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 70,
+          "nextWorkSeq": 80
+        },
+        {
+          "seq": 75,
+          "op": "bindFramebuffer",
+          "crossesTargets": "fb-4 -> default",
+          "sampleTransition": null,
+          "effective": true,
+          "previousKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 70,
+          "nextWorkSeq": 80
+        },
+        {
+          "seq": 76,
+          "op": "bindFramebuffer",
+          "crossesTargets": "default -> default",
+          "sampleTransition": null,
+          "effective": false,
+          "previousKey": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "atPassBoundary": true,
+          "previousWorkSeq": 70,
+          "nextWorkSeq": 80
+        },
+        {
+          "seq": 82,
+          "op": "bindFramebuffer",
+          "crossesTargets": "default -> default",
+          "sampleTransition": null,
+          "effective": false,
+          "previousKey": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+          "nextKey": null,
+          "atPassBoundary": true,
+          "previousWorkSeq": 80,
+          "nextWorkSeq": null
+        }
+      ]
+    },
+    "passKeys": [
+      {
+        "index": 0,
+        "key": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 0,
+        "cleared": 1
+      },
+      {
+        "index": 1,
+        "key": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 0,
+        "cleared": 2
+      },
+      {
+        "index": 2,
+        "key": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=texture(untracked); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 0,
+        "cleared": 1
+      },
+      {
+        "index": 3,
+        "key": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 4,
+        "cleared": 3
+      },
+      {
+        "index": 4,
+        "key": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 1,
+        "cleared": 0
+      },
+      {
+        "index": 5,
+        "key": "colorTargets=[renderbuffer(rb-1)]; depthStencilTarget=renderbuffer(rb-2); sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 1,
+        "cleared": 1
+      },
+      {
+        "index": 6,
+        "key": "colorTargets=[texture(untracked)|texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 1,
+        "cleared": 0
+      },
+      {
+        "index": 7,
+        "key": "colorTargets=[texture(untracked)]; depthStencilTarget=null; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 1,
+        "cleared": 0
+      },
+      {
+        "index": 8,
+        "key": "colorTargets=[canvas]; depthStencilTarget=canvas; sampleCount=1; viewport={0,0,300,150}; scissorRect=null",
+        "drew": 1,
+        "cleared": 0
+      }
+    ],
+    "privateMemberHits": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "title": "录制用的是上游默认 EllipsoidTerrainProvider（零网络），地形瓦片数据集属 W5/T085",
+      "detail": "T020 要求录制地形路径的完整帧。MVP 的固定地形数据集（T085）尚未落盘，且门禁 MUST NOT 依赖网络；因此门禁使用上游**默认**的 `EllipsoidTerrainProvider`，它走的是同一条 Globe → QuadtreePrimitive → GlobeSurfaceTile → GlobeSurfaceShaderSet 路径与同一套 GlobeVS/GlobeFS 着色器，但不产生多瓦片层级。本门禁的通道身份只由平台可见的 (colorTargets, depthStencilTarget, sampleCount, viewport, scissorRect) 决定，因此**同目标的额外瓦片只会落在同一通道内**；该推断在 T021(b) 中由「同一通道内多次 draw」的实测（见 measurements.partition.passesWithMultipleDraws）支持。真实瓦片树的通道覆盖仍应在 T085 之后重跑本门禁。",
+      "followUp": [
+        "T085（数据集落盘）",
+        "T098b（切片 B 全量验证时重跑）"
+      ]
+    },
+    {
+      "id": "F-2",
+      "title": "clear 与通道起始的关系（T044 的 loadOp 依据）",
+      "detail": "T021 的 `clears-are-first-in-their-pass` 检查记录每个通道内首次操作是否为 clear —— 这是 research §5.1「首次操作走 loadOp:\"clear\"，其余走 clearBuffer 兜底」的实测依据。",
+      "followUp": [
+        "T044（Context.clear 的 loadOp/clearBuffer 取舍）",
+        "T046（pass-encoder）"
+      ]
+    },
+    {
+      "id": "F-3",
+      "title": "本门禁的边界",
+      "detail": "门禁只录制**上游原始** WebGL2 路径（这正是 T020 的要求），不渲染我们的后端、不做跨后端像素比较（属 G-6），也不建立 WebGPU 通道——它回答的是「派生式身份是否足以覆盖上游的目标切换序列」。",
+      "followUp": [
+        "T046（以本门禁的 trace 做录制-回放）",
+        "G-6"
+      ]
+    }
+  ],
+  "deviations": [
+    {
+      "id": "D-1",
+      "what": "T020 的失败动作/通过判据以「地形（terrain）」为对象，而可用的地形数据尚未落盘（T085）。",
+      "how": "使用上游默认 EllipsoidTerrainProvider（零网络、确定性），并在 F-1 中登记覆盖边界与后续重跑义务；不修改 tasks/plan。"
+    },
+    {
+      "id": "D-2",
+      "what": "T020 明确「MUST NOT 修改上游实现」→ 本门禁的构建**不应用替换清单**（不使用 T008 别名插件），因此 bundle 里是上游原版 Context/Scene。",
+      "how": "build.mjs 断言图中含上游 Renderer/Context.js 与 Scene/Scene.js、且没有任何门禁本地 Renderer 替换；F-3 说明该选择与 T020 一致。"
+    }
+  ]
+}

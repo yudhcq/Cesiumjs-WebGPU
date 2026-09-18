@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-6 fix — pipeline-overridable-constant feasibility probe</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      code { color: #9fd3ff; }
+    </style>
+  </head>
+  <body>
+    <p>
+      Feasibility probe for the G-6 fix (T025 over-budget). It answers one question with device
+      numbers: <em>is a new <code>WGSL override</code> value on an already-parsed module cheaper than
+      a new module text?</em> Three workloads are measured on the same adapter with the same timing
+      discipline as <code>g6-variants/driver.js</code> (including the <code>popErrorScope</code>
+      validation round trip), plus a trivial-module floor so a per-pipeline constant cost cannot be
+      mistaken for shader size. This page is <strong>not</strong> a gate: it is the experiment that
+      decides the route, and its report is archived as evidence.
+    </p>
+    <script type="module" src="./probe.js"></script>
+  </body>
+</html>

@@ -24,7 +24,7 @@
 type UpstreamOpaque = any;
 
 /**
- * `Source/Renderer/ContextLimits.js` — 17 members, all read by either the logic layer
+ * `Source/Renderer/ContextLimits.js` — 22 members declared below, covering the measured union
  * (measured: 9 distinct members referenced from the 1,306 non-`Renderer` modules) or by
  * the `Renderer/**` modules this patch layer reimplements (`RenderState` reads the aliased
  * line-width bounds, `ShaderProgram` reads the high-precision flags, `Texture`/`VertexArray`/
@@ -51,6 +51,14 @@ declare module "@cesium/engine/Source/Renderer/ContextLimits.js" {
     readonly maximumSamples: number;
     readonly minimumAliasedLineWidth: number;
     readonly maximumAliasedLineWidth: number;
+    // —— 以下 5 项由**补丁层重实现的 Renderer 模块**消费，逻辑层不读取，故早期声明面遗漏；
+    //    依 research §4「事实更正记录 C-2」的实测并集补齐（声明面 17 → 22）。
+    readonly minimumAliasedPointSize: number;
+    readonly maximumAliasedPointSize: number;
+    readonly maximumViewportWidth: number;
+    readonly maximumViewportHeight: number;
+    readonly highpFloatSupported: boolean;
+    readonly highpIntSupported: boolean;
   };
   export default ContextLimits;
 }

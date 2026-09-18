@@ -3,16 +3,40 @@ node_modules/
 .pnpm-store/
 
 # Build output
+# NOTE: `out/` is anchored to the repo root on purpose. An unanchored `out/` matches ANY
+# directory named `out` at any depth — including `experiments/gates/out/` — and once a
+# directory is excluded, git cannot re-include files inside it, which silently defeated the
+# gate-verdict allowlist below.
 dist/
 build/
-out/
+/out/
 *.tsbuildinfo
 
 # Verification / CI artifacts (audit JSON, benchmark history, diff images, test reports)
 artifacts/
 
-# Gate experiment outputs (machine-checkable gate verdicts; the gate sources live in experiments/gates/**)
-experiments/gates/out/
+# Gate experiment outputs (the gate sources live in experiments/gates/**).
+# Everything under out/ is regenerable and some intermediates are large (11 MB bundles,
+# 3.5 MB input dumps), so they stay local. The machine-checkable VERDICTS are small and are
+# committed so a reviewer can audit the architecture gates without a GPU or a browser:
+#   g<N>.json           — the six gate verdicts (checks + evidence paths + environment)
+#   g<N>-control*.json  — the negative controls (proof that each gate CAN fail)
+experiments/gates/out/*
+# The six gate verdicts
+!experiments/gates/out/g[1-9].json
+# Key per-gate evidence that the verdicts reference
+!experiments/gates/out/g2-webgpu.json
+!experiments/gates/out/g2-webgl2.json
+!experiments/gates/out/g3-trace.json
+!experiments/gates/out/g5-arch-boundaries.json
+!experiments/gates/out/g6-precision.json
+!experiments/gates/out/g6-variants.json
+!experiments/gates/out/g6-override-probe.json
+# Negative controls — proof that each gate CAN fail (small verdicts only)
+!experiments/gates/out/g1-control-no-rewrite.json
+!experiments/gates/out/g2-control-no-handoff.json
+!experiments/gates/out/g2-control-no-handoff-webgpu.json
+!experiments/gates/out/g4-control-shift.json
 
 # Env & secrets
 .env

@@ -1,0 +1,310 @@
+{
+  "gate": "g1-control-no-rewrite",
+  "task": "T015 (negative control)",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T18:41:32.748Z",
+  "notes": "G-1 阴性对照（空清单，别名插件零改写）。verdict=pass 的含义是：**判定器确实能识别接缝未被替换**——5/5 个应当失败的检查项确实失败。若此处出现 \"NOT detected\"，则 G-1 的正向结论不可信（判定器无法区分真替换与无替换）。对照运行不写 g1.json，也不改变门禁结论。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "engine": {
+      "packageName": "@cesium/engine",
+      "version": "26.3.0",
+      "lock": "upstream/engine-26.3.0.lock.json"
+    },
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": [],
+      "note": "zero launch flags: headless Chrome exposes a hardware WebGPU adapter on this machine",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36"
+    },
+    "gpu": {
+      "webgpu": {
+        "available": true,
+        "reason": null,
+        "adapterInfo": {
+          "vendor": "nvidia",
+          "architecture": "lovelace",
+          "device": "",
+          "description": "",
+          "subgroupMinSize": 32,
+          "subgroupMaxSize": 32
+        },
+        "isFallbackAdapter": null,
+        "preferredFormat": "bgra8unorm",
+        "requestDeviceOk": true
+      }
+    },
+    "webgl2": {
+      "available": true
+    }
+  },
+  "checks": [
+    {
+      "id": "control-detects-missing-rewrite:build-rewrite-scene-relative-import",
+      "ok": true,
+      "detail": "build-rewrite-scene-relative-import → detected (ok=false): Scene/Scene.js:40 `import Context from \"../Renderer/Context.js\"` resolved to \"NOT REWRITTEN\" during the real Rollup run"
+    },
+    {
+      "id": "control-detects-missing-rewrite:build-rewrite-bare-deep-import",
+      "ok": true,
+      "detail": "build-rewrite-bare-deep-import → detected (ok=false): bare deep import \"@cesium/engine/Source/Renderer/Context.js\" resolved to \"NOT REWRITTEN\""
+    },
+    {
+      "id": "control-detects-missing-rewrite:build-upstream-context-absent-from-graph",
+      "ok": true,
+      "detail": "build-upstream-context-absent-from-graph → detected (ok=false): graph: upstream Renderer/Context.js present=true, gate-local Renderer/Context.js present=true, upstream Scene/Scene.js present=true"
+    },
+    {
+      "id": "control-detects-missing-rewrite:whitelist-exhaustive",
+      "ok": true,
+      "detail": "whitelist-exhaustive → detected (ok=false): rewritten set == manifest set: missing=[] extra=[Renderer/Context.js] (manifest 0, rewritten 0)"
+    },
+    {
+      "id": "control-detects-missing-rewrite:scene-constructed-through-replacement",
+      "ok": true,
+      "detail": "scene-constructed-through-replacement → detected (ok=false): new Scene({canvas}) with no context injected → constructor=\"Context\", instanceof bundle Context=true, instanceof the gate-local file=false, deep-import identity=false, stub flag=null, marker=null, id=faf3f1b6-9700-40e3-a36c-46789f51e9a8"
+    }
+  ],
+  "harnessChecks": [
+    {
+      "id": "upstream-baseline-version",
+      "ok": true,
+      "detail": "installed @cesium/engine 26.3.0; upstream/engine-26.3.0.lock.json 26.3.0 (cesium 1.145.0)",
+      "phase": "build"
+    },
+    {
+      "id": "detector-literals-unique",
+      "ok": true,
+      "detail": "\"this._originalGLContext = glContext;\" x1 in upstream Context.js; \"this._logDepthBuffer = Scene.defaultLogDepthBuffer && context.fragmentDepth;\" x1 in upstream Scene.js (the presence/absence probes below depend on this)",
+      "phase": "build"
+    },
+    {
+      "id": "build-rewrite-scene-relative-import",
+      "ok": false,
+      "detail": "Scene/Scene.js:40 `import Context from \"../Renderer/Context.js\"` resolved to \"NOT REWRITTEN\" during the real Rollup run",
+      "phase": "build"
+    },
+    {
+      "id": "build-rewrite-bare-deep-import",
+      "ok": false,
+      "detail": "bare deep import \"@cesium/engine/Source/Renderer/Context.js\" resolved to \"NOT REWRITTEN\"",
+      "phase": "build"
+    },
+    {
+      "id": "build-upstream-context-absent-from-graph",
+      "ok": false,
+      "detail": "graph: upstream Renderer/Context.js present=true, gate-local Renderer/Context.js present=true, upstream Scene/Scene.js present=true",
+      "phase": "build"
+    },
+    {
+      "id": "build-bundle-text-probe",
+      "ok": false,
+      "detail": "bundle contains the upstream Scene.js control snippet=true, contains upstream Context.js snippet=true, contains the gate stub marker=true",
+      "phase": "build"
+    },
+    {
+      "id": "whitelist-exhaustive",
+      "ok": false,
+      "detail": "rewritten set == manifest set: missing=[] extra=[Renderer/Context.js] (manifest 0, rewritten 0)",
+      "phase": "build"
+    },
+    {
+      "id": "logic-layer-overrides-zero",
+      "ok": true,
+      "detail": "logicLayerOverrides=0; repo-local modules in the graph=[experiments/gates/g1-alias/Renderer/Context.js, experiments/gates/g1-alias/entry.js]; upstream logic-layer modules bundled=1250",
+      "phase": "build"
+    },
+    {
+      "id": "no-unresolved-imports",
+      "ok": true,
+      "detail": "14 rollup warning(s), codes=[\"CIRCULAR_DEPENDENCY\",\"MISSING_EXPORT\"]; UNRESOLVED_IMPORT entries=0 (an unresolved import would survive into the browser bundle)",
+      "phase": "build"
+    },
+    {
+      "id": "missing-exports-attributable-to-cjs-interop",
+      "ok": true,
+      "detail": "MISSING_EXPORT warning(s): 1; each one MUST be attributable to the F-1 CommonJS wrapper (mersenne-twister/src/mersenne-twister.js, urijs/src/URI.js, urijs/src/IPv6.js, urijs/src/punycode.js, urijs/src/SecondLevelDomains.js, lerc/LercDecode.js, grapheme-splitter/index.js, bitmap-sdf/index.js, protobufjs/dist/minimal/protobuf.js). Detail: node_modules/@cesium/engine/Source/Scene/GoogleEarthEnterpriseImageryProvider.js (482:26): \"Reader\" is not exported by \"node_modules/protobufjs/dist/minimal/protobuf.js\", imported by \"node_modules/@cesium/engine/Source/Scene/GoogleEarthEnterpriseImageryProvider.js\".",
+      "phase": "build"
+    },
+    {
+      "id": "kept-modules-stay-upstream",
+      "ok": true,
+      "detail": "not-in-manifest modules are never rewritten (ContextLimits -> upstream, Scene -> upstream); 47 upstream Renderer module(s) bundled, Context.js excluded=[false]",
+      "phase": "build"
+    },
+    {
+      "id": "third-party-cjs-interop-recorded",
+      "ok": true,
+      "detail": "9 CommonJS/UMD module(s) wrapped at build time (finding F-1: no CJS plugin in the approved dependency set): mersenne-twister/src/mersenne-twister.js [-]; urijs/src/URI.js [./punycode ./IPv6 ./SecondLevelDomains]; urijs/src/IPv6.js [-]; urijs/src/punycode.js [-]; urijs/src/SecondLevelDomains.js [-]; lerc/LercDecode.js [-]; grapheme-splitter/index.js [-]; bitmap-sdf/index.js [-]; protobufjs/dist/minimal/protobuf.js [long]",
+      "phase": "build"
+    },
+    {
+      "id": "private-members-confined-to-gate-assertions",
+      "ok": true,
+      "detail": "\"_context\" occurrences under packages/cesium-webgpu/{src,backend-webgpu} (implementation path, .d.ts excluded): 0",
+      "phase": "build"
+    },
+    {
+      "id": "upstream-disk-unchanged",
+      "ok": true,
+      "detail": "aggregate sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033 -> sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033; files 1891 -> 1891; changed=[] (the alias plugin rewrites at build time only — node_modules is never edited)",
+      "phase": "runtime"
+    },
+    {
+      "id": "runtime-probe-produced-report",
+      "ok": true,
+      "detail": "probe completed at 2026-09-18T18:41:32.253Z; construction threw=false; page-level error=none",
+      "phase": "runtime"
+    },
+    {
+      "id": "scene-constructed-through-replacement",
+      "ok": false,
+      "detail": "new Scene({canvas}) with no context injected → constructor=\"Context\", instanceof bundle Context=true, instanceof the gate-local file=false, deep-import identity=false, stub flag=null, marker=null, id=faf3f1b6-9700-40e3-a36c-46789f51e9a8",
+      "phase": "runtime"
+    },
+    {
+      "id": "replacement-consumed-by-scene",
+      "ok": false,
+      "detail": "the replacement recorded 0 construction(s) and the upstream Scene read fragmentDepth x0, drawingBufferWidth x0, drawingBufferHeight x0, uniformState x0 (Scene.js:195/715-720; uniformState is built by upstream Context.js:335); scene.canvas is the gate canvas=true",
+      "phase": "runtime"
+    },
+    {
+      "id": "scene-public-api-served-by-replacement",
+      "ok": true,
+      "detail": "scene.drawingBufferWidth/Height = 320/200 (the upstream public getters delegate to the replacement) vs context 320/200; GL context acquired=true (webgl2) drawing buffer 320/200",
+      "glBacked": true,
+      "phase": "runtime"
+    },
+    {
+      "id": "capability-flags-reach-kept-upstream-module",
+      "ok": true,
+      "detail": "Renderer/ContextLimits.js (kept upstream, not in the manifest) received the replacement's values: maximumTextureSize=16384 (gl=16384), maximumSamples=8 (gl=8), maximumVertexAttributes=16, maximum3DTextureSize=2048",
+      "applicable": true,
+      "phase": "runtime"
+    },
+    {
+      "id": "logic-layer-capability-branch-followed-replacement",
+      "ok": true,
+      "detail": "Scene.js:195 `_logDepthBuffer = Scene.defaultLogDepthBuffer && context.fragmentDepth` → true (defaultLogDepthBuffer=true, our fragmentDepth=true, linkage=true); Scene.js:723-726 then set camera near/far = 0.1/10000000000 (camera=Camera)",
+      "applicable": true,
+      "phase": "runtime"
+    },
+    {
+      "id": "replacement-fails-loudly-not-silently",
+      "ok": false,
+      "detail": "probes: context.draw(...) → threw=true category=null; context.defaultTexture → threw=false category=undefined; recorded capabilities=[] (a replacement MUST NOT return silent empty values)",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgpu-adapter-info-recorded",
+      "ok": true,
+      "detail": "adapter.info={\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"device\":\"\",\"description\":\"\",\"subgroupMinSize\":32,\"subgroupMaxSize\":32}, preferredFormat=bgra8unorm, isFallbackAdapter=null, requestDevice()=true",
+      "phase": "runtime"
+    },
+    {
+      "id": "no-uncaught-page-errors",
+      "ok": true,
+      "detail": "0 uncaught page error(s)",
+      "phase": "runtime"
+    },
+    {
+      "id": "no-console-errors",
+      "ok": true,
+      "detail": "0 console message(s) — errors: []",
+      "phase": "runtime"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/out/g1-control-manifest.json",
+      "what": "the EMPTY control manifest (no entry ⇒ zero rewrites)"
+    },
+    {
+      "path": "experiments/gates/out/g1-control-build.json",
+      "what": "control build evidence (upstream Context.js stays in the graph/bundle)"
+    },
+    {
+      "path": "experiments/gates/out/g1-control-runtime.json",
+      "what": "control runtime probe report (the scene's context is the upstream implementation)"
+    },
+    {
+      "path": "experiments/gates/out/g1-alias-control/bundle.js",
+      "what": "control bundle loaded by the browser"
+    },
+    {
+      "path": "experiments/gates/out/g1-control-run.log",
+      "what": "control runner transcript"
+    },
+    {
+      "path": "experiments/gates/g1-alias/probe.js",
+      "what": "the probe reused unchanged by the control"
+    },
+    {
+      "path": "experiments/gates/out/g1.json",
+      "what": "the gate conclusion this control underpins"
+    }
+  ],
+  "measurements": {
+    "startedAt": "2026-09-18T18:40:16.102Z",
+    "requiredFailures": [
+      "build-rewrite-scene-relative-import",
+      "build-rewrite-bare-deep-import",
+      "build-upstream-context-absent-from-graph",
+      "whitelist-exhaustive",
+      "scene-constructed-through-replacement"
+    ],
+    "detected": 5,
+    "engine": {
+      "version": "26.3.0"
+    },
+    "upstreamIntegrity": {
+      "unchanged": true,
+      "aggregateBefore": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "aggregateAfter": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "fileCountBefore": 1891,
+      "fileCountAfter": 1891,
+      "changedDetails": [],
+      "detailsAdded": [],
+      "detailsRemoved": []
+    },
+    "upstreamContextInControlGraph": "as expected (upstream Context.js bundled)",
+    "controlRuntime": {
+      "contextConstructorName": "Context",
+      "contextInstanceOfBundleContext": true,
+      "contextInstanceOfLocalFile": false,
+      "gateStubFlag": null,
+      "stubMarkerOnContext": null,
+      "contextId": "faf3f1b6-9700-40e3-a36c-46789f51e9a8",
+      "sceneDrawingBufferWidth": 320,
+      "sceneDrawingBufferHeight": 200,
+      "contextDrawingBufferWidth": 320,
+      "contextDrawingBufferHeight": 200,
+      "glContextAcquired": true,
+      "glContextType": "webgl2",
+      "glDrawingBufferWidth": 320,
+      "glDrawingBufferHeight": 200,
+      "fragmentDepth": true,
+      "sceneDefaultLogDepthBuffer": true,
+      "sceneLogDepthBuffer": true,
+      "logDepthLinkageHolds": true,
+      "cameraNear": 0.1,
+      "cameraFar": 10000000000,
+      "cameraServedByScene": "Camera",
+      "sceneCanvasIsGateCanvas": true,
+      "sceneMsaaSamples": 4,
+      "probeGlDrawingBufferWidth": 8
+    },
+    "whitelist": {
+      "ok": false,
+      "manifestModules": [],
+      "rewritten": [],
+      "missing": [],
+      "extra": [
+        "Renderer/Context.js"
+      ]
+    }
+  }
+}

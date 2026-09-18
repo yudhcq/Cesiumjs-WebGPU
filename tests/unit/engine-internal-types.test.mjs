@@ -230,8 +230,14 @@ test("Context declarations cover the whole measured logic-layer consumption surf
 test("ContextLimits declarations match the members present upstream (>= 10)", () => {
   const declared = declaredMembers(blocks.get("@cesium/engine/Source/Renderer/ContextLimits.js"));
   const source = upstream("ContextLimits.js");
-  const upstreamMembers = new Set([...source.matchAll(/^ {2}(m(?:aximum|inimum)[A-Za-z0-9_]*):/gm)].map((m) => m[1]));
-  assert.ok(upstreamMembers.size >= 10, "upstream ContextLimits MUST expose at least 10 measured members");
+  // Upstream exposes every public member as a 2-space-indented accessor object (`name: {`).
+  // NOTE: an earlier revision matched only `maximum*`/`minimum*` names, which silently dropped
+  // the `highp*Supported` flags and made a correct declaration look like an upstream mismatch.
+  // Matching the accessor form covers the whole public surface (measured 23 members in 26.3.0).
+  const upstreamMembers = new Set(
+    [...source.matchAll(/^ {2}([A-Za-z_][A-Za-z0-9_]*):\s*\{\s*$/gm)].map((m) => m[1]),
+  );
+  assert.ok(upstreamMembers.size >= 20, `upstream ContextLimits MUST expose at least 20 public members, got ${upstreamMembers.size}`);
   assert.ok(declared.size >= 10, `ContextLimits declaration MUST cover at least 10 members, got ${declared.size}`);
   for (const name of declared) {
     assert.ok(upstreamMembers.has(name), `declared ContextLimits member "${name}" does not exist upstream`);
@@ -239,6 +245,10 @@ test("ContextLimits declarations match the members present upstream (>= 10)", ()
   // Members the logic layer reads directly (research §1.3) MUST be part of the declared set.
   for (const name of ["maximumTextureSize", "maximumCubeMapSize", "maximumVertexTextureImageUnits"]) {
     assert.ok(declared.has(name), `ContextLimits declaration MUST include "${name}" (logic-layer consumer)`);
+  }
+  // High-precision flags are consumed by the reimplemented ShaderProgram; they must stay declared.
+  for (const name of ["highpFloatSupported", "highpIntSupported"]) {
+    assert.ok(declared.has(name), `ContextLimits declaration MUST include "${name}" (patch-layer consumer)`);
   }
 });
 

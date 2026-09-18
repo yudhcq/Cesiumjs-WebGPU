@@ -1,0 +1,443 @@
+{
+  "ready": true,
+  "startedAt": "2026-09-18T20:58:02.741Z",
+  "finishedAt": "2026-09-18T20:59:19.479Z",
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "lovelace",
+    "subgroupMinSize": 32,
+    "hasInfo": true
+  },
+  "preferredFormat": "bgra8unorm",
+  "wgslLanguageFeatures": [
+    "packed_4x8_integer_dot_product",
+    "subgroup_uniformity",
+    "immediate_address_space",
+    "linear_indexing",
+    "subgroup_id",
+    "readonly_and_readwrite_storage_textures",
+    "unrestricted_pointer_parameters",
+    "buffer_view",
+    "texture_and_sampler_let",
+    "pointer_composite_access",
+    "texture_formats_tier1",
+    "uniform_buffer_standard_layout"
+  ],
+  "errors": [],
+  "startup": {
+    "planKey": "g6-reachable-subset-prewarm",
+    "plannedVariants": 36,
+    "declaredPlanSize": 36,
+    "configuration": {
+      "quantization": "QUANTIZATION_BITS12",
+      "imageryOps": "alpha",
+      "geodetic": "both",
+      "ocean": "none",
+      "tileLimitRectangle": "none"
+    },
+    "pipelineCompilations": 36,
+    "shaderProgramInstances": 36,
+    "failures": 0,
+    "wallMs": 2255,
+    "histogram": {
+      "count": 36,
+      "min": 28.699999928474426,
+      "p50": 65.60000002384186,
+      "p95": 97.90000009536743,
+      "p99": 103.10000002384186,
+      "max": 103.10000002384186,
+      "mean": 62.61666666136848,
+      "totalMs": 2254.199999809265,
+      "buckets": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 0
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 6
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 27
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 3
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ]
+    },
+    "syncHistogram": {
+      "count": 36,
+      "min": 0,
+      "p50": 0,
+      "p95": 0.20000004768371582,
+      "p99": 0.20000004768371582,
+      "max": 0.20000004768371582,
+      "mean": 0.03611111640930176,
+      "totalMs": 1.3000001907348633,
+      "buckets": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 36
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 0
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 0
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 0
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ]
+    },
+    "distinctModuleTexts": 128,
+    "moduleCompilations": 256
+  },
+  "session": {
+    "frames": 300,
+    "shaderProgramInstances": 7,
+    "pipelineCompilations": 0,
+    "cacheHits": 300,
+    "cacheMisses": 0,
+    "cacheHitRatio": 1,
+    "duplicateModuleCompilations": 0,
+    "wallMs": 0,
+    "histogram": {
+      "count": 0,
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0,
+      "totalMs": 0,
+      "buckets": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 0
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 0
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 0
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 0
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ]
+    },
+    "syncHistogram": {
+      "count": 0,
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "mean": 0,
+      "totalMs": 0,
+      "buckets": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 0
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 0
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 0
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 0
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ]
+    },
+    "poolSize": 36,
+    "poolPreparedBeforeTheSession": true,
+    "uncompiledSessionVariants": 0
+  },
+  "worstCase": {
+    "role": "informational",
+    "requestedVariants": 732,
+    "shaderProgramInstances": 732,
+    "pipelineCompilations": 732,
+    "duplicateModuleCompilations": 0,
+    "distinctModuleTexts": 128,
+    "moduleCompilations": 256,
+    "failures": 0,
+    "wallMs": 71756.5,
+    "histogram": {
+      "count": 732,
+      "min": 34.60000002384186,
+      "p50": 104.80000007152557,
+      "p95": 126,
+      "p99": 132.70000004768372,
+      "max": 143,
+      "mean": 98.0170765032208,
+      "totalMs": 71748.50000035763,
+      "buckets": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 0
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 22
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 100
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 610
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ]
+    },
+    "syncHistogram": {
+      "count": 732,
+      "min": 0,
+      "p50": 0,
+      "p95": 0.2999999523162842,
+      "p99": 0.5,
+      "max": 0.7000000476837158,
+      "mean": 0.04726776024682926,
+      "totalMs": 34.600000500679016,
+      "buckets": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 732
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 0
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 0
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 0
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ]
+    },
+    "autoLayoutSampleHistogram": {
+      "count": 24,
+      "min": 81.10000002384186,
+      "p50": 90.79999995231628,
+      "p95": 113.70000004768372,
+      "p99": 114.69999992847443,
+      "max": 114.69999992847443,
+      "mean": 95.09166666368644,
+      "totalMs": 2282.1999999284744,
+      "buckets": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 0
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 0
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 0
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 24
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ]
+    }
+  },
+  "pages": [
+    "2026-09-18T20:58:02.753Z input /experiments/gates/out/g6-variants-input.json",
+    "2026-09-18T20:58:03.184Z loaded 128 distinct module pair(s); 0 still missing",
+    "2026-09-18T20:58:17.777Z informational sweep 128/732 (12.3s)",
+    "2026-09-18T20:58:29.614Z informational sweep 256/732 (24.2s)",
+    "2026-09-18T20:58:42.008Z informational sweep 384/732 (36.6s)",
+    "2026-09-18T20:58:54.569Z informational sweep 512/732 (49.1s)",
+    "2026-09-18T20:59:08.011Z informational sweep 640/732 (62.6s)",
+    "2026-09-18T20:59:19.479Z startup: 36 planned variant(s) in 2.3s; session: 7 instance(s), 300 hit(s) / 0 miss(es), 0.0s; informational sweep: 732 variant(s) in 71.8s"
+  ]
+}

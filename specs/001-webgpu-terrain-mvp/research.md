@@ -110,7 +110,7 @@ npm pack @cesium/engine@26.3.0      # → 7,021,716 B；解包后 package/Source
 | `depthTexture` | getter | 27 | `Scene/View.js:46`、`Scene/GlobeTranslucencyState.js:222` | `Context.js:721` |
 | `createViewportQuadCommand` | 方法 | 26 | `Scene/GlobeDepth.js:178,196,212,229,247` | `Context.js:1625` |
 | `cache` | 普通对象 | 22 | `Scene/GlobeSurfaceTile.js:1063,1093`、`Scene/BillboardCollection.js:712` | `Context.js:386` |
-| `webgl2` | getter | 17 | `Core/FeatureDetection.js:392`、`Core/PixelFormat.js:518` | `Context.js:584` |
+| `webgl2` | getter | 17（**本轮复核为 18 / 15 个文件，口径差异见 §4 末 C-5**） | `Core/FeatureDetection.js:392`、`Core/PixelFormat.js:518` | `Context.js:584` |
 | `createPickId` | 方法 | 11 | `Scene/BatchTexture.js:466`、`Scene/Billboard.js:1106` | `Context.js:1686` |
 | `halfFloatingPointTexture` | getter | 9 | `Scene/GlobeDepth.js:281`、`Scene/AutoExposure.js:133` | `Context.js:747` |
 | `stencilBuffer` | getter | 8 | `Scene/Scene.js:2870,3064,3075` | `Context.js:628` |
@@ -139,6 +139,7 @@ npm pack @cesium/engine@26.3.0      # → 7,021,716 B；解包后 package/Source
 `Texture`（51）、`Sampler`（47）、`DrawCommand`（37）、`FramebufferManager`（29）、`ClearCommand`（22）、
 `ShaderProgram`（22，其中 `fromCache` 22）、`VertexArray`（16）、`PassState`（7）、`CubeMap`（6）、`ComputeCommand`（6）、
 `Framebuffer`（6）、`Renderbuffer`（3）、`VertexArrayFacade`（3）、`TextureAtlas`（3）、`ContextLimits`（19 个文件 / 10 个成员，主要为 `maximumTextureSize` 16、`maximumCubeMapSize` 5、`maximumVertexTextureImageUnits` 5）。
+**（实测更正，依据 G-2 门禁 D-3）**：上游模块 `Renderer/ContextLimits.js` 的公开成员实为 **23 个**（后备字段 `:7-29` 23 个 / `Object.defineProperties` 访问器 `:32-330` 23 个）；**逻辑层实际消费 9 个成员**（`maximumTextureSize` 16、`maximumVertexTextureImageUnits` 5、`maximumCubeMapSize` 5、`maximumAliasedLineWidth` 2，以及 `maximumTextureImageUnits` / `maximumTextureFilterAnisotropy`（`Scene/ImageryLayer.js:1302`）/ `maximumAliasedPointSize`（`Scene/PointPrimitiveCollection.js:850`）/ `minimumAliasedLineWidth` / `maximumSamples` 各 1）。原文的"10 个成员"来源已定位：对逻辑层做 `ContextLimits\.(\w+)` 扫描会把模块路径片段 `ContextLimits.js` 的 `js` 计为成员名（同一扫描排除该片段即得 9）。完整计数与并集见 §4 末「§4 事实更正记录」C-2。
 
 ### 1.4 已核实：逐帧调用链（渲染后端在哪里被执行）
 
@@ -399,7 +400,7 @@ WebGPU 后端 MUST 用**真实能力**回答逻辑层的特性门控（§1.3、�
 
 | 逻辑层读取的标志 | 证据（消费点） | WebGPU 事实 | 采用值（MVP） |
 |---|---|---|---|
-| `webgl2` | `Core/FeatureDetection.js:392`、`Core/PixelFormat.js:518`、`Scene/Scene.js:3905` | WebGPU 等价于"现代管线"（整数纹理、实例化、MRT、VAO 语义、sRGB 目标） | **true**（语义为"现代渲染能力可用"，实现里 MUST 注释说明该标志的历史含义） |
+| `webgl2` | ~~`Scene/Scene.js:3905`~~ → **`Scene/Cesium3DTileset.js:3905`**（**实测更正，依据 G-2 门禁 F-2**：`Scene/Scene.js` 全文没有 `context.webgl2` 读取，该行是 shadowState 代码；`:3905` 命中属 `Scene/Cesium3DTileset.js`。逻辑层实测共 **18 处 / 15 个文件**，代表见 `Core/FeatureDetection.js:392`、`Core/PixelFormat.js:518`、`Scene/Picking.js:386`、`Scene/GltfLoader.js:1382,1464,1521`；清单见 §4 末 C-1）、`Scene/Scene.js:1721`（**`msaa`**，逻辑层唯一消费点，见本表下一行） | WebGPU 等价于"现代管线"（整数纹理、实例化、MRT、VAO 语义、sRGB 目标） | **true**（语义为"现代渲染能力可用"，实现里 MUST 注释说明该标志的历史含义；该标志是**能力**不是**路径开关**，MUST NOT 用于决定走哪条后端） |
 | `msaa` | `Scene/Scene.js:1721` | WebGPU 保证 4× MSAA（`sampleCount` 1/4） | true |
 | `depthTexture` | `Scene/View.js:46`、`GlobeTranslucencyState.js:222`、`GroundPrimitive.js:983` | 取决于我们是否已实现离屏深度纹理与深度拷贝（§8 切片 B） | 切片 A：**false（临时）**；切片 B：true |
 | `fragmentDepth` | `Scene/Scene.js:195`、`EllipsoidPrimitive.js:282` | WGSL `@builtin(frag_depth)` | true |
@@ -409,12 +410,18 @@ WebGPU 后端 MUST 用**真实能力**回答逻辑层的特性门控（§1.3、�
 | `floatingPointTexture` / `halfFloatingPointTexture` | `Scene/BatchTable.js:90`、`GlobeDepth.js:281` | 纹理格式能力 | 按能力计算 |
 | `stencilBuffer` / `stencilBits` | `Scene/Scene.js:2870,3064,3075` | `depth24plus-stencil8` → 8 bit | true / 8 |
 | `elementIndexUint` | `Scene/Primitive.js:1263` | 原生 `uint32` 索引 | true |
-| `textureFilterAnisotropic` | `Scene/Scene.js`（`maximumTextureFilterAnisotropy` 1 处） | 无各向异性过滤 | **false**（逻辑层走无各向异性路径） |
+| `textureFilterAnisotropic` | ~~`Scene/Scene.js`（`maximumTextureFilterAnisotropy` 1 处）~~ → **`Scene/ImageryLayer.js:1302`**（`ContextLimits.maximumTextureFilterAnisotropy`；**实测更正，依据 G-2 门禁 T017 复核**：`Scene/Scene.js` 仅在 JSDoc 提及 `allowTextureFilterAnisotropic`（`:130`），没有该成员读取；`context.textureFilterAnisotropic`（`Context.js:802`）无逻辑层读取） | 无各向异性过滤 | **false**（逻辑层走无各向异性路径） |
 | `s3tc/pvrtc/astc/etc/etc1/bc7` | `Scene/Scene.js:1771-1781` | 未实现压缩纹理上传 | 全 **false** |
-| `supportsBasis` | `GltfLoader.js:586` | 未实现（依赖压缩纹理） | false |
+| `supportsBasis` | `GltfLoader.js:586`（另有 `Core/FeatureDetection.js:298`，实测补注） | 未实现（依赖压缩纹理） | false |
 | `standardDerivatives` / `blendMinmax` / `textureFloatLinear` / `textureHalfFloatLinear` / `vertexArrayObject` | 无外部消费者（§1.3 表末） | — | 内部实现自由 |
 
 `ContextLimits`（`Renderer/ContextLimits.js`，19 个逻辑层文件消费）映射：
+**（实测更正，依据 G-2 门禁 D-3）** 该模块公开成员实为 **23 个**：逻辑层消费 **9 个**，补丁层**需重实现**的模块再消费 **8 个**
+（`RenderState`→`maximumViewportWidth`/`maximumViewportHeight`/`maximumAliasedLineWidth`/`minimumAliasedLineWidth`；
+`ShaderProgram`→`highpFloatSupported`/`highpIntSupported`；`Framebuffer`→`maximumColorAttachments`；`Renderbuffer`→`maximumRenderbufferSize`；
+`Texture3D`→`maximum3DTextureSize`；`Texture`→`maximumTextureSize`；`VertexArray`→`maximumVertexAttributes`；`CubeMap`→`maximumCubeMapSize`），
+**并集 17 个**（T005 的 `packages/cesium-webgpu/types/engine-internal.d.ts:27-54` 已按实测声明 **17 个声明面**；其成员集合与实测并集有 5 项差异，见 C-2）。
+下表**补齐至全部 23 个成员**（含原表遗漏的 5 个）：
 
 | `ContextLimits` 成员 | 外部消费 | WebGPU 来源 |
 |---|---|---|
@@ -430,9 +437,48 @@ WebGPU 后端 MUST 用**真实能力**回答逻辑层的特性门控（§1.3、�
 | `maximumAliasedPointSize` | 1 | `1.0` |
 | `maximumTextureFilterAnisotropy` | 1 | `1.0` |
 | `maximumViewportWidth/Height` | 0 | `maxTextureDimension2D` |
+| `minimumAliasedPointSize`（原表遗漏，实测补入） | 0（内部） | `1.0`（WebGPU 无点大小；与 `maximumAliasedPointSize` 对称） |
+| `maximumDrawBuffers`（原表遗漏，实测补入） | 0（内部；G-2 实测经公开 getter 读回 8） | `maxColorAttachments`（本机 Chrome 153 实测 8；WebGPU 保证 ≥ 8） |
+| `maximumColorAttachments`（原表遗漏，实测补入） | 0（内部；`Framebuffer.js` 消费） | `maxColorAttachments` |
+| `highpFloatSupported` / `highpIntSupported`（原表遗漏，实测补入） | 0（内部；`ShaderProgram.js:153` 消费） | 均 **true**（WGSL 无精度限定符，highp 语义恒可用；由此产生的精度差异属 §6.3 / H-7 已声明范围） |
 
 > **临时降级开关的纪律**：`depthTexture=false`（切片 A）是**过渡**，MUST 在切片 B 完成后翻转为 true 并重跑全量验证；
 > 该翻转必须在 `plan.md` 的复杂度追踪与 `tasks.md` 中显式登记，禁止长期停留在降级态。
+
+### §4 事实更正记录（实测更正，依据 G-2 / G-4 门禁）
+
+> 2026-09-19 复核**已装** `node_modules/@cesium/engine`（`version = 26.3.0`，即 `cesium@1.145.0` 的依赖）的 `Source/**` 后对本节表格的更正。
+> 上文原文一律保留（删除线或引号标出），更正在其后就地给出，使漂移可追溯。本节只更正**事实**，不改任何采用值。
+
+**C-1｜`webgl2` 的消费点行号（文件归属错误，非"标志不存在"）** —— 原文 `Scene/Scene.js:3905` 不成立：
+- `Scene/Scene.js` 全文**没有** `context.webgl2` 读取；`:3905` 是 shadowState 代码（`shadowState.lightShadowMaps.length = 0;`）；
+- 该 `:3905` 命中实为 **`Scene/Cesium3DTileset.js:3905`**（`if (!frameState.context.webgl2 && !this._enablePick)`）；
+- **但 MUST NOT 推广为"全文没有读取"**：`context.webgl2` 在 26.3.0 中共 **25 处** = 逻辑层 **18 处 / 15 个文件** + `Renderer/**` **7 处**。
+  逻辑层全部命中：`Core/FeatureDetection.js:392`、`Core/PixelFormat.js:518`、`Scene/Cesium3DTileset.js:3905`、`Scene/ClippingPolygonCollection.js:745`、
+  `Scene/createElevationBandMaterial.js:492`、`Scene/GltfLoader.js:1382,1464,1521`、`Scene/GltfTextureLoader.js:304`、`Scene/Picking.js:386`、
+  `Scene/Vector3DTilePrimitive.js:234,735`、`Scene/Model/GeometryPipelineStage.js:181`、`Scene/Model/InstancingPipelineStage.js:77`、
+  `Scene/Model/MetadataPipelineStage.js:90`、`Scene/Model/ModelRuntimePrimitive.js:203`、`Scene/Model/TextureManager.js:84`、`Scene/Model/WireframePipelineStage.js:82`；
+  Renderer 内部：`PixelDatatype.js:35`、`ShaderSource.js:245,282,297`、`Texture.js:806,1090`、`Texture3D.js:72`。
+  （`docs/gate-g2-conclusion.md` F-2 的表述限定在 **`Scene.js` 单文件**，与本条一致；本行据此更正为"归属错误"而非"该标志无消费"。）
+- 与 `webgl2` 最接近的能力标志确为 `msaa`（`Context.js:652`）：其**逻辑层唯一**消费点是 `Scene#msaaSupported` getter（`Scene/Scene.js:1719-1721`，读 `this._context.msaa`，**构造期不读**）；`Renderer/FramebufferManager.js:143` 另有一处（补丁层内部）。
+- **对 WebGL2 回退设计依据的影响**：`webgl2` 是**真实被逻辑层读取的能力标志**（18 处，跨 `Core`/`Scene`/`Scene/Model`），因此 (i) 替换实现 MUST 如实发布该标志；(ii) 它是**能力**而非**路径开关**，决定走哪条后端的职责仍属 `src/render-path/` 的探测 + 交接槽，MUST NOT 用该标志做路径分支；(iii) **静态清单下的回退**由"补丁层保留一份上游原版 WebGL2 实现、替换实现一次性探测后整体委派"承担（**单构建**，同一时刻只有一个后端被实例化）——该决策见 `plan.md` 决策 **D2-a** 与原则 II 合规论证。
+
+**C-2｜`ContextLimits` 计数（`10` → 模块 23 个公开成员）** —— 原文"10 个成员"不成立，实测：
+- **模块公开成员 23 个**（`Renderer/ContextLimits.js:7-29` 后备字段 23 个；`:32-330` 访问器 23 个；除 `highpFloatSupported`/`highpIntSupported` 为 boolean 外均为 number）；
+- **逻辑层消费 9 个**（19 个文件，明细见 §1.3 行内更正）；
+- **补丁层需重实现的模块再消费 8 个**（清单见本节上方 `ContextLimits` 映射表引言）→ **并集 17 个**；
+- 原记"10"的来源：`ContextLimits\.(\w+)` 扫描把模块路径片段 `ContextLimits.js` 的 `js` 计为成员名（排除该片段即得 9）；
+- **T005 的 `packages/cesium-webgpu/types/engine-internal.d.ts` 已按实测声明 17 个成员声明面**（`:27-54`）。**W2 同步提示**：该 17 项与实测并集**基数相同但集合有 5 项差异** —— 已声明而实测无人消费：`maximumCombinedTextureImageUnits`、`maximumVaryingVectors`、`maximumVertexUniformVectors`、`maximumFragmentUniformVectors`、`maximumDrawBuffers`；实测被消费而未声明：`maximumAliasedPointSize`（`Scene/PointPrimitiveCollection.js:850`）、`maximumViewportWidth`/`maximumViewportHeight`（`RenderState.js:321-328`）、`highpFloatSupported`/`highpIntSupported`（`ShaderProgram.js:153`）。若 W2/T045 需要后者，T005 的声明面 MUST 同步；不影响本节的计数结论与 §4 的采用值。
+
+**C-3｜`AutomaticUniforms` 计数（93，非 92；两个"92"是另一个量）** —— 实测上游 `Renderer/AutomaticUniforms.js` 顶层 `czm_*` 条目 **93 条**（全部 `czm_` 前缀，仅 `czm_sphericalHarmonicCoefficients` 为数组 size 9），与 §5.4 表所记"共 93 条"一致 → **§4 本身无需更正**。需要消歧的是另两处"92"：
+- `tasks.md` T018 与 `plan.md`「Scale/Scope」的 **92** = 尖刺对"**拼装后 VS+FS 文本中 `^uniform` 声明数**"（`experiments/shader-spike/REPORT.md:74`，`default-3d` 配置）的实测值，**与 `AutomaticUniforms` 的 93 条不是同一个量**（前者是文本声明数，后者是上游模块条目数，且后者还受"记号未出现则不注入"影响）；
+- G-4 门禁实测**默认配置实际参与者**为 **52 个数值 uniform + 2 个 sampler**（矩阵并集 58 个 struct 成员 + 5 个 sampler），`g4.json → measurements.automaticUniformCount = 93`；`docs/gate-g4-conclusion.md` D-1 已登记该偏离。
+- 处置：`tasks.md` T018 的文字已消歧（92/93/54 三者分列），`plan.md` 的 92 保持原样（它引用的正是尖刺实测的文本声明数）。
+
+**C-4｜`textureFilterAnisotropic` 的消费点行号** —— 原文"`Scene/Scene.js`（`maximumTextureFilterAnisotropy` 1 处）"不成立：实测该 `ContextLimits` 成员的**逻辑层唯一**消费点是 **`Scene/ImageryLayer.js:1302`**；`Scene/Scene.js` 中只有一处 JSDoc 提及 `allowTextureFilterAnisotropic`（`:130`），**没有**该成员读取；`context.textureFilterAnisotropic`（`Context.js:802`）**无逻辑层读取**（仅 `Texture.js:225/822`、`CubeMap.js:192/545`、`Texture3D.js:214/677` 经 `_textureFilterAnisotropic` 在补丁层内部使用扩展对象）。本行采用值 `false` 不变。
+
+**C-5｜其余行号的逐条复核结果（顺带扫描）** —— §4 表内以下证据行**逐条与已装 26.3.0 一致，无漂移**：`msaa`(`Scene/Scene.js:1721`)、`depthTexture`(`View.js:46`/`GlobeTranslucencyState.js:222`/`GroundPrimitive.js:983`)、`fragmentDepth`(`Scene.js:195`/`EllipsoidPrimitive.js:282`)、`instancedArrays`(`CloudCollection.js:955`/`GltfLoader.js:1462`)、`drawBuffers`(`OIT.js:32`)、`colorBufferFloat`(`OIT.js:31`)/`colorBufferHalfFloat`(`Scene.js:1661`)、`floatingPointTexture`(`BatchTable.js:90`)/`halfFloatingPointTexture`(`GlobeDepth.js:281`)、`stencilBuffer`(`Scene.js:2870,3064,3075`)、`elementIndexUint`(`Primitive.js:1263`)、压缩纹理族(`Scene.js:1771-1781`)、`supportsBasis`(`GltfLoader.js:586` + `Core/FeatureDetection.js:298`)、以及"无外部消费者"组（`standardDerivatives`/`blendMinmax`/`textureFloatLinear`/`textureHalfFloatLinear`/`vertexArrayObject`/`debugShaders`/`throwOnWebGLError`/`defaultEmissiveTexture`/`defaultNormalTexture`/`defaultFramebuffer`/`stencilBits` 均实测 **0 处**）。
+§1.3 的**引用计数是下界且随扫描口径浮动**：本轮独立复核（仅计 `context.<member>` / `frameState.context.<member>` 形态、未剔注释）得 `uniformState` 55（原 57）、`shaderCache` 31（32）、`drawingBufferHeight` 28（29）、`drawingBufferWidth` 22（23）、`depthTexture` 24（27）、`fragmentDepth` 6（7）、`textureCache` 2（3）、`webgl2` 18（17，差异最可能来自可选链 `scene?.context.webgl2` 的匹配口径）、`defaultTexture` 43（一致）、`createViewportQuadCommand` 26（一致）、`cache` 22（一致）。差异均在 ±3 内且**不改变"谁被消费"的任何结论**（所有被记成员在两种口径下都被消费、被记为 0 的成员在两种口径下都为 0），故正文计数保持原样、差异在此登记。
 
 ---
 

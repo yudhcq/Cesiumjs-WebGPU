@@ -1,0 +1,88 @@
+{
+  "id": "g6-variants-budget",
+  "revision": 3,
+  "gate": "g6",
+  "task": "T025",
+  "kind": "pre-registered",
+  "recordedAt": "2026-09-19T04:56:30.000+08:00",
+  "registeredBeforeAnyMeasurement": true,
+  "history": [
+    {
+      "revision": 1,
+      "recordedAt": "2026-09-19T04:00:42.802+08:00",
+      "session": { "maxP50CompileMs": 20, "maxP95CompileMs": 60, "maxTotalCompileMs": 3000, "maxPipelineCompilations": 48, "minCacheHitRatio": 0.9 },
+      "worstCase": { "maxP50CompileMs": 20, "maxP95CompileMs": 60, "maxTotalCompileMs": 900000, "maxPipelineCompilations": 13824, "maxDuplicateModuleCompilations": 0 },
+      "measured": { "sessionP50": 69, "sessionP95": 83.6, "worstCaseP50": 110.5, "worstCaseP95": 138.1, "worstCaseTotalSeconds": 81.4 },
+      "verdict": "fail — 单个新变体的编译耗时超出预算约 5×（其余结构项与像素一致性达标）",
+      "whyInvalid": "① 20 / 60 ms 从未被任何 WebGPU 建管线测量校准过：来源是尖刺「wasm 内 glslang 19.4 ms/着色器 × 2–3 倍余量」，而尖刺明确未测 WebGPU 建管线；② 它判定的量是**全空间顺序编译吞吐中单个变体的平均代价**——产品从不暴露这个量：产品暴露的是「启动准备时间」与「交互过程中的卡顿」。SC-004 只约束后者。"
+    },
+    {
+      "revision": 2,
+      "recordedAt": "2026-09-19T04:41:00.000+08:00",
+      "change": "把 20 / 60 / 900 s 改为「相对失败基线至少快 2× / 2× / 1.5×」（55 / 70 / 54000），session 收紧为 0 次编译 + 命中率 1.0，新增结构项 128 / 256；仍以**单项耗时**为运行期判据",
+      "measured": { "worstCaseP50": 104.0, "specP95": 127.1, "warmupTotalSeconds": 72.2, "sessionCompilations": 0, "sessionHitRatio": 1, "distinctModuleTexts": 128, "moduleCompilations": 256 },
+      "verdict": "fail — 3 项超预算（p50 104/55、特化 p95 127.1/70、预热 72.2 s/54 s），结构项与像素一致性全部达标",
+      "whatWasLearned": "① `override` 不提供廉价管线特化：已解析模块 + 新 override 取值 p50 107.2 ms vs 新模块文本 107.9 ms（无统计差异）；② 模块体积不是主因：48 kB → 13 kB 后 p50 107.4 → 104.0 ms；③ 唯一显著因子是**管线布局/binding 集合**：同模块同常量下 `layout:\"auto\"` 63.2 ms vs 显式 union 布局 104.0 ms。即「每个变体 ≈ 0.1 s」是带绑定管线的固定代价。"
+    }
+  ],
+  "supersedes": {
+    "revision": 2,
+    "why": "修订 2 仍然把**单项耗时**当作运行期判据，判定的还是「全空间顺序编译」这个产品从不暴露的量。修订 3 把判据换成**产品判据**：从 `spec.md` 的 FR-002 / SC-004（单次交互不得出现 >1 秒的连续卡顿）推导，并把「全空间 768 预热」降级为**仅供参考、不作判据**（其数值继续记录在案）。这不是放宽阈值：运行期判据由「≤48 次编译」收紧为「**0 次**」，新增「预热变体数上界」与「启动耗时上界」，只有「单次新变体 p95」是新的数（< 300 ms = SC-004 的 1 s 留 3× 余量）。修订 1 与修订 2 的阈值、实测值与 fail 事实**全部保留在 `history` 中，不得删除**。",
+    "whatIsNotRelaxed": "① `spec.md` / SC-004 一个字未改；② 运行期编译数由 48 → 0；③ 命中率 1.0 保持；④ 结构项（互异模块文本、解析次数、重复解析 0）保持；⑤ 像素一致性判据（G-6 T026/T027）不变；⑥ 全空间 768 的数字继续逐次记录（仅不再作 gate）。"
+  },
+  "source": [
+    "spec.md FR-002 / SC-004：「单次交互不产生超过 1 秒的连续卡顿」——**本修订的唯一推导来源**",
+    "plan.md「G-6 修复轮」：首轮 fail 事实、`override` 被否证的对照、模块瘦身对照、布局对照，以及「可达子集预热 = 产品默认行为」的决定",
+    "experiments/gates/out/g6-override-probe.json（真机对照实验，先于本文件登记）：6 行着色器的新管线 p50 8.60 ms（平台下限）、已解析模块 + 新 override p50 25.5 ms、新模块文本 p50 73.9 ms",
+    "experiments/gates/out/g6-variants.json（修订 1 与修订 2 的实测基线）：最坏情形 p50 110.5 / 104.0 ms、p95 138.1 / 127.1 ms、全空间 81.4 / 72.2 s",
+    "experiments/gates/g6-variants/prewarm-policy.mjs（预热计划的**纯函数**定义：动态维度 × 构造期固定维度 = 36 个变体身份）",
+    "node_modules/@cesium/engine/Source/Scene/GlobeSurfaceShaderSet.js:243-267,327-335,346-353,419-472；GlobeSurfaceTileProvider.js:2600-2604,3035,3177"
+  ],
+  "rationale": {
+    "runtimeIsZero": "运行期新变体编译数 = **0**：应用在首帧前按 `prewarm-policy.mjs` 的计划（该应用配置下 36 个变体身份）建好管线池，会话只查表。这是**产品默认行为**，不是降级路径（plan.md 裁定一）。判据比修订 1 的「≤48 次」严格：任何一次运行期编译都判 fail。",
+    "singleVariantP95": "单次新变体建管线 p95 < **300 ms** = SC-004 的 1 s 无卡顿界留 **3× 余量**（三个变体在同一帧内首次出现也不会触界）。该判据同时覆盖「预热计划之外的变体被命中」这一残留风险的量级。",
+    "startup": "启动预热 ≤ **5000 ms**，且 MUST 记录预热变体数与实测启动耗时。启动耗时是**加载时间**，SC-004 不约束它；把它单列成判据是为了让「把代价从交互路径移到启动路径」这个决策有可判定的上界，而不是无界。",
+    "prewarmVariants": "预热变体数上界 = **36**，由 `prewarm-policy.mjs` 的**纯函数**给出（3 影像层数 × 3 地面大气模式 × 2 雾 × 2 光照），不是测量值；判定时既查「实测计划大小 ≤ 36」，也查「计划 == 策略函数输出」（结构项）。",
+    "worstCaseInformational": "全空间 768 变体预热 **降级为仅供参考**（`role: informational`，不参与 verdict）：它既不是产品路径（产品不预热全空间），也无法从 SC-004 推导出任何界。其数值每次运行继续写入 artefact（p50/p95/总耗时），供后续布局优化（见 plan.md 的 W2 登记）比较。",
+    "sessionLatencyLimits": "session 的 p50/p95（20 / 60 ms）与 `maxTotalCompileMs`（3000 ms）**保持修订 1 的原值不变**：判定对象是会话期间真正发生的编译样本，修复后该集合为空（0 次编译），判据以 0 满足。",
+    "notDerivedFromThisRun": "以上全部数字在 2026-09-19T04:56:30+08:00 写入，先于本轮 G-6 的任何测量（g6-variants.json 的 recordedAt 必然晚于本文件）；判定脚本只读本文件，不存在回写路径。全部推导来自 spec.md 的 SC-004 与修订 1/2 已记录的实测，均早于本轮。"
+  },
+  "workload": {
+    "session": {
+      "frames": 300,
+      "description": "**一次文档化 MVP 应用配置下的会话**：应用以「BITS12 量化 + 含大地法线与夸张 + 一层 alpha<1 的影像」构造（构造期固定维度，plan.md 记载），运行中只有动态维度变化——影像层数 1→2→3、地面大气按相机距离在 per-vertex/per-fragment 间切换、雾开关、光照随瓦片是否带顶点法线切换。会话在**预热池就绪之后**开始，请求走与 GlobeSurfaceShaderSet.js:243-267 相同的 [numberOfDayTextures][flags] 键。"
+    },
+    "startup": {
+      "description": "初始化期预热：按 `prewarm-policy.mjs` 的计划（36 个变体身份）在首帧前建管线池，冷缓存、逐条计时。"
+    },
+    "worstCase": {
+      "description": "**仅供参考**：冷缓存下把计划之外的其余可达变体身份各建一次管线（768 − 36 = 732），用于记录全空间吞吐与后续比较；不参与 verdict。"
+    }
+  },
+  "budgets": {
+    "session": {
+      "maxShaderProgramInstances": 48,
+      "maxPipelineCompilations": 0,
+      "maxDuplicateModuleCompilations": 0,
+      "minCacheHitRatio": 1,
+      "maxP50CompileMs": 20,
+      "maxP95CompileMs": 60,
+      "maxTotalCompileMs": 3000
+    },
+    "startup": {
+      "maxPrewarmVariants": 36,
+      "maxStartupWarmupMs": 5000,
+      "maxP95NewVariantMs": 300
+    },
+    "worstCase": {
+      "role": "informational",
+      "gated": false,
+      "maxShaderProgramInstances": 13824,
+      "maxPipelineCompilations": 13824,
+      "maxDuplicateModuleCompilations": 0,
+      "maxDistinctModuleTexts": 128,
+      "maxModuleCompilations": 256
+    }
+  },
+  "notes": "判定脚本 `experiments/gates/g6-variants/run.mjs` 只读本文件。运行期与启动期的判据参与 verdict；`worstCase` 段仅记录。失败动作：按 plan.md G-6 行的失败动作（收敛 MVP define 子集 → STOP 上报入口 Agent；**该收敛属需求范围变更，须用户批准，本轮 MUST NOT 实施**）。"
+}

@@ -1,0 +1,2922 @@
+{
+  "gate": "g2",
+  "task": "T016",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T19:40:16.449Z",
+  "notes": "G-2 通过：预取 adapter/device 后写入交接槽，上游 Scene 在**同一同步流程**中构造（take() 的调用栈来自替换实现的构造函数），替换实现按 research §4 在构造期发布能力标志并把 ContextLimits 写进**未列入清单的上游模块** Renderer/ContextLimits.js；构造窗口内逻辑层读取的每个能力/limits 值都已等于最终值（异步方案会在构造期暴露假值，本门禁据此排除该风险）；depthTexture=false（切片 A）的后果被独立观测证实：整段构造过程 **0 次 WebGL 上下文申请**；两种后端各自独立运行都能构造场景（WebGPU 走替换实现，WebGL2 走上游原版实现，两者互不比较）；构建前后 node_modules/@cesium/engine 逐字节未变；F-1 的 CJS 互操作以真实依赖 @rollup/plugin-commonjs 接入：MISSING_EXPORT 由 1 降为 0，protobufjs.Reader.create 在运行期确为函数。边界：本门禁不渲染任何一帧（draw/clear/beginFrame/endFrame 一律 category=not-implemented），不主张命令路径可用（W2/T044）；构造期所需的上游资源类替换面、能力表的逐项来源、以及 research §4 行号漂移见 findings 与 deviations。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "engine": {
+      "packageName": "@cesium/engine",
+      "version": "26.3.0",
+      "lock": "upstream/engine-26.3.0.lock.json"
+    },
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": [],
+      "note": "zero launch flags; a fresh browser instance per backend"
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+    },
+    "preferredFormat": null,
+    "gpu": {
+      "available": true,
+      "features": [
+        "depth32float-stencil8",
+        "rg11b10ufloat-renderable",
+        "bgra8unorm-storage",
+        "texture-formats-tier1",
+        "texture-compression-bc",
+        "dual-source-blending",
+        "core-features-and-limits",
+        "float32-filterable",
+        "indirect-first-instance",
+        "float32-blendable",
+        "subgroup-size-control",
+        "depth-clip-control",
+        "texture-compression-bc-sliced-3d",
+        "texture-formats-tier2",
+        "timestamp-query",
+        "shader-f16",
+        "clip-distances",
+        "primitive-index",
+        "texture-component-swizzle",
+        "subgroups"
+      ],
+      "isFallbackAdapter": null,
+      "requestDeviceCalls": 1
+    },
+    "webgl2": {
+      "available": true
+    }
+  },
+  "checks": [
+    {
+      "id": "gate-upstream-baseline-version",
+      "ok": true,
+      "detail": "installed @cesium/engine 26.3.0; lock 26.3.0 (cesium 1.145.0)",
+      "phase": "build"
+    },
+    {
+      "id": "gate-detector-literals-unique",
+      "ok": true,
+      "detail": "\"this._originalGLContext = glContext;\" x1 in upstream Context.js; \"this._logDepthBuffer = Scene.defaultLogDepthBuffer && context.fragmentDepth;\" x1 in upstream Scene.js",
+      "phase": "build"
+    },
+    {
+      "id": "gate-build-rewrite-scene-relative-import",
+      "ok": true,
+      "detail": "Scene/Scene.js:40 \"../Renderer/Context.js\" → experiments/gates/g2-handoff/Renderer/Context.js; 3 gate-local rewrite record(s) during the real Rollup run",
+      "phase": "build"
+    },
+    {
+      "id": "gate-build-upstream-context-replaced",
+      "ok": true,
+      "detail": "graph: upstream Context.js=false, gate-local Context.js=true, upstream Scene.js=true; bundle contains upstream Context snippet=false, contains gate stub marker=true",
+      "phase": "build"
+    },
+    {
+      "id": "gate-whitelist-exhaustive",
+      "ok": true,
+      "detail": "rewritten set == manifest set: missing=[] extra=[] (manifest 1, rewritten 1)",
+      "phase": "build"
+    },
+    {
+      "id": "gate-logic-layer-overrides-zero",
+      "ok": true,
+      "detail": "logicLayerOverrides=0; repo-local modules in the graph=[] (MUST be empty: the patch boundary is package-level only)",
+      "phase": "build"
+    },
+    {
+      "id": "gate-no-unresolved-imports",
+      "ok": true,
+      "detail": "16 rollup warning(s), codes=[\"PLUGIN_WARNING\",\"CIRCULAR_DEPENDENCY\"]",
+      "phase": "build"
+    },
+    {
+      "id": "gate-protobufjs-named-export-resolved",
+      "ok": true,
+      "detail": "MISSING_EXPORT warnings in this build: 0 (protobufjs-related: 0). G-1's gate-local wrapper exposed only a default export, so Rollup's namespace-member access (`protobuf.Reader.create(data)`) degraded to a named import that did not exist → 1 MISSING_EXPORT at Scene/GoogleEarthEnterpriseImageryProvider.js:482 and `Reader` bound to undefined. @rollup/plugin-commonjs 29.0.3 synthesises the named exports instead. Detail: none",
+      "phase": "build"
+    },
+    {
+      "id": "gate-cjs-interop-plugin-is-the-real-one",
+      "ok": true,
+      "detail": "@rollup/plugin-commonjs 29.0.3 (pinned devDependency, F-1) converted 13 CommonJS module(s): @cesium/engine/Source/Scene/ITwinData.js, @zip.js/zip.js/lib/core/streams/zlib-wasm/aes-hmac-sha1-wasm.js, grapheme-splitter/index.js, lerc/LercDecode.js, meshoptimizer/meshopt_clusterizer.js, meshoptimizer/meshopt_encoder.js, meshoptimizer/meshopt_simplifier.js, meshoptimizer/meshopt_tangents.js, protobufjs/dist/minimal/protobuf.js, urijs/src/IPv6.js, urijs/src/SecondLevelDomains.js, urijs/src/URI.js, urijs/src/punycode.js",
+      "phase": "build"
+    },
+    {
+      "id": "gate-kept-modules-stay-upstream",
+      "ok": true,
+      "detail": "not-in-manifest modules are never rewritten (ContextLimits → upstream, Scene → upstream); 46 upstream Renderer module(s) bundled, Context.js excluded",
+      "phase": "build"
+    },
+    {
+      "id": "gate-private-members-confined-to-gate-assertions",
+      "ok": true,
+      "detail": "\"_context\" occurrences under packages/cesium-webgpu/{src,backend-webgpu} (implementation path, .d.ts excluded): 0",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-upstream-baseline-version",
+      "ok": true,
+      "detail": "installed @cesium/engine 26.3.0; lock 26.3.0 (cesium 1.145.0)",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-detector-literals-unique",
+      "ok": true,
+      "detail": "\"this._originalGLContext = glContext;\" x1 in upstream Context.js; \"this._logDepthBuffer = Scene.defaultLogDepthBuffer && context.fragmentDepth;\" x1 in upstream Scene.js",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-build-no-rewrite-in-webgl2-run",
+      "ok": true,
+      "detail": "Scene/Scene.js:40 \"../Renderer/Context.js\" → upstream (no rewrite); 0 gate-local rewrite record(s) during the real Rollup run",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-build-upstream-context-kept",
+      "ok": true,
+      "detail": "WebGL2 run (empty manifest): the upstream Renderer/Context.js IS in the graph=true, the upstream Scene.js is too=true, 0 rewrite(s) happened; the entry still imports the gate stub explicitly (for the identity probe), so provenance is asserted at runtime by `scene.context` being the upstream class and NOT the stub (build-level module presence alone cannot distinguish them).",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-whitelist-exhaustive",
+      "ok": true,
+      "detail": "rewritten set == manifest set: missing=[] extra=[] (manifest 0, rewritten 0)",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-logic-layer-overrides-zero",
+      "ok": true,
+      "detail": "logicLayerOverrides=0; repo-local modules in the graph=[] (MUST be empty: the patch boundary is package-level only)",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-no-unresolved-imports",
+      "ok": true,
+      "detail": "16 rollup warning(s), codes=[\"PLUGIN_WARNING\",\"CIRCULAR_DEPENDENCY\"]",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-protobufjs-named-export-resolved",
+      "ok": true,
+      "detail": "MISSING_EXPORT warnings in this build: 0 (protobufjs-related: 0). G-1's gate-local wrapper exposed only a default export, so Rollup's namespace-member access (`protobuf.Reader.create(data)`) degraded to a named import that did not exist → 1 MISSING_EXPORT at Scene/GoogleEarthEnterpriseImageryProvider.js:482 and `Reader` bound to undefined. @rollup/plugin-commonjs 29.0.3 synthesises the named exports instead. Detail: none",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-cjs-interop-plugin-is-the-real-one",
+      "ok": true,
+      "detail": "@rollup/plugin-commonjs 29.0.3 (pinned devDependency, F-1) converted 13 CommonJS module(s): @cesium/engine/Source/Scene/ITwinData.js, @zip.js/zip.js/lib/core/streams/zlib-wasm/aes-hmac-sha1-wasm.js, grapheme-splitter/index.js, lerc/LercDecode.js, meshoptimizer/meshopt_clusterizer.js, meshoptimizer/meshopt_encoder.js, meshoptimizer/meshopt_simplifier.js, meshoptimizer/meshopt_tangents.js, protobufjs/dist/minimal/protobuf.js, urijs/src/IPv6.js, urijs/src/SecondLevelDomains.js, urijs/src/URI.js, urijs/src/punycode.js",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-kept-modules-stay-upstream",
+      "ok": true,
+      "detail": "not-in-manifest modules are never rewritten (ContextLimits → upstream, Scene → upstream); 47 upstream Renderer module(s) bundled, Context.js INCLUDED",
+      "phase": "build"
+    },
+    {
+      "id": "webgl2-private-members-confined-to-gate-assertions",
+      "ok": true,
+      "detail": "\"_context\" occurrences under packages/cesium-webgpu/{src,backend-webgpu} (implementation path, .d.ts excluded): 0",
+      "phase": "build"
+    },
+    {
+      "id": "upstream-disk-unchanged",
+      "ok": true,
+      "detail": "aggregate sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033 → sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033; files 1891 → 1891; changed=[] (both bundles are produced by build-time rewrites; node_modules is never edited)",
+      "phase": "build"
+    },
+    {
+      "id": "webgpu-run-produced-report",
+      "ok": true,
+      "detail": "probe finished at 2026-09-18T19:40:15.058Z; probe-level errors=0",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgpu-prefetch-adapter-and-device",
+      "ok": true,
+      "detail": "adapter.info={\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"device\":\"\",\"description\":\"\"}, isFallbackAdapter=null, features=[\"depth32float-stencil8\",\"rg11b10ufloat-renderable\",\"bgra8unorm-storage\",\"texture-formats-tier1\",\"texture-compression-bc\",\"dual-source-blending\",\"core-features-and-limits\",\"float32-filterable\",\"indirect-first-instance\",\"float32-blendable\",\"subgroup-size-control\",\"depth-clip-control\",\"texture-compression-bc-sliced-3d\",\"texture-formats-tier2\",\"timestamp-query\",\"shader-f16\",\"clip-distances\",\"primitive-index\",\"texture-component-swizzle\",\"subgroups\"], requestDevice() calls=1, device.lost handled=true, limits(selected)={\"maxTextureDimension2D\":16384,\"maxTextureDimension3D\":2048,\"maxVertexAttributes\":30,\"maxColorAttachments\":8,\"maxInterStageShaderVariables\":28}",
+      "phase": "runtime"
+    },
+    {
+      "id": "handoff-slot-contract",
+      "ok": true,
+      "detail": "install() twice → threw=true category=device-handoff/already-installed; peek() after construction=empty; a second take()=empty; take() calls in the audit=1",
+      "phase": "runtime"
+    },
+    {
+      "id": "scene-constructed-on-webgpu",
+      "ok": true,
+      "detail": "new Scene({canvas}) threw=false (no error); context constructor=\"G2HandoffContext\", is the gate stub=true, deep-import identity=true, bundle reports replacement=true, context.device === prefetched device=true, context.adapter === prefetched adapter=true; scene.canvas is the gate canvas=true",
+      "phase": "runtime"
+    },
+    {
+      "id": "device-handoff-is-synchronous",
+      "ok": true,
+      "detail": "take() was called from the replacement's constructor: stack contains \"G2HandoffContext\"=true, contains \"Scene\"=true; capability publication tick=3 inside the construction window (2..59); install tick=1 < construction start",
+      "phase": "runtime"
+    },
+    {
+      "id": "capabilities-and-limits-synchronously-readable",
+      "ok": true,
+      "detail": "capability reads during construction: fragmentDepth, drawingBufferWidth, drawingBufferHeight, depthTexture, uniformState; every one already equalled the final published value; ContextLimits: 23 backing member(s) written inside the construction window, 7 read(s) by the upstream logic layer during construction (_minimumAliasedLineWidth, _maximumAliasedLineWidth, _maximumTextureSize), all already final; snapshot unchanged after construction=true",
+      "phase": "runtime"
+    },
+    {
+      "id": "capability-values-match-research-table",
+      "ok": true,
+      "detail": "flags={\"webgl2\":true,\"msaa\":true,\"depthTexture\":false,\"fragmentDepth\":true,\"instancedArrays\":true,\"drawBuffers\":true,\"colorBufferFloat\":true,\"colorBufferHalfFloat\":true,\"floatingPointTexture\":true,\"halfFloatingPointTexture\":true,\"stencilBuffer\":true,\"stencilBits\":8,\"elementIndexUint\":true,\"textureFilterAnisotropic\":false,\"s3tc\":false,\"pvrtc\":false,\"astc\":false,\"etc\":false,\"etc1\":false,\"bc7\":false,\"supportsBasis\":false,\"standardDerivatives\":true,\"blendMinmax\":true,\"textureFloatLinear\":true,\"textureHalfFloatLinear\":true,\"vertexArrayObject\":true}; every flag equals the value composed from this adapter's limits/features (derived flags such as colorBufferFloat/textureFloatLinear come from adapter.features, not from the static fallback); maximumSamples=4 (>= 4); maximumTextureSize=16384 ← adapter.limits.maxTextureDimension2D=16384; maximum3DTextureSize=2048; maximumVertexAttributes=30; maximumColorAttachments=8; maximumVaryingVectors=28 ← maxInterStageShaderVariables=28",
+      "phase": "runtime"
+    },
+    {
+      "id": "false-capabilities-declared-with-branches",
+      "ok": true,
+      "detail": "false capabilities: [depthTexture, textureFilterAnisotropic, s3tc, pvrtc, astc, etc, etc1, bc7, supportsBasis] — each has a declared unimplemented branch and notes; depthTexture=false carries the slice-A declaration (flips to true in slice B / T098a)",
+      "phase": "runtime"
+    },
+    {
+      "id": "construction-hit-no-not-implemented-branch",
+      "ok": true,
+      "detail": "not-implemented hits recorded up to the end of construction: [] (the construction path MUST NOT reach a member the W2 backend owns; the post-construction loud-failure probes are separate)",
+      "phase": "runtime"
+    },
+    {
+      "id": "logic-layer-branches-match-research-4",
+      "ok": true,
+      "detail": "fragmentDepth=true → scene.logarithmicDepthBuffer=true, camera near/far=0.1/10000000000 (Scene.js:195 + :723-726); depthTexture=false → WebGL context requests during construction=0 (View.js:46 consequence: GlobeDepth is not created ⇒ nothing needs GL); msaa=true → scene.msaaSupported=true (Scene.js:1721); compressed families s3tc..bc7=false,false,false,false,false,false (Scene.js:1771-1781); ContextLimits.maximumTextureFilterAnisotropy=1; recorded branches=6",
+      "phase": "runtime"
+    },
+    {
+      "id": "context-limits-written-to-kept-upstream-module",
+      "ok": true,
+      "detail": "the KEPT upstream module Renderer/ContextLimits.js (read through its public getters) holds: {\"maximumTextureSize\":16384,\"maximumSamples\":4,\"maximumVertexAttributes\":30,\"maximum3DTextureSize\":2048,\"maximumDrawBuffers\":8,\"maximumColorAttachments\":8,\"maximumTextureFilterAnisotropy\":1,\"highpFloatSupported\":true,\"highpIntSupported\":true} — derived from the WebGPU device, with 0 WebGL contexts acquired, so the values cannot have come from GL",
+      "phase": "runtime"
+    },
+    {
+      "id": "gate-does-not-render-a-frame",
+      "ok": true,
+      "detail": "loud-failure probes: draw→not-implemented, clear→not-implemented, beginFrame→not-implemented, endFrame→not-implemented, defaultTexture→not-implemented, defaultCubeMap→not-implemented (this gate claims device handoff + synchronous construction only; rendering is W2/T044 and MUST NOT be silently stubbed)",
+      "phase": "runtime"
+    },
+    {
+      "id": "protobufjs-named-export-resolved-at-runtime",
+      "ok": true,
+      "detail": "protobufjs namespace probe (F-1 condition 5): Reader=function, Reader.create is a function=true, Root=undefined, keys=[default, build, Writer, BufferWriter, Reader, BufferReader, util, rpc, roots, configure]",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgpu-run-no-uncaught-page-errors",
+      "ok": true,
+      "detail": "0 uncaught page error(s)",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgpu-run-no-console-errors",
+      "ok": true,
+      "detail": "1 console message(s); errors=[]",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgl2-run-produced-report",
+      "ok": true,
+      "detail": "probe finished at 2026-09-18T19:40:16.143Z; probe-level errors=0",
+      "phase": "runtime"
+    },
+    {
+      "id": "scene-constructed-on-webgl2",
+      "ok": true,
+      "detail": "new Scene({canvas}) threw=false; context constructor=\"Context\" (upstream class), is the gate stub=false, instanceof the deep bare import=true, deep-import identity with the local file=false; context.webgl2=true, drawing buffer=300x150",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgl2-run-capabilities-are-gl-derived",
+      "ok": true,
+      "detail": "ContextLimits (kept upstream module) matches the independently queried WebGL2 limits: maximumTextureSize=16384 vs gl 16384, maximumSamples=8 vs gl 8, maximumVertexAttributes=16 vs gl 16; upstream Context writes during construction=23, logic-layer reads during construction=26. These GL values differ from the WebGPU adoption values, so the two runs cannot be confused.",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgl2-run-no-uncaught-page-errors",
+      "ok": true,
+      "detail": "0 uncaught page error(s)",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgl2-run-no-console-errors",
+      "ok": true,
+      "detail": "0 console message(s); errors=[]",
+      "phase": "runtime"
+    },
+    {
+      "id": "two-independent-runs-no-shared-session",
+      "ok": true,
+      "detail": "run isolation: webgpu=webgpu-mu7d528e (browser 153.0.8010.36) vs webgl2=webgl2-mu7d535i (browser 153.0.8010.36); each run used its own browser instance and its own page load, and no artefact is compared across the two backends (原则 II: 两条后端 MUST NOT 同会话/同帧运行)",
+      "phase": "runtime"
+    },
+    {
+      "id": "environment-recorded",
+      "ok": true,
+      "detail": "node=v22.20.0, browser=153.0.8010.36 (headless), upstream @cesium/engine 26.3.0, webgpuApi=true, webgl2Api=true, adapter.info={\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"device\":\"\",\"description\":\"\"}",
+      "phase": "runtime"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/out/g2-build.json",
+      "what": "real build chain evidence for the gate bundle (alias rewrites, graph classification, whitelist, CJS plugin, MISSING_EXPORT)"
+    },
+    {
+      "path": "experiments/gates/out/g2-webgl2-build.json",
+      "what": "build evidence for the WebGL2 run (empty manifest ⇒ upstream Context stays)"
+    },
+    {
+      "path": "experiments/gates/out/g2-webgpu.json",
+      "what": "raw WebGPU page probe report (prefetch, handoff audit with the take() stack, construction window, capability/ContextLimits snapshots, read log, branch records, loud failures)"
+    },
+    {
+      "path": "experiments/gates/out/g2-webgl2.json",
+      "what": "raw WebGL2 page probe report (upstream Context provenance, GL-derived ContextLimits, independent GL reference query)"
+    },
+    {
+      "path": "experiments/gates/out/g2-run.log",
+      "what": "runner transcript of this execution"
+    },
+    {
+      "path": "experiments/gates/g2-handoff/Renderer/Context.js",
+      "what": "the replacement consumed by the upstream Scene (synchronous device take + capability publication)"
+    },
+    {
+      "path": "experiments/gates/g2-handoff/capability-map.mjs",
+      "what": "the executable form of research §4 (flag table, ContextLimits mapping, composition)"
+    },
+    {
+      "path": "experiments/gates/g2-handoff/device-handoff.mjs",
+      "what": "the handoff slot prototype (T042 contract) with its audit log"
+    },
+    {
+      "path": "experiments/gates/g2-handoff/probe.js",
+      "what": "in-page probe: GL-context instrumentation, ContextLimits instrumentation, prefetch, handoff, synchronous construction, loud-failure probes"
+    },
+    {
+      "path": "experiments/gates/g2-handoff/build.mjs",
+      "what": "real build chain (Rollup + T008 alias plugin + @rollup/plugin-commonjs)"
+    },
+    {
+      "path": "experiments/gates/g1-alias/upstream-integrity.mjs",
+      "what": "upstream content-hash snapshot/diff reused from G-1 (sanctioned reuse)"
+    },
+    {
+      "path": "tests/unit/capability-mapping.test.mjs",
+      "what": "T017: the research §4 mapping asserted without a GPU"
+    },
+    {
+      "path": "docs/gate-g2-conclusion.md",
+      "what": "human-readable conclusion (basis, evidence paths, verdict, consequences)"
+    }
+  ],
+  "gateCriteria": {
+    "source": "plan.md「实现前的验证门」G-2 行；tasks.md T016",
+    "requirements": [
+      "(a) 两种后端下都能构造场景",
+      "(b) ContextLimits 与能力标志在 Scene 构造期同步可读",
+      "(c) 记录被触发的逻辑层分支并与 research §4 表逐项一致"
+    ],
+    "requiredVerdict": "pass",
+    "failureAction": "逐项修正能力表并补测试；某标志无法诚实回答则降为 false 并登记 → STOP 上报入口 Agent 修订 plan"
+  },
+  "measurements": {
+    "upstreamIntegrity": {
+      "unchanged": true,
+      "aggregateBefore": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "aggregateAfter": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "fileCountBefore": 1891,
+      "fileCountAfter": 1891,
+      "changedDetails": [],
+      "detailsAdded": [],
+      "detailsRemoved": [],
+      "detailsBefore": {
+        "Source/Renderer/AutomaticUniforms.js": "sha256-fd57375edf8e9b21ec49f018a7157b6cc40dc1083b67b891f2cb3407c89238fe",
+        "Source/Renderer/Buffer.js": "sha256-110cce1938c2a3c530ab52c6545fdb5ab3a8e9da728f81178682dd8a932e5ebc",
+        "Source/Renderer/BufferUsage.js": "sha256-5a883ca1dfb4d3989695c841f57c25d9bbb5ea272fa7eedc95b56d662b0d9db6",
+        "Source/Renderer/ClearCommand.js": "sha256-8fe47e6de7194d8af7e38c8e8b1d68dc5e90ec8b2df439577312faf8e82aab6c",
+        "Source/Renderer/ComputeCommand.js": "sha256-e531a391c99657cb1a8e42683134516d4af0d5df29e81df3bd668a6e58289af8",
+        "Source/Renderer/ComputeEngine.js": "sha256-d5b0c0d4853ffda6178504286d97b4c77742481bcb9052b49d0daa8f0e2bbb94",
+        "Source/Renderer/Context.js": "sha256-3d7fa4ec0c97df6c9e1a2142f6b7ee527c37ce339f744b22edee402d60d90b83",
+        "Source/Renderer/ContextLimits.js": "sha256-b24965ae722646629ab80da5bd1185be920d17370518653350320211c64cbb89",
+        "Source/Renderer/CubeMap.js": "sha256-8dc4f3c5a6963aed75513e9a7896d9bfd0c571f9d15d30040fc7d64fc54cbeb5",
+        "Source/Renderer/CubeMapFace.js": "sha256-ab8bc1fb0668902a6b3e57f6eff685a63e7ecfb1a418c9b835da683c5d4d68e9",
+        "Source/Renderer/DrawCommand.js": "sha256-7264cecd7f062a55d8bfd159a602775d459ca983a743a0553f496c7a8102a7b6",
+        "Source/Renderer/Framebuffer.js": "sha256-9779f0740817e99b28428e81596d17dee4cab1ff992c75ce5ec7fa0036863ec1",
+        "Source/Renderer/FramebufferManager.js": "sha256-8289584a486decaebcf2c318f176f7e58e8b6000988309755ed3ae11015bfd5b",
+        "Source/Renderer/MipmapHint.js": "sha256-6b5ca2eb75c272709bdec174e4250299f30f2f7175ab8ae5c3028bdc79de0821",
+        "Source/Renderer/MultisampleFramebuffer.js": "sha256-b364eb1d71f37b0f662a9ee2e60396d2c28896dda915c8af41ae955b8a2478aa",
+        "Source/Renderer/Pass.js": "sha256-5b231da76955383455bc64deed470d464022216c130c05e51bf76e0ff13e6d1c",
+        "Source/Renderer/PassState.js": "sha256-60e6caf56451cb7b26b04d472dd10309ac1fb39791cf3fb9ad7516b178f994c3",
+        "Source/Renderer/PickId.js": "sha256-e7cde4170d6ff73dcbb97b4a533266ebe1ec819c8a84d08283989da47b01cd30",
+        "Source/Renderer/PixelDatatype.js": "sha256-ea1a2b8f4e8a725816c633fdc01926f52a7cf691b675ad3986e80ec60c4becbb",
+        "Source/Renderer/RenderState.js": "sha256-39c29a732e36593c12154df8a130e0bb50a72ad568af42f4b7e153184e285a30",
+        "Source/Renderer/Renderbuffer.js": "sha256-096bf88e4a3a8f1f752640eec88f2c7c5d5cd600c050184a50d4ee9e3928a227",
+        "Source/Renderer/RenderbufferFormat.js": "sha256-ecbba5b6689febe4a69aa2ffdb36a547a2017e050ed44669a19a2d3c19238ef0",
+        "Source/Renderer/Sampler.js": "sha256-fb65fced667103116bc5b3e8a7c4a005805a4bf0975f9da4359f6147864320b1",
+        "Source/Renderer/ShaderBuilder.js": "sha256-c887183c13753e11f5201cc2de826fe73b8e52119e1d9765546afe8c1b786e7f",
+        "Source/Renderer/ShaderCache.js": "sha256-897695313fe04cf4237e5a02cd522c223b4b1567fdd1e6fa6a7b514f437fa8ce",
+        "Source/Renderer/ShaderDestination.js": "sha256-f11f2ed44ef5e69e06fc0d93faa2569a55589e8f7f35b395c4f6a550c66bd90d",
+        "Source/Renderer/ShaderFunction.js": "sha256-cbc2174f42ecb1b95fd057c4d3dcc3455501ef38e430c7a89e989f808f302c2d",
+        "Source/Renderer/ShaderProgram.js": "sha256-b0ae609324f012437311fc443f483802917be375e3015c647173080dd15dba4f",
+        "Source/Renderer/ShaderSource.js": "sha256-50f6f111843ac677af41be2d2231e78a412ef158d24d89e5a0802c602107ab47",
+        "Source/Renderer/ShaderStruct.js": "sha256-5855dcaf0957c45bb02e5b58227e272cad3f81e52e9b152fa3ae0ca5dd872000",
+        "Source/Renderer/SharedContext.js": "sha256-b52aa496829a661dc20784c28cc515adffe547a753e6df477e8ef5dc6df59315",
+        "Source/Renderer/Sync.js": "sha256-78f93116bfdddb530bdfc5e1c7162c9d990b2d606eb9fc3562275289527b64c3",
+        "Source/Renderer/Texture.js": "sha256-39fe8aee366ccdbccfdee8ad2662316a17c06193ec8288416456b9e367aeba42",
+        "Source/Renderer/Texture3D.js": "sha256-a942bf4f9afcb094a67ec0cc6f903d349592972dc9d8d91dfd50fff7e0e3304b",
+        "Source/Renderer/TextureAtlas.js": "sha256-42ec7a99c52b2506781a2599d3ca28edae30c5a98eda302c2494e03c5c6bbdb1",
+        "Source/Renderer/TextureCache.js": "sha256-9ebba22337dbe3110d418c91523706d56a36b77fc38dc3b2cadecbbc38e34f6d",
+        "Source/Renderer/TextureMagnificationFilter.js": "sha256-4e0f87ce250ff9f478a62c12e3bda889cde2ad0152fe6a4a57ba7f7dc39e8a9e",
+        "Source/Renderer/TextureMinificationFilter.js": "sha256-3586076b7384e7c955244db203ad33cfb59aad965dc47306e3dded71c4924aac",
+        "Source/Renderer/TextureWrap.js": "sha256-d4eb2208cc71f58f4638a92574886053b01733d6ef837317c3840058c1c53fad",
+        "Source/Renderer/UniformState.js": "sha256-365623296dfb9a27f7f43769c0b10242de680c9a864dcfbe5995e6b19a8805c6",
+        "Source/Renderer/VertexArray.js": "sha256-4064f982a4a2ee8a6abebb8a47dd8603d21643efebcc05b1c66c21926fe21a42",
+        "Source/Renderer/VertexArrayFacade.js": "sha256-eb2c223e9b89e580228b8669029a266917421327ea366c59725237b0a378a530",
+        "Source/Renderer/createUniform.js": "sha256-312594d8b4269a76c5ca147455b761f4f2cf80933894f2eeafe1767f3a6fb16b",
+        "Source/Renderer/createUniformArray.js": "sha256-7e8bccfbe39d035faf8029ab46f91102b368ed20062ff376dc2d173d8d6615f5",
+        "Source/Renderer/demodernizeShader.js": "sha256-ecae6df4a5e083cf7d8acb1bb0a4926e3eee3cff637bae43b79eab7b76e7c0a0",
+        "Source/Renderer/freezeRenderState.js": "sha256-19fc5c80f01d4d8cbd0a6c2da10ab5d7251c25e7f420a96a20a747b5f7f31688",
+        "Source/Renderer/loadCubeMap.js": "sha256-06814e1ffd9ea0052f5f2bc32d230a68331a46860d77da844d4297d71acfa36b",
+        "Source/Scene/Scene.js": "sha256-d7679e58a9c5349053209dac94592bbd554c4d686a81944466a045a6ad191a4a"
+      },
+      "detailsAfter": {
+        "Source/Renderer/AutomaticUniforms.js": "sha256-fd57375edf8e9b21ec49f018a7157b6cc40dc1083b67b891f2cb3407c89238fe",
+        "Source/Renderer/Buffer.js": "sha256-110cce1938c2a3c530ab52c6545fdb5ab3a8e9da728f81178682dd8a932e5ebc",
+        "Source/Renderer/BufferUsage.js": "sha256-5a883ca1dfb4d3989695c841f57c25d9bbb5ea272fa7eedc95b56d662b0d9db6",
+        "Source/Renderer/ClearCommand.js": "sha256-8fe47e6de7194d8af7e38c8e8b1d68dc5e90ec8b2df439577312faf8e82aab6c",
+        "Source/Renderer/ComputeCommand.js": "sha256-e531a391c99657cb1a8e42683134516d4af0d5df29e81df3bd668a6e58289af8",
+        "Source/Renderer/ComputeEngine.js": "sha256-d5b0c0d4853ffda6178504286d97b4c77742481bcb9052b49d0daa8f0e2bbb94",
+        "Source/Renderer/Context.js": "sha256-3d7fa4ec0c97df6c9e1a2142f6b7ee527c37ce339f744b22edee402d60d90b83",
+        "Source/Renderer/ContextLimits.js": "sha256-b24965ae722646629ab80da5bd1185be920d17370518653350320211c64cbb89",
+        "Source/Renderer/CubeMap.js": "sha256-8dc4f3c5a6963aed75513e9a7896d9bfd0c571f9d15d30040fc7d64fc54cbeb5",
+        "Source/Renderer/CubeMapFace.js": "sha256-ab8bc1fb0668902a6b3e57f6eff685a63e7ecfb1a418c9b835da683c5d4d68e9",
+        "Source/Renderer/DrawCommand.js": "sha256-7264cecd7f062a55d8bfd159a602775d459ca983a743a0553f496c7a8102a7b6",
+        "Source/Renderer/Framebuffer.js": "sha256-9779f0740817e99b28428e81596d17dee4cab1ff992c75ce5ec7fa0036863ec1",
+        "Source/Renderer/FramebufferManager.js": "sha256-8289584a486decaebcf2c318f176f7e58e8b6000988309755ed3ae11015bfd5b",
+        "Source/Renderer/MipmapHint.js": "sha256-6b5ca2eb75c272709bdec174e4250299f30f2f7175ab8ae5c3028bdc79de0821",
+        "Source/Renderer/MultisampleFramebuffer.js": "sha256-b364eb1d71f37b0f662a9ee2e60396d2c28896dda915c8af41ae955b8a2478aa",
+        "Source/Renderer/Pass.js": "sha256-5b231da76955383455bc64deed470d464022216c130c05e51bf76e0ff13e6d1c",
+        "Source/Renderer/PassState.js": "sha256-60e6caf56451cb7b26b04d472dd10309ac1fb39791cf3fb9ad7516b178f994c3",
+        "Source/Renderer/PickId.js": "sha256-e7cde4170d6ff73dcbb97b4a533266ebe1ec819c8a84d08283989da47b01cd30",
+        "Source/Renderer/PixelDatatype.js": "sha256-ea1a2b8f4e8a725816c633fdc01926f52a7cf691b675ad3986e80ec60c4becbb",
+        "Source/Renderer/RenderState.js": "sha256-39c29a732e36593c12154df8a130e0bb50a72ad568af42f4b7e153184e285a30",
+        "Source/Renderer/Renderbuffer.js": "sha256-096bf88e4a3a8f1f752640eec88f2c7c5d5cd600c050184a50d4ee9e3928a227",
+        "Source/Renderer/RenderbufferFormat.js": "sha256-ecbba5b6689febe4a69aa2ffdb36a547a2017e050ed44669a19a2d3c19238ef0",
+        "Source/Renderer/Sampler.js": "sha256-fb65fced667103116bc5b3e8a7c4a005805a4bf0975f9da4359f6147864320b1",
+        "Source/Renderer/ShaderBuilder.js": "sha256-c887183c13753e11f5201cc2de826fe73b8e52119e1d9765546afe8c1b786e7f",
+        "Source/Renderer/ShaderCache.js": "sha256-897695313fe04cf4237e5a02cd522c223b4b1567fdd1e6fa6a7b514f437fa8ce",
+        "Source/Renderer/ShaderDestination.js": "sha256-f11f2ed44ef5e69e06fc0d93faa2569a55589e8f7f35b395c4f6a550c66bd90d",
+        "Source/Renderer/ShaderFunction.js": "sha256-cbc2174f42ecb1b95fd057c4d3dcc3455501ef38e430c7a89e989f808f302c2d",
+        "Source/Renderer/ShaderProgram.js": "sha256-b0ae609324f012437311fc443f483802917be375e3015c647173080dd15dba4f",
+        "Source/Renderer/ShaderSource.js": "sha256-50f6f111843ac677af41be2d2231e78a412ef158d24d89e5a0802c602107ab47",
+        "Source/Renderer/ShaderStruct.js": "sha256-5855dcaf0957c45bb02e5b58227e272cad3f81e52e9b152fa3ae0ca5dd872000",
+        "Source/Renderer/SharedContext.js": "sha256-b52aa496829a661dc20784c28cc515adffe547a753e6df477e8ef5dc6df59315",
+        "Source/Renderer/Sync.js": "sha256-78f93116bfdddb530bdfc5e1c7162c9d990b2d606eb9fc3562275289527b64c3",
+        "Source/Renderer/Texture.js": "sha256-39fe8aee366ccdbccfdee8ad2662316a17c06193ec8288416456b9e367aeba42",
+        "Source/Renderer/Texture3D.js": "sha256-a942bf4f9afcb094a67ec0cc6f903d349592972dc9d8d91dfd50fff7e0e3304b",
+        "Source/Renderer/TextureAtlas.js": "sha256-42ec7a99c52b2506781a2599d3ca28edae30c5a98eda302c2494e03c5c6bbdb1",
+        "Source/Renderer/TextureCache.js": "sha256-9ebba22337dbe3110d418c91523706d56a36b77fc38dc3b2cadecbbc38e34f6d",
+        "Source/Renderer/TextureMagnificationFilter.js": "sha256-4e0f87ce250ff9f478a62c12e3bda889cde2ad0152fe6a4a57ba7f7dc39e8a9e",
+        "Source/Renderer/TextureMinificationFilter.js": "sha256-3586076b7384e7c955244db203ad33cfb59aad965dc47306e3dded71c4924aac",
+        "Source/Renderer/TextureWrap.js": "sha256-d4eb2208cc71f58f4638a92574886053b01733d6ef837317c3840058c1c53fad",
+        "Source/Renderer/UniformState.js": "sha256-365623296dfb9a27f7f43769c0b10242de680c9a864dcfbe5995e6b19a8805c6",
+        "Source/Renderer/VertexArray.js": "sha256-4064f982a4a2ee8a6abebb8a47dd8603d21643efebcc05b1c66c21926fe21a42",
+        "Source/Renderer/VertexArrayFacade.js": "sha256-eb2c223e9b89e580228b8669029a266917421327ea366c59725237b0a378a530",
+        "Source/Renderer/createUniform.js": "sha256-312594d8b4269a76c5ca147455b761f4f2cf80933894f2eeafe1767f3a6fb16b",
+        "Source/Renderer/createUniformArray.js": "sha256-7e8bccfbe39d035faf8029ab46f91102b368ed20062ff376dc2d173d8d6615f5",
+        "Source/Renderer/demodernizeShader.js": "sha256-ecae6df4a5e083cf7d8acb1bb0a4926e3eee3cff637bae43b79eab7b76e7c0a0",
+        "Source/Renderer/freezeRenderState.js": "sha256-19fc5c80f01d4d8cbd0a6c2da10ab5d7251c25e7f420a96a20a747b5f7f31688",
+        "Source/Renderer/loadCubeMap.js": "sha256-06814e1ffd9ea0052f5f2bc32d230a68331a46860d77da844d4297d71acfa36b",
+        "Source/Scene/Scene.js": "sha256-d7679e58a9c5349053209dac94592bbd554c4d686a81944466a045a6ad191a4a"
+      }
+    },
+    "build": {
+      "gate": {
+        "checks": [
+          {
+            "id": "upstream-baseline-version",
+            "ok": true,
+            "detail": "installed @cesium/engine 26.3.0; lock 26.3.0 (cesium 1.145.0)"
+          },
+          {
+            "id": "detector-literals-unique",
+            "ok": true,
+            "detail": "\"this._originalGLContext = glContext;\" x1 in upstream Context.js; \"this._logDepthBuffer = Scene.defaultLogDepthBuffer && context.fragmentDepth;\" x1 in upstream Scene.js"
+          },
+          {
+            "id": "build-rewrite-scene-relative-import",
+            "ok": true,
+            "detail": "Scene/Scene.js:40 \"../Renderer/Context.js\" → experiments/gates/g2-handoff/Renderer/Context.js; 3 gate-local rewrite record(s) during the real Rollup run"
+          },
+          {
+            "id": "build-upstream-context-replaced",
+            "ok": true,
+            "detail": "graph: upstream Context.js=false, gate-local Context.js=true, upstream Scene.js=true; bundle contains upstream Context snippet=false, contains gate stub marker=true"
+          },
+          {
+            "id": "whitelist-exhaustive",
+            "ok": true,
+            "detail": "rewritten set == manifest set: missing=[] extra=[] (manifest 1, rewritten 1)"
+          },
+          {
+            "id": "logic-layer-overrides-zero",
+            "ok": true,
+            "detail": "logicLayerOverrides=0; repo-local modules in the graph=[] (MUST be empty: the patch boundary is package-level only)"
+          },
+          {
+            "id": "no-unresolved-imports",
+            "ok": true,
+            "detail": "16 rollup warning(s), codes=[\"PLUGIN_WARNING\",\"CIRCULAR_DEPENDENCY\"]"
+          },
+          {
+            "id": "protobufjs-named-export-resolved",
+            "ok": true,
+            "detail": "MISSING_EXPORT warnings in this build: 0 (protobufjs-related: 0). G-1's gate-local wrapper exposed only a default export, so Rollup's namespace-member access (`protobuf.Reader.create(data)`) degraded to a named import that did not exist → 1 MISSING_EXPORT at Scene/GoogleEarthEnterpriseImageryProvider.js:482 and `Reader` bound to undefined. @rollup/plugin-commonjs 29.0.3 synthesises the named exports instead. Detail: none"
+          },
+          {
+            "id": "cjs-interop-plugin-is-the-real-one",
+            "ok": true,
+            "detail": "@rollup/plugin-commonjs 29.0.3 (pinned devDependency, F-1) converted 13 CommonJS module(s): @cesium/engine/Source/Scene/ITwinData.js, @zip.js/zip.js/lib/core/streams/zlib-wasm/aes-hmac-sha1-wasm.js, grapheme-splitter/index.js, lerc/LercDecode.js, meshoptimizer/meshopt_clusterizer.js, meshoptimizer/meshopt_encoder.js, meshoptimizer/meshopt_simplifier.js, meshoptimizer/meshopt_tangents.js, protobufjs/dist/minimal/protobuf.js, urijs/src/IPv6.js, urijs/src/SecondLevelDomains.js, urijs/src/URI.js, urijs/src/punycode.js"
+          },
+          {
+            "id": "kept-modules-stay-upstream",
+            "ok": true,
+            "detail": "not-in-manifest modules are never rewritten (ContextLimits → upstream, Scene → upstream); 46 upstream Renderer module(s) bundled, Context.js excluded"
+          },
+          {
+            "id": "private-members-confined-to-gate-assertions",
+            "ok": true,
+            "detail": "\"_context\" occurrences under packages/cesium-webgpu/{src,backend-webgpu} (implementation path, .d.ts excluded): 0"
+          }
+        ],
+        "graph": {
+          "moduleCount": 1407,
+          "upstreamEngineModules": 1296,
+          "gateLocalModules": [
+            "experiments/gates/g2-handoff/Renderer/Context.js",
+            "experiments/gates/g2-handoff/capability-map.mjs",
+            "experiments/gates/g2-handoff/device-handoff.mjs",
+            "experiments/gates/g2-handoff/entry.js"
+          ],
+          "upstreamLogicLayerModules": 1250,
+          "repoModules": [],
+          "thirdPartyModules": 107
+        },
+        "rewriteRecords": [
+          {
+            "source": "../Renderer/Context.js",
+            "importer": "node_modules/@cesium/engine/Source/Scene/Scene.js",
+            "resolved": "experiments/gates/g2-handoff/Renderer/Context.js"
+          },
+          {
+            "source": "./Context.js",
+            "importer": "node_modules/@cesium/engine/Source/Renderer/SharedContext.js",
+            "resolved": "experiments/gates/g2-handoff/Renderer/Context.js"
+          },
+          {
+            "source": "./Source/Renderer/Context.js",
+            "importer": "node_modules/@cesium/engine/index.js",
+            "resolved": "experiments/gates/g2-handoff/Renderer/Context.js"
+          }
+        ],
+        "whitelist": {
+          "ok": true,
+          "manifestModules": [
+            "Renderer/Context.js"
+          ],
+          "rewritten": [
+            "Renderer/Context.js"
+          ],
+          "missing": [],
+          "extra": []
+        },
+        "cjsPlugin": {
+          "name": "@rollup/plugin-commonjs",
+          "version": "29.0.3",
+          "license": "MIT",
+          "converted": [
+            "@cesium/engine/Source/Scene/ITwinData.js",
+            "@zip.js/zip.js/lib/core/streams/zlib-wasm/aes-hmac-sha1-wasm.js",
+            "grapheme-splitter/index.js",
+            "lerc/LercDecode.js",
+            "meshoptimizer/meshopt_clusterizer.js",
+            "meshoptimizer/meshopt_encoder.js",
+            "meshoptimizer/meshopt_simplifier.js",
+            "meshoptimizer/meshopt_tangents.js",
+            "protobufjs/dist/minimal/protobuf.js",
+            "urijs/src/IPv6.js",
+            "urijs/src/SecondLevelDomains.js",
+            "urijs/src/URI.js",
+            "urijs/src/punycode.js"
+          ]
+        }
+      },
+      "webgl2": {
+        "checks": [
+          {
+            "id": "upstream-baseline-version",
+            "ok": true,
+            "detail": "installed @cesium/engine 26.3.0; lock 26.3.0 (cesium 1.145.0)"
+          },
+          {
+            "id": "detector-literals-unique",
+            "ok": true,
+            "detail": "\"this._originalGLContext = glContext;\" x1 in upstream Context.js; \"this._logDepthBuffer = Scene.defaultLogDepthBuffer && context.fragmentDepth;\" x1 in upstream Scene.js"
+          },
+          {
+            "id": "build-no-rewrite-in-webgl2-run",
+            "ok": true,
+            "detail": "Scene/Scene.js:40 \"../Renderer/Context.js\" → upstream (no rewrite); 0 gate-local rewrite record(s) during the real Rollup run"
+          },
+          {
+            "id": "build-upstream-context-kept",
+            "ok": true,
+            "detail": "WebGL2 run (empty manifest): the upstream Renderer/Context.js IS in the graph=true, the upstream Scene.js is too=true, 0 rewrite(s) happened; the entry still imports the gate stub explicitly (for the identity probe), so provenance is asserted at runtime by `scene.context` being the upstream class and NOT the stub (build-level module presence alone cannot distinguish them)."
+          },
+          {
+            "id": "whitelist-exhaustive",
+            "ok": true,
+            "detail": "rewritten set == manifest set: missing=[] extra=[] (manifest 0, rewritten 0)"
+          },
+          {
+            "id": "logic-layer-overrides-zero",
+            "ok": true,
+            "detail": "logicLayerOverrides=0; repo-local modules in the graph=[] (MUST be empty: the patch boundary is package-level only)"
+          },
+          {
+            "id": "no-unresolved-imports",
+            "ok": true,
+            "detail": "16 rollup warning(s), codes=[\"PLUGIN_WARNING\",\"CIRCULAR_DEPENDENCY\"]"
+          },
+          {
+            "id": "protobufjs-named-export-resolved",
+            "ok": true,
+            "detail": "MISSING_EXPORT warnings in this build: 0 (protobufjs-related: 0). G-1's gate-local wrapper exposed only a default export, so Rollup's namespace-member access (`protobuf.Reader.create(data)`) degraded to a named import that did not exist → 1 MISSING_EXPORT at Scene/GoogleEarthEnterpriseImageryProvider.js:482 and `Reader` bound to undefined. @rollup/plugin-commonjs 29.0.3 synthesises the named exports instead. Detail: none"
+          },
+          {
+            "id": "cjs-interop-plugin-is-the-real-one",
+            "ok": true,
+            "detail": "@rollup/plugin-commonjs 29.0.3 (pinned devDependency, F-1) converted 13 CommonJS module(s): @cesium/engine/Source/Scene/ITwinData.js, @zip.js/zip.js/lib/core/streams/zlib-wasm/aes-hmac-sha1-wasm.js, grapheme-splitter/index.js, lerc/LercDecode.js, meshoptimizer/meshopt_clusterizer.js, meshoptimizer/meshopt_encoder.js, meshoptimizer/meshopt_simplifier.js, meshoptimizer/meshopt_tangents.js, protobufjs/dist/minimal/protobuf.js, urijs/src/IPv6.js, urijs/src/SecondLevelDomains.js, urijs/src/URI.js, urijs/src/punycode.js"
+          },
+          {
+            "id": "kept-modules-stay-upstream",
+            "ok": true,
+            "detail": "not-in-manifest modules are never rewritten (ContextLimits → upstream, Scene → upstream); 47 upstream Renderer module(s) bundled, Context.js INCLUDED"
+          },
+          {
+            "id": "private-members-confined-to-gate-assertions",
+            "ok": true,
+            "detail": "\"_context\" occurrences under packages/cesium-webgpu/{src,backend-webgpu} (implementation path, .d.ts excluded): 0"
+          }
+        ],
+        "graph": {
+          "moduleCount": 1408,
+          "upstreamEngineModules": 1297,
+          "gateLocalModules": [
+            "experiments/gates/g2-handoff/Renderer/Context.js",
+            "experiments/gates/g2-handoff/capability-map.mjs",
+            "experiments/gates/g2-handoff/device-handoff.mjs",
+            "experiments/gates/g2-handoff/entry.js"
+          ],
+          "upstreamLogicLayerModules": 1250,
+          "repoModules": [],
+          "thirdPartyModules": 107
+        },
+        "rewriteRecords": [],
+        "whitelist": {
+          "ok": true,
+          "manifestModules": [],
+          "rewritten": [],
+          "missing": [],
+          "extra": []
+        },
+        "cjsPlugin": {
+          "name": "@rollup/plugin-commonjs",
+          "version": "29.0.3",
+          "license": "MIT",
+          "converted": [
+            "@cesium/engine/Source/Scene/ITwinData.js",
+            "@zip.js/zip.js/lib/core/streams/zlib-wasm/aes-hmac-sha1-wasm.js",
+            "grapheme-splitter/index.js",
+            "lerc/LercDecode.js",
+            "meshoptimizer/meshopt_clusterizer.js",
+            "meshoptimizer/meshopt_encoder.js",
+            "meshoptimizer/meshopt_simplifier.js",
+            "meshoptimizer/meshopt_tangents.js",
+            "protobufjs/dist/minimal/protobuf.js",
+            "urijs/src/IPv6.js",
+            "urijs/src/SecondLevelDomains.js",
+            "urijs/src/URI.js",
+            "urijs/src/punycode.js"
+          ]
+        }
+      }
+    },
+    "webgpu": {
+      "backend": "webgpu",
+      "handoffMode": "install",
+      "startedAt": "2026-09-18T19:40:14.653Z",
+      "bundleUrl": "/experiments/gates/out/g2-handoff/bundle.js",
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+        "webgpuApi": true,
+        "webgl2Api": true,
+        "devicePixelRatio": 1,
+        "crossOriginIsolated": false
+      },
+      "prefetch": {
+        "adapterInfo": {
+          "vendor": "nvidia",
+          "architecture": "lovelace",
+          "device": "",
+          "description": ""
+        },
+        "isFallbackAdapter": null,
+        "features": [
+          "depth32float-stencil8",
+          "rg11b10ufloat-renderable",
+          "bgra8unorm-storage",
+          "texture-formats-tier1",
+          "texture-compression-bc",
+          "dual-source-blending",
+          "core-features-and-limits",
+          "float32-filterable",
+          "indirect-first-instance",
+          "float32-blendable",
+          "subgroup-size-control",
+          "depth-clip-control",
+          "texture-compression-bc-sliced-3d",
+          "texture-formats-tier2",
+          "timestamp-query",
+          "shader-f16",
+          "clip-distances",
+          "primitive-index",
+          "texture-component-swizzle",
+          "subgroups"
+        ],
+        "limits": {
+          "maxTextureDimension1D": 16384,
+          "maxTextureDimension2D": 16384,
+          "maxTextureDimension3D": 2048,
+          "maxTextureArrayLayers": 2048,
+          "maxBindGroups": 4,
+          "maxBindGroupsPlusVertexBuffers": 24,
+          "maxBindingsPerBindGroup": 1000,
+          "maxDynamicUniformBuffersPerPipelineLayout": 10,
+          "maxDynamicStorageBuffersPerPipelineLayout": 8,
+          "maxSampledTexturesPerShaderStage": 48,
+          "maxSamplersPerShaderStage": 16,
+          "maxStorageBuffersPerShaderStage": 16,
+          "maxStorageTexturesPerShaderStage": 8,
+          "maxUniformBuffersPerShaderStage": 12,
+          "maxUniformBufferBindingSize": 65536,
+          "maxStorageBufferBindingSize": 2147483644,
+          "minUniformBufferOffsetAlignment": 256,
+          "minStorageBufferOffsetAlignment": 256,
+          "maxVertexBuffers": 8,
+          "maxBufferSize": 2147483648,
+          "maxVertexAttributes": 30,
+          "maxVertexBufferArrayStride": 2048,
+          "maxInterStageShaderVariables": 28,
+          "maxColorAttachments": 8,
+          "maxColorAttachmentBytesPerSample": 128,
+          "maxComputeWorkgroupStorageSize": 32768,
+          "maxComputeInvocationsPerWorkgroup": 1024,
+          "maxComputeWorkgroupSizeX": 1024,
+          "maxComputeWorkgroupSizeY": 1024,
+          "maxComputeWorkgroupSizeZ": 64,
+          "maxComputeWorkgroupsPerDimension": 65535,
+          "maxImmediateSize": 64,
+          "maxStorageBuffersInFragmentStage": 16,
+          "maxStorageTexturesInFragmentStage": 8,
+          "maxStorageBuffersInVertexStage": 16,
+          "maxStorageTexturesInVertexStage": 8
+        },
+        "deviceRequests": 1,
+        "deviceIsObject": true,
+        "deviceLostHandled": true
+      },
+      "handoff": {
+        "installTick": 1,
+        "installed": true
+      },
+      "construction": {
+        "startTick": 2,
+        "endTick": 59,
+        "threw": false,
+        "error": null,
+        "contextIsStub": true,
+        "contextConstructorName": "G2HandoffContext",
+        "deviceIdentity": true,
+        "adapterIdentity": true,
+        "contextIdentity": true,
+        "contextIsReplaced": true
+      },
+      "scene": {
+        "canvasIsGateCanvas": true,
+        "drawingBufferWidth": 300,
+        "drawingBufferHeight": 150,
+        "logarithmicDepthBuffer": true,
+        "msaaSupported": true,
+        "msaaSamples": 4,
+        "cameraNear": 0.1,
+        "cameraFar": 10000000000,
+        "contextDrawingBufferWidth": 300,
+        "contextDrawingBufferHeight": 150,
+        "contextFragmentDepth": true,
+        "contextDepthTexture": false,
+        "contextMsaa": true,
+        "contextWebgl2": true,
+        "contextId": "G2-HANDOFF-CONTEXT-STUB-v1-1"
+      },
+      "capabilities": {
+        "composition": {
+          "slice": "A",
+          "flags": {
+            "webgl2": true,
+            "msaa": true,
+            "depthTexture": false,
+            "fragmentDepth": true,
+            "instancedArrays": true,
+            "drawBuffers": true,
+            "colorBufferFloat": true,
+            "colorBufferHalfFloat": true,
+            "floatingPointTexture": true,
+            "halfFloatingPointTexture": true,
+            "stencilBuffer": true,
+            "stencilBits": 8,
+            "elementIndexUint": true,
+            "textureFilterAnisotropic": false,
+            "s3tc": false,
+            "pvrtc": false,
+            "astc": false,
+            "etc": false,
+            "etc1": false,
+            "bc7": false,
+            "supportsBasis": false,
+            "standardDerivatives": true,
+            "blendMinmax": true,
+            "textureFloatLinear": true,
+            "textureHalfFloatLinear": true,
+            "vertexArrayObject": true
+          },
+          "limits": {
+            "maximumTextureSize": 16384,
+            "maximumCubeMapSize": 16384,
+            "maximum3DTextureSize": 2048,
+            "maximumVertexTextureImageUnits": 48,
+            "maximumTextureImageUnits": 48,
+            "maximumCombinedTextureImageUnits": 48,
+            "maximumRenderbufferSize": 16384,
+            "maximumSamples": 4,
+            "maximumVertexAttributes": 30,
+            "maximumVaryingVectors": 28,
+            "maximumVertexUniformVectors": 4096,
+            "maximumFragmentUniformVectors": 4096,
+            "minimumAliasedLineWidth": 1,
+            "maximumAliasedLineWidth": 1,
+            "minimumAliasedPointSize": 1,
+            "maximumAliasedPointSize": 1,
+            "maximumViewportWidth": 16384,
+            "maximumViewportHeight": 16384,
+            "maximumTextureFilterAnisotropy": 1,
+            "maximumDrawBuffers": 8,
+            "maximumColorAttachments": 8,
+            "highpFloatSupported": true,
+            "highpIntSupported": true
+          },
+          "notes": {
+            "webgl2": "The historical meaning of this flag is \"a modern GL pipeline is available\"; WebGPU provides the equivalent semantics. The production replacement MUST carry a comment saying so (T045).",
+            "msaa": "WebGPU guarantees sampleCount 4; no adapter query is required (paired with maximumSamples = 4).",
+            "depthTexture": "TEMPORARY slice-A degradation: with depthTexture=false the View does not create GlobeDepth (View.js:46), so no depth texture/copy is required. Slice B (T098a) MUST flip this to true and re-run this gate; the flip is registered in plan Complexity Tracking and MUST NOT become permanent.",
+            "fragmentDepth": "true ⇒ Scene.js:195 sets _logDepthBuffer (Scene.defaultLogDepthBuffer) and Scene.js:723-726 sets camera near/far.",
+            "instancedArrays": "Native instancing; no extension required.",
+            "drawBuffers": "Native MRT; the actual attachment count comes from ContextLimits.maximumDrawBuffers.",
+            "colorBufferFloat": "Adopted as the *blendable* 32-bit float capability so the logic layer's float framebuffer paths (globe depth / OIT) are only taken when the device can actually blend them.",
+            "colorBufferHalfFloat": "16-bit float render targets need no optional feature in WebGPU.",
+            "floatingPointTexture": "Linear filtering of 32-bit float textures is a separate flag (textureFloatLinear ← float32-filterable).",
+            "halfFloatingPointTexture": "No optional feature required.",
+            "stencilBuffer": "stencilBits = 8 is published together with this flag.",
+            "stencilBits": "Companion value of the stencilBuffer flag.",
+            "elementIndexUint": "Native 32-bit indices.",
+            "textureFilterAnisotropic": "WebGPU has no anisotropic sampler; the logic layer already has a non-anisotropic path.",
+            "s3tc": "No compressed texture family is uploaded in the MVP; all six family flags are false so the logic layer takes its uncompressed path.",
+            "pvrtc": "See s3tc.",
+            "astc": "See s3tc.",
+            "etc": "See s3tc.",
+            "etc1": "See s3tc.",
+            "bc7": "See s3tc.",
+            "supportsBasis": "Basis/KTX2 transcoding targets compressed formats; not implemented in the MVP.",
+            "standardDerivatives": "No external consumer in §1.3; internal implementation freedom.",
+            "blendMinmax": "No external consumer; min/max blend operations exist in core WebGPU.",
+            "textureFloatLinear": "Linear filtering of 32-bit float textures; derived from the optional feature rather than assumed.",
+            "textureHalfFloatLinear": "No external consumer; 16-bit float filtering is core.",
+            "vertexArrayObject": "Semantics (a fixed vertex layout per draw) are provided by the pipeline, not by a VAO handle."
+          },
+          "unimplementedBranches": {
+            "depthTexture": "Scene/View.js:46 `if (context.depthTexture)` → GlobeDepth is NOT created; GlobeTranslucencyState.js:222 and GroundPrimitive.js:983 take their existing no-depth-texture branches. Asserted in G-2 by the consequence probe: the whole Scene construction completes with ZERO WebGL context acquisitions.",
+            "textureFilterAnisotropic": "ContextLimits.maximumTextureFilterAnisotropy = 1 ⇒ the logic layer requests anisotropy 1 (no-op) — the existing `maximumTextureFilterAnisotropy` clamp in the sampler creation path.",
+            "s3tc": "Scene.js:1771-1781 → all family probes false ⇒ the logic layer keeps its uncompressed texture path.",
+            "pvrtc": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+            "astc": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+            "etc": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+            "etc1": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+            "bc7": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+            "supportsBasis": "GltfLoader.js:586 → false ⇒ the loader keeps its non-Basis path (no transcoder is created)."
+          },
+          "sources": {
+            "webgl2": "WebGPU core: modern pipeline (integer textures, instancing, MRT, sRGB targets)",
+            "msaa": "WebGPU core guarantees 4x MSAA (sampleCount 1|4)",
+            "depthTexture": "slice A: no offscreen depth texture / depth copy implemented yet",
+            "fragmentDepth": "WGSL `@builtin(frag_depth)`",
+            "instancedArrays": "WebGPU core: instance step mode in the vertex layout",
+            "drawBuffers": "WebGPU core: multiple color attachments per render pass (maxColorAttachments)",
+            "colorBufferFloat": "adapter.features.has(\"float32-blendable\")",
+            "colorBufferHalfFloat": "WebGPU core: rgba16float is renderable and blendable",
+            "floatingPointTexture": "WebGPU core texture format table: rgba32float / r32float are sampleable",
+            "halfFloatingPointTexture": "WebGPU core texture format table: rgba16float is sampleable and filterable",
+            "stencilBuffer": "WebGPU core: depth24plus-stencil8 (8 stencil bits)",
+            "stencilBits": "depth24plus-stencil8 → 8 stencil bits",
+            "elementIndexUint": "WebGPU core: uint32 index format",
+            "textureFilterAnisotropic": "no anisotropic filtering in WebGPU core",
+            "s3tc": "compressed texture upload not implemented in the MVP",
+            "pvrtc": "compressed texture upload not implemented in the MVP",
+            "astc": "compressed texture upload not implemented in the MVP",
+            "etc": "compressed texture upload not implemented in the MVP",
+            "etc1": "compressed texture upload not implemented in the MVP",
+            "bc7": "compressed texture upload not implemented in the MVP",
+            "supportsBasis": "Basis transcoding depends on compressed texture families (all false)",
+            "standardDerivatives": "WGSL core: dpdx/dpdy/fwidth",
+            "blendMinmax": "WebGPU core blend operations include \"min\"/\"max\"",
+            "textureFloatLinear": "adapter.features.has(\"float32-filterable\")",
+            "textureHalfFloatLinear": "WebGPU core: rgba16float is filterable",
+            "vertexArrayObject": "WebGPU core: vertex layouts live in the render pipeline (no VAO object)"
+          },
+          "limitSources": {
+            "maximumTextureSize": "adapter.limits.maxTextureDimension2D",
+            "maximumCubeMapSize": "adapter.limits.maxTextureDimension2D",
+            "maximum3DTextureSize": "adapter.limits.maxTextureDimension3D",
+            "maximumVertexTextureImageUnits": "adapter.limits.maxSampledTexturesPerShaderStage",
+            "maximumTextureImageUnits": "adapter.limits.maxSampledTexturesPerShaderStage",
+            "maximumCombinedTextureImageUnits": "adapter.limits.maxSampledTexturesPerShaderStage",
+            "maximumRenderbufferSize": "adapter.limits.maxTextureDimension2D",
+            "maximumSamples": "constant 4 (WebGPU guarantees 4x MSAA)",
+            "maximumVertexAttributes": "adapter.limits.maxVertexAttributes",
+            "maximumVaryingVectors": "adapter.limits.maxInterStageShaderVariables",
+            "maximumVertexUniformVectors": "min(floor(adapter.limits.maxUniformBufferBindingSize / 16), 4096)",
+            "maximumFragmentUniformVectors": "min(floor(adapter.limits.maxUniformBufferBindingSize / 16), 4096)",
+            "minimumAliasedLineWidth": "constant 1.0 (WebGPU has no wide lines)",
+            "maximumAliasedLineWidth": "constant 1.0 (WebGPU has no wide lines)",
+            "minimumAliasedPointSize": "constant 1.0 (WebGPU point size is 1)",
+            "maximumAliasedPointSize": "constant 1.0 (WebGPU point size is 1)",
+            "maximumViewportWidth": "adapter.limits.maxTextureDimension2D",
+            "maximumViewportHeight": "adapter.limits.maxTextureDimension2D",
+            "maximumTextureFilterAnisotropy": "constant 1.0 (no anisotropic filtering)",
+            "maximumDrawBuffers": "adapter.limits.maxColorAttachments",
+            "maximumColorAttachments": "adapter.limits.maxColorAttachments",
+            "highpFloatSupported": "constant true (WGSL has no mediump/lowp in the MVP emission target)",
+            "highpIntSupported": "constant true (WGSL i32/u32 are 32-bit in the fragment stage)"
+          },
+          "falseFlags": [
+            "depthTexture",
+            "textureFilterAnisotropic",
+            "s3tc",
+            "pvrtc",
+            "astc",
+            "etc",
+            "etc1",
+            "bc7",
+            "supportsBasis"
+          ],
+          "defaults": {
+            "webgl2": true,
+            "msaa": true,
+            "depthTexture": false,
+            "fragmentDepth": true,
+            "instancedArrays": true,
+            "drawBuffers": true,
+            "colorBufferFloat": true,
+            "colorBufferHalfFloat": true,
+            "floatingPointTexture": true,
+            "halfFloatingPointTexture": true,
+            "stencilBuffer": true,
+            "stencilBits": 8,
+            "elementIndexUint": true,
+            "textureFilterAnisotropic": false,
+            "s3tc": false,
+            "pvrtc": false,
+            "astc": false,
+            "etc": false,
+            "etc1": false,
+            "bc7": false,
+            "supportsBasis": false,
+            "standardDerivatives": true,
+            "blendMinmax": true,
+            "textureFloatLinear": false,
+            "textureHalfFloatLinear": true,
+            "vertexArrayObject": true
+          }
+        },
+        "declaredDefaults": {
+          "webgl2": true,
+          "msaa": true,
+          "depthTexture": false,
+          "fragmentDepth": true,
+          "instancedArrays": true,
+          "drawBuffers": true,
+          "colorBufferFloat": true,
+          "colorBufferHalfFloat": true,
+          "floatingPointTexture": true,
+          "halfFloatingPointTexture": true,
+          "stencilBuffer": true,
+          "stencilBits": 8,
+          "elementIndexUint": true,
+          "textureFilterAnisotropic": false,
+          "s3tc": false,
+          "pvrtc": false,
+          "astc": false,
+          "etc": false,
+          "etc1": false,
+          "bc7": false,
+          "supportsBasis": false,
+          "standardDerivatives": true,
+          "blendMinmax": true,
+          "textureFloatLinear": false,
+          "textureHalfFloatLinear": true,
+          "vertexArrayObject": true
+        },
+        "stubSnapshot": {
+          "webgl2": true,
+          "msaa": true,
+          "depthTexture": false,
+          "fragmentDepth": true,
+          "instancedArrays": true,
+          "drawBuffers": true,
+          "colorBufferFloat": true,
+          "colorBufferHalfFloat": true,
+          "floatingPointTexture": true,
+          "halfFloatingPointTexture": true,
+          "stencilBuffer": true,
+          "stencilBits": 8,
+          "elementIndexUint": true,
+          "textureFilterAnisotropic": false,
+          "s3tc": false,
+          "pvrtc": false,
+          "astc": false,
+          "etc": false,
+          "etc1": false,
+          "bc7": false,
+          "supportsBasis": false,
+          "standardDerivatives": true,
+          "blendMinmax": true,
+          "textureFloatLinear": true,
+          "textureHalfFloatLinear": true,
+          "vertexArrayObject": true
+        },
+        "stubLimitsSnapshot": {
+          "maximumTextureSize": 16384,
+          "maximumCubeMapSize": 16384,
+          "maximum3DTextureSize": 2048,
+          "maximumVertexTextureImageUnits": 48,
+          "maximumTextureImageUnits": 48,
+          "maximumCombinedTextureImageUnits": 48,
+          "maximumRenderbufferSize": 16384,
+          "maximumSamples": 4,
+          "maximumVertexAttributes": 30,
+          "maximumVaryingVectors": 28,
+          "maximumVertexUniformVectors": 4096,
+          "maximumFragmentUniformVectors": 4096,
+          "minimumAliasedLineWidth": 1,
+          "maximumAliasedLineWidth": 1,
+          "minimumAliasedPointSize": 1,
+          "maximumAliasedPointSize": 1,
+          "maximumViewportWidth": 16384,
+          "maximumViewportHeight": 16384,
+          "maximumTextureFilterAnisotropy": 1,
+          "maximumDrawBuffers": 8,
+          "maximumColorAttachments": 8,
+          "highpFloatSupported": true,
+          "highpIntSupported": true
+        },
+        "publishedAtTick": 3,
+        "stubSnapshotAfter": {
+          "webgl2": true,
+          "msaa": true,
+          "depthTexture": false,
+          "fragmentDepth": true,
+          "instancedArrays": true,
+          "drawBuffers": true,
+          "colorBufferFloat": true,
+          "colorBufferHalfFloat": true,
+          "floatingPointTexture": true,
+          "halfFloatingPointTexture": true,
+          "stencilBuffer": true,
+          "stencilBits": 8,
+          "elementIndexUint": true,
+          "textureFilterAnisotropic": false,
+          "s3tc": false,
+          "pvrtc": false,
+          "astc": false,
+          "etc": false,
+          "etc1": false,
+          "bc7": false,
+          "supportsBasis": false,
+          "standardDerivatives": true,
+          "blendMinmax": true,
+          "textureFloatLinear": true,
+          "textureHalfFloatLinear": true,
+          "vertexArrayObject": true
+        }
+      },
+      "contextLimits": {
+        "instrumented": 23,
+        "writesDuringConstruction": [
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 4
+          },
+          {
+            "member": "_maximumCubeMapSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 5
+          },
+          {
+            "member": "_maximum3DTextureSize",
+            "value": 2048,
+            "phase": "construction",
+            "tick": 6
+          },
+          {
+            "member": "_maximumVertexTextureImageUnits",
+            "value": 48,
+            "phase": "construction",
+            "tick": 7
+          },
+          {
+            "member": "_maximumTextureImageUnits",
+            "value": 48,
+            "phase": "construction",
+            "tick": 8
+          },
+          {
+            "member": "_maximumCombinedTextureImageUnits",
+            "value": 48,
+            "phase": "construction",
+            "tick": 9
+          },
+          {
+            "member": "_maximumRenderbufferSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 10
+          },
+          {
+            "member": "_maximumSamples",
+            "value": 4,
+            "phase": "construction",
+            "tick": 11
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 30,
+            "phase": "construction",
+            "tick": 12
+          },
+          {
+            "member": "_maximumVaryingVectors",
+            "value": 28,
+            "phase": "construction",
+            "tick": 13
+          },
+          {
+            "member": "_maximumVertexUniformVectors",
+            "value": 4096,
+            "phase": "construction",
+            "tick": 14
+          },
+          {
+            "member": "_maximumFragmentUniformVectors",
+            "value": 4096,
+            "phase": "construction",
+            "tick": 15
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 16
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 17
+          },
+          {
+            "member": "_minimumAliasedPointSize",
+            "value": 1,
+            "phase": "construction",
+            "tick": 18
+          },
+          {
+            "member": "_maximumAliasedPointSize",
+            "value": 1,
+            "phase": "construction",
+            "tick": 19
+          },
+          {
+            "member": "_maximumViewportWidth",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 20
+          },
+          {
+            "member": "_maximumViewportHeight",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 21
+          },
+          {
+            "member": "_maximumTextureFilterAnisotropy",
+            "value": 1,
+            "phase": "construction",
+            "tick": 22
+          },
+          {
+            "member": "_maximumDrawBuffers",
+            "value": 8,
+            "phase": "construction",
+            "tick": 23
+          },
+          {
+            "member": "_maximumColorAttachments",
+            "value": 8,
+            "phase": "construction",
+            "tick": 24
+          },
+          {
+            "member": "_highpFloatSupported",
+            "value": true,
+            "phase": "construction",
+            "tick": 25
+          },
+          {
+            "member": "_highpIntSupported",
+            "value": true,
+            "phase": "construction",
+            "tick": 26
+          }
+        ],
+        "logicLayerReadsDuringConstruction": [
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 29
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 30
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 34
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 35
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 36
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 37
+          },
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 38
+          }
+        ],
+        "reads": [
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 29
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 30
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 34
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 35
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 36
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 37
+          },
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 38
+          },
+          {
+            "member": "_maximumTextureFilterAnisotropy",
+            "value": 1,
+            "phase": "after",
+            "tick": 90
+          },
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "after",
+            "tick": 92
+          },
+          {
+            "member": "_maximumSamples",
+            "value": 4,
+            "phase": "after",
+            "tick": 93
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 30,
+            "phase": "after",
+            "tick": 94
+          },
+          {
+            "member": "_maximum3DTextureSize",
+            "value": 2048,
+            "phase": "after",
+            "tick": 95
+          },
+          {
+            "member": "_maximumDrawBuffers",
+            "value": 8,
+            "phase": "after",
+            "tick": 96
+          },
+          {
+            "member": "_maximumColorAttachments",
+            "value": 8,
+            "phase": "after",
+            "tick": 97
+          },
+          {
+            "member": "_maximumTextureFilterAnisotropy",
+            "value": 1,
+            "phase": "after",
+            "tick": 98
+          },
+          {
+            "member": "_highpFloatSupported",
+            "value": true,
+            "phase": "after",
+            "tick": 99
+          },
+          {
+            "member": "_highpIntSupported",
+            "value": true,
+            "phase": "after",
+            "tick": 100
+          }
+        ],
+        "writes": [
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 4
+          },
+          {
+            "member": "_maximumCubeMapSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 5
+          },
+          {
+            "member": "_maximum3DTextureSize",
+            "value": 2048,
+            "phase": "construction",
+            "tick": 6
+          },
+          {
+            "member": "_maximumVertexTextureImageUnits",
+            "value": 48,
+            "phase": "construction",
+            "tick": 7
+          },
+          {
+            "member": "_maximumTextureImageUnits",
+            "value": 48,
+            "phase": "construction",
+            "tick": 8
+          },
+          {
+            "member": "_maximumCombinedTextureImageUnits",
+            "value": 48,
+            "phase": "construction",
+            "tick": 9
+          },
+          {
+            "member": "_maximumRenderbufferSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 10
+          },
+          {
+            "member": "_maximumSamples",
+            "value": 4,
+            "phase": "construction",
+            "tick": 11
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 30,
+            "phase": "construction",
+            "tick": 12
+          },
+          {
+            "member": "_maximumVaryingVectors",
+            "value": 28,
+            "phase": "construction",
+            "tick": 13
+          },
+          {
+            "member": "_maximumVertexUniformVectors",
+            "value": 4096,
+            "phase": "construction",
+            "tick": 14
+          },
+          {
+            "member": "_maximumFragmentUniformVectors",
+            "value": 4096,
+            "phase": "construction",
+            "tick": 15
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 16
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 17
+          },
+          {
+            "member": "_minimumAliasedPointSize",
+            "value": 1,
+            "phase": "construction",
+            "tick": 18
+          },
+          {
+            "member": "_maximumAliasedPointSize",
+            "value": 1,
+            "phase": "construction",
+            "tick": 19
+          },
+          {
+            "member": "_maximumViewportWidth",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 20
+          },
+          {
+            "member": "_maximumViewportHeight",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 21
+          },
+          {
+            "member": "_maximumTextureFilterAnisotropy",
+            "value": 1,
+            "phase": "construction",
+            "tick": 22
+          },
+          {
+            "member": "_maximumDrawBuffers",
+            "value": 8,
+            "phase": "construction",
+            "tick": 23
+          },
+          {
+            "member": "_maximumColorAttachments",
+            "value": 8,
+            "phase": "construction",
+            "tick": 24
+          },
+          {
+            "member": "_highpFloatSupported",
+            "value": true,
+            "phase": "construction",
+            "tick": 25
+          },
+          {
+            "member": "_highpIntSupported",
+            "value": true,
+            "phase": "construction",
+            "tick": 26
+          }
+        ]
+      },
+      "reads": {
+        "counts": {
+          "fragmentDepth": 3,
+          "drawingBufferWidth": 9,
+          "drawingBufferHeight": 9,
+          "depthTexture": 10,
+          "uniformState": 1,
+          "msaa": 3,
+          "webgl2": 1,
+          "draw": 1,
+          "clear": 1,
+          "beginFrame": 1,
+          "endFrame": 1,
+          "defaultTexture": 1,
+          "defaultCubeMap": 1,
+          "s3tc": 1,
+          "pvrtc": 1,
+          "astc": 1,
+          "etc": 1,
+          "etc1": 1,
+          "bc7": 1
+        },
+        "duringConstruction": [
+          {
+            "name": "fragmentDepth",
+            "value": true,
+            "tick": 28
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 31
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 32
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 33
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 39
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 40
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 41
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 42
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 43
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 44
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 45
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 46
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 47
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 48
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 49
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 50
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 51
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 52
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 53
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 54
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 55
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 56
+          },
+          {
+            "name": "uniformState",
+            "value": "object",
+            "tick": 57
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 58
+          }
+        ],
+        "all": [
+          {
+            "name": "fragmentDepth",
+            "value": true,
+            "tick": 28
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 31
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 32
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 33
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 39
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 40
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 41
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 42
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 43
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 44
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 45
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 46
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 47
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 48
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 49
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 50
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 51
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 52
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 53
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 54
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 55
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 56
+          },
+          {
+            "name": "uniformState",
+            "value": "object",
+            "tick": 57
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 58
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 60
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 61
+          },
+          {
+            "name": "msaa",
+            "value": true,
+            "tick": 62
+          },
+          {
+            "name": "drawingBufferWidth",
+            "value": 300,
+            "tick": 63
+          },
+          {
+            "name": "drawingBufferHeight",
+            "value": 150,
+            "tick": 64
+          },
+          {
+            "name": "fragmentDepth",
+            "value": true,
+            "tick": 65
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 66
+          },
+          {
+            "name": "msaa",
+            "value": true,
+            "tick": 67
+          },
+          {
+            "name": "webgl2",
+            "value": true,
+            "tick": 68
+          },
+          {
+            "name": "draw",
+            "value": "<not-implemented>",
+            "tick": 69
+          },
+          {
+            "name": "clear",
+            "value": "<not-implemented>",
+            "tick": 70
+          },
+          {
+            "name": "beginFrame",
+            "value": "<not-implemented>",
+            "tick": 71
+          },
+          {
+            "name": "endFrame",
+            "value": "<not-implemented>",
+            "tick": 72
+          },
+          {
+            "name": "defaultTexture",
+            "value": "<not-implemented>",
+            "tick": 73
+          },
+          {
+            "name": "defaultCubeMap",
+            "value": "<not-implemented>",
+            "tick": 74
+          },
+          {
+            "name": "fragmentDepth",
+            "value": true,
+            "tick": 76
+          },
+          {
+            "name": "depthTexture",
+            "value": false,
+            "tick": 79
+          },
+          {
+            "name": "msaa",
+            "value": true,
+            "tick": 81
+          },
+          {
+            "name": "s3tc",
+            "value": false,
+            "tick": 83
+          },
+          {
+            "name": "pvrtc",
+            "value": false,
+            "tick": 84
+          },
+          {
+            "name": "astc",
+            "value": false,
+            "tick": 85
+          },
+          {
+            "name": "etc",
+            "value": false,
+            "tick": 86
+          },
+          {
+            "name": "etc1",
+            "value": false,
+            "tick": 87
+          },
+          {
+            "name": "bc7",
+            "value": false,
+            "tick": 88
+          }
+        ],
+        "constructionWindow": {
+          "startTick": 2,
+          "endTick": 59
+        }
+      },
+      "branches": [
+        {
+          "id": "Scene.js:195 fragmentDepth → _logDepthBuffer",
+          "condition": "context.fragmentDepth",
+          "value": true,
+          "consequence": "scene.logarithmicDepthBuffer",
+          "tick": 77
+        },
+        {
+          "id": "Scene.js:723-726 _logDepthBuffer → camera near/far",
+          "condition": "scene.logarithmicDepthBuffer",
+          "value": true,
+          "consequence": "camera.frustum.near/far = 0.1/10000000000",
+          "tick": 78
+        },
+        {
+          "id": "Scene/View.js:46 depthTexture → GlobeDepth creation",
+          "condition": "context.depthTexture",
+          "value": false,
+          "consequence": "consequence observed via the WebGL-context request log (see probes.glRequestsDuringConstruction)",
+          "tick": 80
+        },
+        {
+          "id": "Scene.js:1721 msaa → Scene#msaaSupported",
+          "condition": "context.msaa",
+          "value": true,
+          "consequence": "scene.msaaSupported",
+          "tick": 82
+        },
+        {
+          "id": "Scene.js:1771-1781 compressed texture families → uncompressed path",
+          "condition": "context.s3tc|pvrtc|astc|etc|etc1|bc7",
+          "value": "false,false,false,false,false,false",
+          "consequence": "Scene#compressedTextureFormats-like probes stay false ⇒ the logic layer keeps its uncompressed texture path",
+          "tick": 89
+        },
+        {
+          "id": "research §4 ContextLimits: maximumTextureFilterAnisotropy",
+          "condition": "ContextLimits.maximumTextureFilterAnisotropy",
+          "value": 1,
+          "consequence": "sampler anisotropy request clamps to 1 (no anisotropic filtering in WebGPU)",
+          "tick": 91
+        }
+      ],
+      "loudFailures": [
+        {
+          "capability": "draw",
+          "threw": true,
+          "category": "not-implemented",
+          "name": "G2HandoffContextNotImplemented"
+        },
+        {
+          "capability": "clear",
+          "threw": true,
+          "category": "not-implemented",
+          "name": "G2HandoffContextNotImplemented"
+        },
+        {
+          "capability": "beginFrame",
+          "threw": true,
+          "category": "not-implemented",
+          "name": "G2HandoffContextNotImplemented"
+        },
+        {
+          "capability": "endFrame",
+          "threw": true,
+          "category": "not-implemented",
+          "name": "G2HandoffContextNotImplemented"
+        },
+        {
+          "capability": "defaultTexture",
+          "threw": true,
+          "category": "not-implemented",
+          "name": "G2HandoffContextNotImplemented"
+        },
+        {
+          "capability": "defaultCubeMap",
+          "threw": true,
+          "category": "not-implemented",
+          "name": "G2HandoffContextNotImplemented"
+        }
+      ],
+      "probes": {
+        "getContextPhase": "after",
+        "notImplementedAfterConstruction": [],
+        "protobufReaderProbe": {
+          "readerType": "function",
+          "createIsFunction": true,
+          "rootType": "undefined",
+          "keys": [
+            "default",
+            "build",
+            "Writer",
+            "BufferWriter",
+            "Reader",
+            "BufferReader",
+            "util",
+            "rpc",
+            "roots",
+            "configure"
+          ]
+        },
+        "doubleInstall": {
+          "threw": true,
+          "category": "device-handoff/already-installed"
+        },
+        "peekAfterConstruction": "empty",
+        "secondTake": "empty",
+        "takeStack": "Error\n    at takeHandoff (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:44146:65)\n    at new G2HandoffContext (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:44746:19)\n    at new Scene (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:231809:21)\n    at run (http://127.0.0.1:54457/experiments/gates/g2-handoff/probe.js:253:17)\n    at async http://127.0.0.1:54457/experiments/gates/g2-handoff/probe.js:419:18",
+        "deviceRequests": 1,
+        "glRequestsDuringConstruction": [],
+        "glRequestsAll": [],
+        "notImplemented": [
+          "draw",
+          "clear",
+          "beginFrame",
+          "endFrame",
+          "defaultTexture",
+          "defaultCubeMap"
+        ],
+        "contextLimitsAfterConstruction": {
+          "maximumTextureSize": 16384,
+          "maximumSamples": 4,
+          "maximumVertexAttributes": 30,
+          "maximum3DTextureSize": 2048,
+          "maximumDrawBuffers": 8,
+          "maximumColorAttachments": 8,
+          "maximumTextureFilterAnisotropy": 1,
+          "highpFloatSupported": true,
+          "highpIntSupported": true
+        },
+        "destroyed": true,
+        "contextDestroyedAfterSceneDestroy": null
+      },
+      "errors": [],
+      "contextLimitsInstrumented": 23,
+      "handoffAudit": {
+        "installedAtTick": 1,
+        "pending": false,
+        "audit": [
+          {
+            "op": "install",
+            "tick": 1,
+            "source": "g2-probe"
+          },
+          {
+            "op": "take",
+            "tick": 3,
+            "source": "G2-HANDOFF-CONTEXT-STUB-v1",
+            "stack": "Error\n    at takeHandoff (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:44146:65)\n    at new G2HandoffContext (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:44746:19)\n    at new Scene (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:231809:21)\n    at run (http://127.0.0.1:54457/experiments/gates/g2-handoff/probe.js:253:17)\n    at async http://127.0.0.1:54457/experiments/gates/g2-handoff/probe.js:419:18"
+          }
+        ]
+      },
+      "finishedAt": "2026-09-18T19:40:15.058Z"
+    },
+    "webgl2": {
+      "backend": "webgl2",
+      "handoffMode": "none",
+      "startedAt": "2026-09-18T19:40:15.840Z",
+      "bundleUrl": "/experiments/gates/out/g2-webgl2/bundle.js",
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+        "webgpuApi": true,
+        "webgl2Api": true,
+        "devicePixelRatio": 1,
+        "crossOriginIsolated": false
+      },
+      "prefetch": null,
+      "handoff": null,
+      "construction": {
+        "startTick": 1,
+        "endTick": 51,
+        "threw": false,
+        "error": null,
+        "contextIsStub": false,
+        "contextConstructorName": "Context",
+        "contextIdentity": false,
+        "contextIsReplaced": false
+      },
+      "scene": {
+        "canvasIsGateCanvas": true,
+        "drawingBufferWidth": 300,
+        "drawingBufferHeight": 150,
+        "logarithmicDepthBuffer": true,
+        "msaaSupported": true,
+        "msaaSamples": 4,
+        "cameraNear": 0.1,
+        "cameraFar": 10000000000,
+        "contextDrawingBufferWidth": 300,
+        "contextDrawingBufferHeight": 150,
+        "contextFragmentDepth": true,
+        "contextDepthTexture": true,
+        "contextMsaa": true,
+        "contextWebgl2": true,
+        "contextId": "3866fce3-c217-44a5-a200-2b7c3e07eea6"
+      },
+      "capabilities": null,
+      "contextLimits": {
+        "instrumented": 23,
+        "writesDuringConstruction": [
+          {
+            "member": "_maximumCombinedTextureImageUnits",
+            "value": 32,
+            "phase": "construction",
+            "tick": 2
+          },
+          {
+            "member": "_maximumCubeMapSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 3
+          },
+          {
+            "member": "_maximumFragmentUniformVectors",
+            "value": 1024,
+            "phase": "construction",
+            "tick": 4
+          },
+          {
+            "member": "_maximumTextureImageUnits",
+            "value": 16,
+            "phase": "construction",
+            "tick": 5
+          },
+          {
+            "member": "_maximumRenderbufferSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 6
+          },
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 7
+          },
+          {
+            "member": "_maximum3DTextureSize",
+            "value": 2048,
+            "phase": "construction",
+            "tick": 8
+          },
+          {
+            "member": "_maximumVaryingVectors",
+            "value": 30,
+            "phase": "construction",
+            "tick": 9
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 10
+          },
+          {
+            "member": "_maximumVertexTextureImageUnits",
+            "value": 16,
+            "phase": "construction",
+            "tick": 11
+          },
+          {
+            "member": "_maximumVertexUniformVectors",
+            "value": 4095,
+            "phase": "construction",
+            "tick": 12
+          },
+          {
+            "member": "_maximumSamples",
+            "value": 8,
+            "phase": "construction",
+            "tick": 13
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 14
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 15
+          },
+          {
+            "member": "_minimumAliasedPointSize",
+            "value": 1,
+            "phase": "construction",
+            "tick": 16
+          },
+          {
+            "member": "_maximumAliasedPointSize",
+            "value": 1024,
+            "phase": "construction",
+            "tick": 17
+          },
+          {
+            "member": "_maximumViewportWidth",
+            "value": 32767,
+            "phase": "construction",
+            "tick": 18
+          },
+          {
+            "member": "_maximumViewportHeight",
+            "value": 32767,
+            "phase": "construction",
+            "tick": 19
+          },
+          {
+            "member": "_highpFloatSupported",
+            "value": true,
+            "phase": "construction",
+            "tick": 20
+          },
+          {
+            "member": "_highpIntSupported",
+            "value": true,
+            "phase": "construction",
+            "tick": 21
+          },
+          {
+            "member": "_maximumTextureFilterAnisotropy",
+            "value": 16,
+            "phase": "construction",
+            "tick": 22
+          },
+          {
+            "member": "_maximumDrawBuffers",
+            "value": 8,
+            "phase": "construction",
+            "tick": 23
+          },
+          {
+            "member": "_maximumColorAttachments",
+            "value": 8,
+            "phase": "construction",
+            "tick": 24
+          }
+        ],
+        "logicLayerReadsDuringConstruction": [
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 25
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 26
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 27
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 28
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 29
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 30
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 31
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 32
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 33
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 34
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 35
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 36
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 37
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 38
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 39
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 40
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 41
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 42
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 43
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 44
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 45
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 46
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 47
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 48
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 49
+          },
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 50
+          }
+        ],
+        "reads": [
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 25
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 26
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 27
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 28
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 29
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 30
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 31
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 32
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 33
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 34
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 35
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 36
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 37
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 38
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 39
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 40
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 41
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 42
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 43
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 44
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 45
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 46
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 47
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 48
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 49
+          },
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 50
+          },
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "after",
+            "tick": 52
+          },
+          {
+            "member": "_maximumSamples",
+            "value": 8,
+            "phase": "after",
+            "tick": 53
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "after",
+            "tick": 54
+          },
+          {
+            "member": "_maximum3DTextureSize",
+            "value": 2048,
+            "phase": "after",
+            "tick": 55
+          },
+          {
+            "member": "_maximumTextureFilterAnisotropy",
+            "value": 16,
+            "phase": "after",
+            "tick": 56
+          }
+        ],
+        "writes": [
+          {
+            "member": "_maximumCombinedTextureImageUnits",
+            "value": 32,
+            "phase": "construction",
+            "tick": 2
+          },
+          {
+            "member": "_maximumCubeMapSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 3
+          },
+          {
+            "member": "_maximumFragmentUniformVectors",
+            "value": 1024,
+            "phase": "construction",
+            "tick": 4
+          },
+          {
+            "member": "_maximumTextureImageUnits",
+            "value": 16,
+            "phase": "construction",
+            "tick": 5
+          },
+          {
+            "member": "_maximumRenderbufferSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 6
+          },
+          {
+            "member": "_maximumTextureSize",
+            "value": 16384,
+            "phase": "construction",
+            "tick": 7
+          },
+          {
+            "member": "_maximum3DTextureSize",
+            "value": 2048,
+            "phase": "construction",
+            "tick": 8
+          },
+          {
+            "member": "_maximumVaryingVectors",
+            "value": 30,
+            "phase": "construction",
+            "tick": 9
+          },
+          {
+            "member": "_maximumVertexAttributes",
+            "value": 16,
+            "phase": "construction",
+            "tick": 10
+          },
+          {
+            "member": "_maximumVertexTextureImageUnits",
+            "value": 16,
+            "phase": "construction",
+            "tick": 11
+          },
+          {
+            "member": "_maximumVertexUniformVectors",
+            "value": 4095,
+            "phase": "construction",
+            "tick": 12
+          },
+          {
+            "member": "_maximumSamples",
+            "value": 8,
+            "phase": "construction",
+            "tick": 13
+          },
+          {
+            "member": "_minimumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 14
+          },
+          {
+            "member": "_maximumAliasedLineWidth",
+            "value": 1,
+            "phase": "construction",
+            "tick": 15
+          },
+          {
+            "member": "_minimumAliasedPointSize",
+            "value": 1,
+            "phase": "construction",
+            "tick": 16
+          },
+          {
+            "member": "_maximumAliasedPointSize",
+            "value": 1024,
+            "phase": "construction",
+            "tick": 17
+          },
+          {
+            "member": "_maximumViewportWidth",
+            "value": 32767,
+            "phase": "construction",
+            "tick": 18
+          },
+          {
+            "member": "_maximumViewportHeight",
+            "value": 32767,
+            "phase": "construction",
+            "tick": 19
+          },
+          {
+            "member": "_highpFloatSupported",
+            "value": true,
+            "phase": "construction",
+            "tick": 20
+          },
+          {
+            "member": "_highpIntSupported",
+            "value": true,
+            "phase": "construction",
+            "tick": 21
+          },
+          {
+            "member": "_maximumTextureFilterAnisotropy",
+            "value": 16,
+            "phase": "construction",
+            "tick": 22
+          },
+          {
+            "member": "_maximumDrawBuffers",
+            "value": 8,
+            "phase": "construction",
+            "tick": 23
+          },
+          {
+            "member": "_maximumColorAttachments",
+            "value": 8,
+            "phase": "construction",
+            "tick": 24
+          }
+        ]
+      },
+      "reads": null,
+      "branches": [],
+      "loudFailures": [],
+      "probes": {
+        "getContextPhase": "after",
+        "instanceofUpstreamContext": true,
+        "upstreamContextIsGateStub": false,
+        "glReference": {
+          "maximumTextureSize": 16384,
+          "maximumSamples": 8,
+          "maximumVertexAttributes": 16,
+          "maximum3DTextureSize": 2048
+        },
+        "protobufReaderProbe": {
+          "readerType": "function",
+          "createIsFunction": true,
+          "rootType": "undefined",
+          "keys": [
+            "default",
+            "build",
+            "Writer",
+            "BufferWriter",
+            "Reader",
+            "BufferReader",
+            "util",
+            "rpc",
+            "roots",
+            "configure"
+          ]
+        },
+        "contextLimitsAfterConstruction": {
+          "maximumTextureSize": 16384,
+          "maximumSamples": 8,
+          "maximumVertexAttributes": 16,
+          "maximum3DTextureSize": 2048,
+          "maximumTextureFilterAnisotropy": 16
+        },
+        "destroyed": true,
+        "contextDestroyedAfterSceneDestroy": null
+      },
+      "errors": [],
+      "contextLimitsInstrumented": 23,
+      "finishedAt": "2026-09-18T19:40:16.143Z"
+    },
+    "runIsolation": {
+      "webgpu": {
+        "browser": "153.0.8010.36",
+        "pageId": "webgpu-mu7d528e"
+      },
+      "webgl2": {
+        "browser": "153.0.8010.36",
+        "pageId": "webgl2-mu7d535i"
+      }
+    }
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "title": "CommonJS 互操作：已按授权以真实依赖 @rollup/plugin-commonjs 接入并验证；protobufjs 具名导出的 MISSING_EXPORT 根因已查清",
+      "detail": "@rollup/plugin-commonjs 29.0.3（devDependency，精确锁版）已接入本门禁的真实构建链。根因：上游 Source/Scene/GoogleEarthEnterpriseImageryProvider.js:482 使用命名空间成员访问 `protobuf.Reader.create(data)`（第 1 行是 `import * as protobuf from \"protobufjs/dist/minimal/protobuf.js\"`）；G-1 的门禁内包裹（cjs-interop.mjs）只导出 default，Rollup 无法静态绑定该成员，于是把它降级为一次具名导入并在 :482:26 报 MISSING_EXPORT、运行期取到 undefined —— 不会自愈。接入真实插件后：两个 bundle 的 MISSING_EXPORT 均为 0，且页面运行期探测 `typeof protobuf.Reader.create === \"function\"` 为真（保护 Google Earth 影像解析路径）。对本组门禁无影响（GE 影像不在 MVP 路径上）；对 W1 产品打包的影响：dist 内嵌上游源码后该路径同样需要具名导出，MUST 继续使用该插件（或等价具名导出合成），否则 GE 影像路径一旦被触达即 TypeError。",
+      "followUp": [
+        "T040（许可证与署名：MIT 纳入允许集合，见条件 3 的落点说明）",
+        "T072 编号核对（见 F-3）"
+      ],
+      "conditions": {
+        "exactVersion": "29.0.3",
+        "devDependencyOnly": true,
+        "license": "MIT",
+        "licenseGateTask": "T040（本 tasks.md 的许可证任务；提示词中的 T072 在本 tasks.md 是 varying 契约任务）"
+      }
+    },
+    {
+      "id": "F-2",
+      "title": "research §4 的行号与已装 26.3.0 不一致（webgl2 标志在 Scene.js 中已无消费点）",
+      "detail": "research §4 记 `Scene/Scene.js:3905` 消费 `context.webgl2`，但 26.3.0 中 Scene.js 全文没有 `context.webgl2`/`_context.webgl2` 读取（3905 行是 shadowState 代码）；`context.msaa` 实际只在 `Scene#msaaSupported` getter（Scene.js:1719-1721）中读取，不在构造函数内。本门禁因此以**实测读取日志**（g2-webgpu.json → reads.duringConstruction）作为「构造期消费面」的证据，而不是照抄行号；capability-map.mjs 的 consumers 字段保留了 research 原文并在该条目标注不可复现。分支断言仍逐项成立：fragmentDepth→_logDepthBuffer→相机 near/far、depthTexture→（无 GL 依赖的构造后果）、压力测试族全 false、maximumTextureFilterAnisotropy=1。",
+      "followUp": [
+        "W2/T045 实现时以实测消费点为准；若 research 行号需修订，由入口 Agent 决定（子代理不得改 research/plan）"
+      ]
+    },
+    {
+      "id": "F-3",
+      "title": "提示词中的「T072 许可证允许集合」在本 tasks.md 中不存在——许可证任务是 T040",
+      "detail": "本 tasks.md（整体重新生成版）中 T040 是「许可证与署名（Apache-2.0）… tools/scripts/check-license-notice.mjs」，而 T072 是「varying 成对推导与契约」。F-1 条件 3（MIT 纳入许可证允许集合）已按 T040 登记（tests/unit/deps-locked.test.mjs 断言已安装包声明 license === \"MIT\"），MUST 在 T040 的实现/校验中把 MIT 写入允许集合。",
+      "followUp": [
+        "T040"
+      ]
+    },
+    {
+      "id": "F-4",
+      "title": "切片 A 的 depthTexture=false 是本门禁唯一的能力降级，且其后果被独立证实",
+      "detail": "depthTexture=false（research §4 切片 A 临时值）使 View.js:46 不创建 GlobeDepth。本门禁没有直接读取私有成员，而是用平台级观测作为后果证据：整段 Scene 构造期间 HTMLCanvasElement.getContext 的 webgl2 申请次数为 0（替换实现为 strict 模式，不申请 GL）。切片 B（T098a）翻转为 true 后 MUST 重跑本门禁。",
+      "followUp": [
+        "T098a（切片 B 功能翻转）",
+        "T045（能力合成正式实现）"
+      ]
+    },
+    {
+      "id": "F-5",
+      "title": "替换实现以 strict 模式构造成功 ⇒ W2 的 Context 替换不必携带 WebGL 上下文",
+      "detail": "G-1 的桩以 WebGL2 承载上下文获取（其 D-3 偏离）；G-2 的桩**不申请任何 GL 上下文**仍完成整个上游 Scene 构造，说明构造期没有走到需要 GL 的资源类。若 W2 在其它配置（如 depthTexture=true 的切片 B、开启 globe depth）下需要资源类，替换清单必须同时覆盖 Texture/Framebuffer/Renderbuffer 等（T031 的 11 项 replace 已含这些）。",
+      "followUp": [
+        "T031",
+        "T045",
+        "T098a"
+      ]
+    }
+  ],
+  "deviations": [
+    {
+      "id": "D-1",
+      "what": "tasks.md T016 要求「桩 Context 从槽中取设备」并断言两种后端都能构造场景；正式清单与 W2 的资源类替换（Texture/Framebuffer/…）属 Phase 3/4。",
+      "how": "门禁使用同 schema 的 g2-handoff/manifest.gate.json（唯一条目 Renderer/Context.js）；「WebGL2 后端」用**空清单**构建的第二个 bundle 承载（即上游原版 Renderer/Context.js），而不是在替换实现内部做 GL 回退——后者需要动态决定模块解析，属 W2 设计（plan 未规定，MUST 由入口 Agent 在 W2 定案）。"
+    },
+    {
+      "id": "D-2",
+      "what": "T016 未要求替换实现在无设备时降级为 WebGL2；research §3 步骤 4 描述的是「不写入交接槽 → 用上游原版 WebGL2 Context」。",
+      "how": "门禁桩在槽为空时抛 category=\"device-handoff/missing\" 的可诊断错误（阴性对照据此成立）。产品语义由 T042/T043 落地时决定；本门禁把该决定显式登记为待入口 Agent 确认的设计点。"
+    },
+    {
+      "id": "D-3",
+      "what": "research §4 的 `webgl2` 消费点行号不可复现（见 F-2）；ContextLimits 成员数 research §4 记为 10 而实测上游模块有 23 个公开成员。",
+      "how": "门禁以实测为准：capability-map.mjs 覆盖 ContextLimits 全部 23 个公开成员，并在 F-2 中记录行号漂移；不修改 research/plan。"
+    },
+    {
+      "id": "D-4",
+      "what": "T017（tests/unit/capability-mapping.test.mjs）为无 GPU 可运行的单元测试，而门禁产物 experiments/gates/out/** 不入库。",
+      "how": "该测试的判据全部来自静态的能力映射表 + @webgpu/types 的真实成员名（无 GPU 亦可运行）；门禁产物存在时额外交叉校验实测值，不存在时打印诊断而不静默跳过。"
+    }
+  ]
+}

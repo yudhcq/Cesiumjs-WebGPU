@@ -63,6 +63,12 @@ preference = "auto"                  → 同 webgpu，但把"不支持"视为正
   （`maxTextureDimension2D`、`maxVertexAttributes`、`maxSampledTexturesPerShaderStage`、`maxUniformBufferBindingSize`）。
 - 探测成功时，设备经**后端层交接槽**同步交付给 `Context` 替换模块（见 research §3）；
   探测失败时**不安装交接槽** → 上游原版 WebGL2 链路（不存在"两条路径各画一半"的中间态）。
+- **被保留的上游原版实现（决策 D2-a，见 plan.md）**：补丁层在替换 `Renderer/Context.js` 的同时，
+  **保留一份上游原版 WebGL2 实现于补丁层私有路径**；替换模块在"交接槽为空"时**整体委派**给它，
+  而不是抛出错误。**同一时刻只有一份实现被实例化**（另一份从不构造、不持设备、不绘制，属休眠代码），
+  因此不构成原则 II 所禁止的"两条管线同时绘制同一场景"。
+  > 注：Phase 2 的 G-2 门禁桩在槽为空时抛 `device-handoff/missing`，那是**门禁局部偏离**（为让失败可观察），
+  > 不是产品语义；产品语义以本条为准。
 - `RenderPathStatus`：`{ active, reason, degraded, notes }`（原因类别见 data-model §2.2/§2.5）；
   `degraded === true` 时 `notes` MUST 非空（FR-023）。
 

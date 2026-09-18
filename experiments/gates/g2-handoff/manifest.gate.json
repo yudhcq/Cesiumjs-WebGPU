@@ -1,0 +1,21 @@
+{
+  "gateNote": "G-2 门禁专用替换清单（tasks.md T016）。仅用于在真实构建链中证明「预取设备 → 交接槽 → 同步构造 Scene」可用；正式清单由 T031 落在 packages/cesium-webgpu/backend-webgpu/manifest.json，本文件 MUST NOT 被当作交付清单使用。",
+  "baseline": {
+    "packageName": "@cesium/engine",
+    "version": "26.3.0",
+    "cesiumVersion": "1.145.0",
+    "integritySource": "upstream/engine-26.3.0.lock.json"
+  },
+  "entries": [
+    {
+      "upstreamModule": "Renderer/Context.js",
+      "localFile": "Renderer/Context.js",
+      "kind": "replace",
+      "requirementRef": ["FR-005", "FR-030", "FR-032"],
+      "reason": "G-2 设备交接与同步构造：替换上游 Context.js，使其在构造期从交接槽同步取出预取的 WebGPU 设备、按 research §4 合成能力标志与 ContextLimits（桩实现，只覆盖构造期读取面；命令执行在 W2/T044）",
+      "glCallSites": 46
+    }
+  ],
+  "keptModulesHash": null,
+  "keptModulesHashNote": "由 T032 的 tools/scripts/gen-kept-hash.mjs 生成并写入正式清单；门禁清单不做上游漂移审计（该审计属 T030/T032/T033）。"
+}

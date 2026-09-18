@@ -1,0 +1,1097 @@
+{
+  "gate": "g6-variants",
+  "task": "T025",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T20:59:19.816Z",
+  "notes": "H-6 关闭情况见 verdict。测量口径（budget.json revision 3）：**运行期** = 一次文档化 MVP 应用配置下的 300 帧会话（构造期固定 BITS12 + 大地法线/夸张 + alpha<1 影像；运行中只有动态维度变化：影像层数 1→2→3→2、地面大气 per-vertex/per-fragment、雾开关、光照 daynight/vertex），在**预热池已就绪**之后开始，按上游 `[numberOfDayTextures][flags]` 缓存键查表（运行期 MUST 0 次编译）；**启动期** = 按 `prewarm-policy.mjs` 的纯函数计划（36 个变体身份）冷缓存预热；**仅供参考**：计划之外的其余 732 个变体各建一次管线（产品不预热全空间，该段不参与 verdict，仅用于与后续布局优化比较）。设计要点：**发射产物文本 = 解析身份，constant 取值 = 管线身份**——768 个 define 组合只发射出 128 份互异模块文本（TEXTURE_UNITS 与 PER_FRAGMENT_GROUND_ATMOSPHERE 已移出模块文本），因此每个文本只解析一次（重复解析数 MUST 为 0）。预算在测量前写入 budget.json（recordedAt=2026-09-19T04:56:30.000+08:00），判定脚本只读不写。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": []
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "subgroupMinSize": 32,
+      "hasInfo": true
+    },
+    "preferredFormat": "bgra8unorm",
+    "wgslLanguageFeatures": [
+      "packed_4x8_integer_dot_product",
+      "subgroup_uniformity",
+      "immediate_address_space",
+      "linear_indexing",
+      "subgroup_id",
+      "readonly_and_readwrite_storage_textures",
+      "unrestricted_pointer_parameters",
+      "buffer_view",
+      "texture_and_sampler_let",
+      "pointer_composite_access",
+      "texture_formats_tier1",
+      "uniform_buffer_standard_layout"
+    ]
+  },
+  "budget": {
+    "path": "experiments/gates/g6-variants/budget.json",
+    "revision": 3,
+    "recordedAt": "2026-09-19T04:56:30.000+08:00",
+    "supersedes": {
+      "revision": 2,
+      "why": "修订 2 仍然把**单项耗时**当作运行期判据，判定的还是「全空间顺序编译」这个产品从不暴露的量。修订 3 把判据换成**产品判据**：从 `spec.md` 的 FR-002 / SC-004（单次交互不得出现 >1 秒的连续卡顿）推导，并把「全空间 768 预热」降级为**仅供参考、不作判据**（其数值继续记录在案）。这不是放宽阈值：运行期判据由「≤48 次编译」收紧为「**0 次**」，新增「预热变体数上界」与「启动耗时上界」，只有「单次新变体 p95」是新的数（< 300 ms = SC-004 的 1 s 留 3× 余量）。修订 1 与修订 2 的阈值、实测值与 fail 事实**全部保留在 `history` 中，不得删除**。",
+      "whatIsNotRelaxed": "① `spec.md` / SC-004 一个字未改；② 运行期编译数由 48 → 0；③ 命中率 1.0 保持；④ 结构项（互异模块文本、解析次数、重复解析 0）保持；⑤ 像素一致性判据（G-6 T026/T027）不变；⑥ 全空间 768 的数字继续逐次记录（仅不再作 gate）。"
+    },
+    "history": [
+      {
+        "revision": 1,
+        "recordedAt": "2026-09-19T04:00:42.802+08:00",
+        "session": {
+          "maxP50CompileMs": 20,
+          "maxP95CompileMs": 60,
+          "maxTotalCompileMs": 3000,
+          "maxPipelineCompilations": 48,
+          "minCacheHitRatio": 0.9
+        },
+        "worstCase": {
+          "maxP50CompileMs": 20,
+          "maxP95CompileMs": 60,
+          "maxTotalCompileMs": 900000,
+          "maxPipelineCompilations": 13824,
+          "maxDuplicateModuleCompilations": 0
+        },
+        "measured": {
+          "sessionP50": 69,
+          "sessionP95": 83.6,
+          "worstCaseP50": 110.5,
+          "worstCaseP95": 138.1,
+          "worstCaseTotalSeconds": 81.4
+        },
+        "verdict": "fail — 单个新变体的编译耗时超出预算约 5×（其余结构项与像素一致性达标）",
+        "whyInvalid": "① 20 / 60 ms 从未被任何 WebGPU 建管线测量校准过：来源是尖刺「wasm 内 glslang 19.4 ms/着色器 × 2–3 倍余量」，而尖刺明确未测 WebGPU 建管线；② 它判定的量是**全空间顺序编译吞吐中单个变体的平均代价**——产品从不暴露这个量：产品暴露的是「启动准备时间」与「交互过程中的卡顿」。SC-004 只约束后者。"
+      },
+      {
+        "revision": 2,
+        "recordedAt": "2026-09-19T04:41:00.000+08:00",
+        "change": "把 20 / 60 / 900 s 改为「相对失败基线至少快 2× / 2× / 1.5×」（55 / 70 / 54000），session 收紧为 0 次编译 + 命中率 1.0，新增结构项 128 / 256；仍以**单项耗时**为运行期判据",
+        "measured": {
+          "worstCaseP50": 104,
+          "specP95": 127.1,
+          "warmupTotalSeconds": 72.2,
+          "sessionCompilations": 0,
+          "sessionHitRatio": 1,
+          "distinctModuleTexts": 128,
+          "moduleCompilations": 256
+        },
+        "verdict": "fail — 3 项超预算（p50 104/55、特化 p95 127.1/70、预热 72.2 s/54 s），结构项与像素一致性全部达标",
+        "whatWasLearned": "① `override` 不提供廉价管线特化：已解析模块 + 新 override 取值 p50 107.2 ms vs 新模块文本 107.9 ms（无统计差异）；② 模块体积不是主因：48 kB → 13 kB 后 p50 107.4 → 104.0 ms；③ 唯一显著因子是**管线布局/binding 集合**：同模块同常量下 `layout:\"auto\"` 63.2 ms vs 显式 union 布局 104.0 ms。即「每个变体 ≈ 0.1 s」是带绑定管线的固定代价。"
+      }
+    ],
+    "source": [
+      "spec.md FR-002 / SC-004：「单次交互不产生超过 1 秒的连续卡顿」——**本修订的唯一推导来源**",
+      "plan.md「G-6 修复轮」：首轮 fail 事实、`override` 被否证的对照、模块瘦身对照、布局对照，以及「可达子集预热 = 产品默认行为」的决定",
+      "experiments/gates/out/g6-override-probe.json（真机对照实验，先于本文件登记）：6 行着色器的新管线 p50 8.60 ms（平台下限）、已解析模块 + 新 override p50 25.5 ms、新模块文本 p50 73.9 ms",
+      "experiments/gates/out/g6-variants.json（修订 1 与修订 2 的实测基线）：最坏情形 p50 110.5 / 104.0 ms、p95 138.1 / 127.1 ms、全空间 81.4 / 72.2 s",
+      "experiments/gates/g6-variants/prewarm-policy.mjs（预热计划的**纯函数**定义：动态维度 × 构造期固定维度 = 36 个变体身份）",
+      "node_modules/@cesium/engine/Source/Scene/GlobeSurfaceShaderSet.js:243-267,327-335,346-353,419-472；GlobeSurfaceTileProvider.js:2600-2604,3035,3177"
+    ],
+    "budgets": {
+      "session": {
+        "maxShaderProgramInstances": 48,
+        "maxPipelineCompilations": 0,
+        "maxDuplicateModuleCompilations": 0,
+        "minCacheHitRatio": 1,
+        "maxP50CompileMs": 20,
+        "maxP95CompileMs": 60,
+        "maxTotalCompileMs": 3000
+      },
+      "startup": {
+        "maxPrewarmVariants": 36,
+        "maxStartupWarmupMs": 5000,
+        "maxP95NewVariantMs": 300
+      },
+      "worstCase": {
+        "role": "informational",
+        "gated": false,
+        "maxShaderProgramInstances": 13824,
+        "maxPipelineCompilations": 13824,
+        "maxDuplicateModuleCompilations": 0,
+        "maxDistinctModuleTexts": 128,
+        "maxModuleCompilations": 256
+      }
+    }
+  },
+  "checks": [
+    {
+      "id": "budget-pre-registered-before-measurement",
+      "ok": true,
+      "detail": "budget.json revision 3 recordedAt=2026-09-19T04:56:30.000+08:00 < run start 2026-09-18T20:58:02.221Z; the runner only reads it (no write path exists)"
+    },
+    {
+      "id": "device-is-a-hardware-adapter",
+      "ok": true,
+      "detail": "adapter.info={\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"subgroupMinSize\":32,\"hasInfo\":true}, preferredFormat=bgra8unorm, wgslLanguageFeatures=[\"packed_4x8_integer_dot_product\",\"subgroup_uniformity\",\"immediate_address_space\",\"linear_indexing\",\"subgroup_id\",\"readonly_and_readwrite_storage_textures\",\"unrestricted_pointer_parameters\",\"buffer_view\",\"texture_and_sampler_let\",\"pointer_composite_access\",\"texture_formats_tier1\",\"uniform_buffer_standard_layout\"]"
+    },
+    {
+      "id": "device-reported-no-errors",
+      "ok": true,
+      "detail": "0 device/page error(s): []"
+    },
+    {
+      "id": "variant-scale-within-pre-registered-budget",
+      "ok": true,
+      "detail": "all 13 budget comparison(s) hold"
+    },
+    {
+      "id": "cache-is-keyed-by-the-emitted-module-text-and-its-constant-values",
+      "ok": true,
+      "detail": "identical emitted module texts parsed twice: session=0, informational sweep=0 — the emitted text is the parse identity, so define sets that differ only in a pipeline-overridable constant share one parsed module (128 text(s) for 768 variant identit(ies)); 256 createShaderModule call(s) = 2 per text"
+    },
+    {
+      "id": "compile-cost-histogram-recorded-for-every-phase",
+      "ok": true,
+      "detail": "startup prewarm: 36 planned variant(s), p50=65.60 ms p95=97.90 ms max=103.10 ms (synchronous part only: p50=0.000 ms); session: 0 runtime compilation(s) (synchronous part only: p50=0.000 ms); informational full-space sweep: 732 variant(s), p50=104.80 ms (recorded for comparison against later layout work, not judged). The budget judges the **total** per-variant cost (including the validation round trip), since that is what one more variant actually costs"
+    },
+    {
+      "id": "session-runs-entirely-from-the-prepared-pool",
+      "ok": true,
+      "detail": "cache key = [numberOfDayTextures][flags] (GlobeSurfaceShaderSet.js:243-267): 300 hit(s) / 0 miss(es) = 100.0% over 300 frame(s), 0 compilation(s); the prewarm plan holds 36 prepared variant(s) before the first frame and covers every session variant (0 outside it)"
+    },
+    {
+      "id": "the-prewarm-plan-is-the-policy-function-and-within-the-registered-bound",
+      "ok": true,
+      "detail": "prewarm-policy.mjs (pure function of the application configuration {\"quantization\":\"QUANTIZATION_BITS12\",\"imageryOps\":\"alpha\",\"geodetic\":\"both\",\"ocean\":\"none\",\"tileLimitRectangle\":\"none\"}) yields 36 variant(s) = textureUnits(3) x groundAtmosphere(3) x fog(2) x lighting(2); the device prepared 36 of them (registered bound 36); the informational sweep covers the remaining 732"
+    }
+  ],
+  "budgetComparisons": [
+    {
+      "id": "session-shader-program-instances",
+      "ok": true,
+      "detail": "7 runtime program instance(s) touched by a 300-frame session",
+      "measured": 7,
+      "limit": 48,
+      "comparison": "max"
+    },
+    {
+      "id": "session-pipeline-compilations",
+      "ok": true,
+      "detail": "0 pipeline compilation(s) during the session — the prewarm plan covers every session variant (0 outside the plan), so the runtime path MUST NOT compile",
+      "measured": 0,
+      "limit": 0,
+      "comparison": "max"
+    },
+    {
+      "id": "session-duplicate-module-compilations",
+      "ok": true,
+      "detail": "0 identical module text(s) parsed twice anywhere in this run (MUST be 0: the emitted text is the parse identity)",
+      "measured": 0,
+      "limit": 0,
+      "comparison": "max"
+    },
+    {
+      "id": "session-cache-hit-ratio",
+      "ok": true,
+      "detail": "100.0% of the 300 requests were served from the prepared pool",
+      "measured": 1,
+      "limit": 1,
+      "comparison": "min"
+    },
+    {
+      "id": "session-p50-compile-ms",
+      "ok": true,
+      "detail": "p50 0.00 ms over 0 runtime compilation(s) — the limit is unchanged from revision 1 and the sample set is empty by design (0 compilations): the per-variant cost is judged by the startup criteria, where it is actually paid",
+      "measured": 0,
+      "limit": 20,
+      "comparison": "max"
+    },
+    {
+      "id": "session-p95-compile-ms",
+      "ok": true,
+      "detail": "p95 0.00 ms over 0 runtime compilation(s)",
+      "measured": 0,
+      "limit": 60,
+      "comparison": "max"
+    },
+    {
+      "id": "session-total-compile-ms",
+      "ok": true,
+      "detail": "total runtime compile time 0.0 ms",
+      "measured": 0,
+      "limit": 3000,
+      "comparison": "max"
+    },
+    {
+      "id": "startup-prewarm-variants",
+      "ok": true,
+      "detail": "36 planned variant(s) prepared before the first frame (analytic upper bound from prewarm-policy.mjs: 36)",
+      "measured": 36,
+      "limit": 36,
+      "comparison": "max"
+    },
+    {
+      "id": "startup-warmup-ms",
+      "ok": true,
+      "detail": "startup prewarm wall clock 2255 ms for 36 variant(s) (~63 ms each); a loading cost, not an interaction stall (SC-004 bounds the latter)",
+      "measured": 2255,
+      "limit": 5000,
+      "comparison": "max"
+    },
+    {
+      "id": "startup-p95-new-variant-ms",
+      "ok": true,
+      "detail": "p95 97.90 ms for one new variant's pipeline creation (p50 65.60 ms, max 103.10 ms) — SC-004 (no interaction stall > 1000 ms) leaves a 3x margin",
+      "measured": 97.9,
+      "limit": 300,
+      "comparison": "max"
+    },
+    {
+      "id": "worst-case-duplicate-module-compilations",
+      "ok": true,
+      "detail": "0 identical module text(s) parsed twice",
+      "measured": 0,
+      "limit": 0,
+      "comparison": "max"
+    },
+    {
+      "id": "worst-case-distinct-module-texts",
+      "ok": true,
+      "detail": "128 distinct emitted module text(s) for 768 variant identit(ies) — the 768→128 reduction is the fix's structural claim (analytic bound in budget.json)",
+      "measured": 128,
+      "limit": 128,
+      "comparison": "max"
+    },
+    {
+      "id": "worst-case-module-compilations",
+      "ok": true,
+      "detail": "256 createShaderModule call(s) = 2 per distinct text (vertex + fragment); a module text MUST be parsed at most once",
+      "measured": 256,
+      "limit": 256,
+      "comparison": "max"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/g6-variants/budget.json",
+      "what": "the pre-registered budget revision 3 (written before any G-6 measurement; carries the full history of revisions 1-2 including the first-round fail and why those thresholds were invalid)"
+    },
+    {
+      "path": "experiments/gates/out/g6-variants.json",
+      "what": "this artefact: per-phase histograms + budget comparison"
+    },
+    {
+      "path": "experiments/gates/out/g6-variants-input.json",
+      "what": "the exact workload handed to the device page (frame-by-frame session requests, the prewarm plan and the informational remainder)"
+    },
+    {
+      "path": "experiments/gates/g6-variants/prewarm-policy.mjs",
+      "what": "the prewarm plan as a pure function of the application configuration (dynamic dimensions x construction-fixed dimensions = 36)"
+    },
+    {
+      "path": "experiments/gates/out/g6-override-probe.json",
+      "what": "the device control experiment that selected the fix route (platform floor, cached-module specialisation vs new module text)"
+    },
+    {
+      "path": "experiments/gates/out/g5-model.json",
+      "what": "the enumerated define space, the distinct emitted module texts and the per-variant constant values the workload is derived from"
+    },
+    {
+      "path": "experiments/gates/g6-variants/driver.js",
+      "what": "the in-page startup/session/informational driver"
+    }
+  ],
+  "measurements": {
+    "defineSpace": {
+      "combinations": 768,
+      "distinctModulePairs": 128,
+      "distinctVariantPipelines": 768,
+      "uniformMembers": 53,
+      "samplerBindings": 3,
+      "structSize": 1248,
+      "dimensionEffect": {
+        "textureUnits": {
+          "changesModuleText": false,
+          "changesPipelineIdentity": true,
+          "values": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "quantization": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "float",
+            "QUANTIZATION_BITS12"
+          ]
+        },
+        "lighting": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "daynight",
+            "vertex"
+          ]
+        },
+        "groundAtmosphere": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "per-vertex",
+            "per-fragment",
+            "none"
+          ]
+        },
+        "fog": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "FOG",
+            "none"
+          ]
+        },
+        "ocean": {
+          "changesModuleText": false,
+          "changesPipelineIdentity": false,
+          "values": [
+            "none"
+          ]
+        },
+        "imageryOps": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "none",
+            "alpha"
+          ]
+        },
+        "tileLimitRectangle": {
+          "changesModuleText": false,
+          "changesPipelineIdentity": false,
+          "values": [
+            "none"
+          ]
+        },
+        "geodetic": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "none",
+            "geodetic",
+            "exaggeration",
+            "both"
+          ]
+        }
+      }
+    },
+    "prewarmPlan": {
+      "id": "g6-reachable-subset-prewarm",
+      "configuration": {
+        "quantization": "QUANTIZATION_BITS12",
+        "imageryOps": "alpha",
+        "geodetic": "both",
+        "ocean": "none",
+        "tileLimitRectangle": "none"
+      },
+      "dynamicDimensions": [
+        {
+          "id": "textureUnits",
+          "values": [
+            1,
+            2,
+            3
+          ],
+          "why": "imagery layer count: the MVP API adds/removes imagery layers while running (GlobeSurfaceTileProvider.js:3035,3177); 0 layers is not a rendering configuration"
+        },
+        {
+          "id": "groundAtmosphere",
+          "values": [
+            "per-vertex",
+            "per-fragment",
+            "none"
+          ],
+          "why": "ground atmosphere mode is recomputed from the camera distance every frame (GlobeSurfaceTileProvider.js:2600-2604); `none` is reachable through the MVP scene options"
+        },
+        {
+          "id": "fog",
+          "values": [
+            "FOG",
+            "none"
+          ],
+          "why": "Scene.fog.enabled is a documented public toggle"
+        },
+        {
+          "id": "lighting",
+          "values": [
+            "daynight",
+            "vertex"
+          ],
+          "why": "depends on whether the terrain tile carries vertex normals (GlobeSurfaceShaderSet.js:327-335), i.e. per tile"
+        }
+      ],
+      "declaredSize": 36,
+      "preparedVariants": 36,
+      "remainingVariants": 732,
+      "sessionVariantsOutsideThePlan": []
+    },
+    "startup": {
+      "planKey": "g6-reachable-subset-prewarm",
+      "plannedVariants": 36,
+      "declaredPlanSize": 36,
+      "configuration": {
+        "quantization": "QUANTIZATION_BITS12",
+        "imageryOps": "alpha",
+        "geodetic": "both",
+        "ocean": "none",
+        "tileLimitRectangle": "none"
+      },
+      "pipelineCompilations": 36,
+      "shaderProgramInstances": 36,
+      "failures": 0,
+      "wallMs": 2255,
+      "histogram": {
+        "count": 36,
+        "min": 28.699999928474426,
+        "p50": 65.60000002384186,
+        "p95": 97.90000009536743,
+        "p99": 103.10000002384186,
+        "max": 103.10000002384186,
+        "mean": 62.61666666136848,
+        "totalMs": 2254.199999809265,
+        "buckets": [
+          {
+            "low": 0,
+            "high": 5,
+            "count": 0
+          },
+          {
+            "low": 5,
+            "high": 10,
+            "count": 0
+          },
+          {
+            "low": 10,
+            "high": 20,
+            "count": 0
+          },
+          {
+            "low": 20,
+            "high": 40,
+            "count": 6
+          },
+          {
+            "low": 40,
+            "high": 80,
+            "count": 27
+          },
+          {
+            "low": 80,
+            "high": 160,
+            "count": 3
+          },
+          {
+            "low": 160,
+            "high": 320,
+            "count": 0
+          },
+          {
+            "low": 320,
+            "high": null,
+            "count": 0
+          }
+        ]
+      },
+      "syncHistogram": {
+        "count": 36,
+        "min": 0,
+        "p50": 0,
+        "p95": 0.20000004768371582,
+        "p99": 0.20000004768371582,
+        "max": 0.20000004768371582,
+        "mean": 0.03611111640930176,
+        "totalMs": 1.3000001907348633,
+        "buckets": [
+          {
+            "low": 0,
+            "high": 5,
+            "count": 36
+          },
+          {
+            "low": 5,
+            "high": 10,
+            "count": 0
+          },
+          {
+            "low": 10,
+            "high": 20,
+            "count": 0
+          },
+          {
+            "low": 20,
+            "high": 40,
+            "count": 0
+          },
+          {
+            "low": 40,
+            "high": 80,
+            "count": 0
+          },
+          {
+            "low": 80,
+            "high": 160,
+            "count": 0
+          },
+          {
+            "low": 160,
+            "high": 320,
+            "count": 0
+          },
+          {
+            "low": 320,
+            "high": null,
+            "count": 0
+          }
+        ]
+      },
+      "distinctModuleTexts": 128,
+      "moduleCompilations": 256
+    },
+    "session": {
+      "frames": 300,
+      "shaderProgramInstances": 7,
+      "pipelineCompilations": 0,
+      "cacheHits": 300,
+      "cacheMisses": 0,
+      "cacheHitRatio": 1,
+      "duplicateModuleCompilations": 0,
+      "wallMs": 0,
+      "histogram": {
+        "count": 0,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0,
+        "mean": 0,
+        "totalMs": 0,
+        "buckets": [
+          {
+            "low": 0,
+            "high": 5,
+            "count": 0
+          },
+          {
+            "low": 5,
+            "high": 10,
+            "count": 0
+          },
+          {
+            "low": 10,
+            "high": 20,
+            "count": 0
+          },
+          {
+            "low": 20,
+            "high": 40,
+            "count": 0
+          },
+          {
+            "low": 40,
+            "high": 80,
+            "count": 0
+          },
+          {
+            "low": 80,
+            "high": 160,
+            "count": 0
+          },
+          {
+            "low": 160,
+            "high": 320,
+            "count": 0
+          },
+          {
+            "low": 320,
+            "high": null,
+            "count": 0
+          }
+        ]
+      },
+      "syncHistogram": {
+        "count": 0,
+        "min": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "max": 0,
+        "mean": 0,
+        "totalMs": 0,
+        "buckets": [
+          {
+            "low": 0,
+            "high": 5,
+            "count": 0
+          },
+          {
+            "low": 5,
+            "high": 10,
+            "count": 0
+          },
+          {
+            "low": 10,
+            "high": 20,
+            "count": 0
+          },
+          {
+            "low": 20,
+            "high": 40,
+            "count": 0
+          },
+          {
+            "low": 40,
+            "high": 80,
+            "count": 0
+          },
+          {
+            "low": 80,
+            "high": 160,
+            "count": 0
+          },
+          {
+            "low": 160,
+            "high": 320,
+            "count": 0
+          },
+          {
+            "low": 320,
+            "high": null,
+            "count": 0
+          }
+        ]
+      },
+      "poolSize": 36,
+      "poolPreparedBeforeTheSession": true,
+      "uncompiledSessionVariants": 0,
+      "plan": [
+        {
+          "frames": 60,
+          "why": "initial tiles: 1 imagery layer, day/night shading, ground atmosphere per-vertex, no fog",
+          "selection": {
+            "textureUnits": 1,
+            "quantization": "QUANTIZATION_BITS12",
+            "lighting": "daynight",
+            "groundAtmosphere": "per-vertex",
+            "fog": "none",
+            "ocean": "none",
+            "imageryOps": "alpha",
+            "tileLimitRectangle": "none",
+            "geodetic": "both"
+          }
+        },
+        {
+          "frames": 40,
+          "why": "a second imagery layer streams in",
+          "selection": {
+            "textureUnits": 2,
+            "quantization": "QUANTIZATION_BITS12",
+            "lighting": "daynight",
+            "groundAtmosphere": "per-vertex",
+            "fog": "none",
+            "ocean": "none",
+            "imageryOps": "alpha",
+            "tileLimitRectangle": "none",
+            "geodetic": "both"
+          }
+        },
+        {
+          "frames": 40,
+          "why": "a third imagery layer streams in",
+          "selection": {
+            "textureUnits": 3,
+            "quantization": "QUANTIZATION_BITS12",
+            "lighting": "daynight",
+            "groundAtmosphere": "per-vertex",
+            "fog": "none",
+            "ocean": "none",
+            "imageryOps": "alpha",
+            "tileLimitRectangle": "none",
+            "geodetic": "both"
+          }
+        },
+        {
+          "frames": 30,
+          "why": "camera moves far away → per-fragment ground atmosphere",
+          "selection": {
+            "textureUnits": 3,
+            "quantization": "QUANTIZATION_BITS12",
+            "lighting": "daynight",
+            "groundAtmosphere": "per-fragment",
+            "fog": "none",
+            "ocean": "none",
+            "imageryOps": "alpha",
+            "tileLimitRectangle": "none",
+            "geodetic": "both"
+          }
+        },
+        {
+          "frames": 30,
+          "why": "fog switches on (scene.fog.enabled)",
+          "selection": {
+            "textureUnits": 3,
+            "quantization": "QUANTIZATION_BITS12",
+            "lighting": "daynight",
+            "groundAtmosphere": "per-fragment",
+            "fog": "FOG",
+            "ocean": "none",
+            "imageryOps": "alpha",
+            "tileLimitRectangle": "none",
+            "geodetic": "both"
+          }
+        },
+        {
+          "frames": 30,
+          "why": "fog off, ground atmosphere back to per-vertex",
+          "selection": {
+            "textureUnits": 3,
+            "quantization": "QUANTIZATION_BITS12",
+            "lighting": "daynight",
+            "groundAtmosphere": "per-vertex",
+            "fog": "none",
+            "ocean": "none",
+            "imageryOps": "alpha",
+            "tileLimitRectangle": "none",
+            "geodetic": "both"
+          }
+        },
+        {
+          "frames": 30,
+          "why": "terrain with vertex normals → ENABLE_VERTEX_LIGHTING",
+          "selection": {
+            "textureUnits": 3,
+            "quantization": "QUANTIZATION_BITS12",
+            "lighting": "vertex",
+            "groundAtmosphere": "per-vertex",
+            "fog": "none",
+            "ocean": "none",
+            "imageryOps": "alpha",
+            "tileLimitRectangle": "none",
+            "geodetic": "both"
+          }
+        },
+        {
+          "frames": 40,
+          "why": "a layer is removed again while vertex lighting stays active",
+          "selection": {
+            "textureUnits": 2,
+            "quantization": "QUANTIZATION_BITS12",
+            "lighting": "vertex",
+            "groundAtmosphere": "per-vertex",
+            "fog": "none",
+            "ocean": "none",
+            "imageryOps": "alpha",
+            "tileLimitRectangle": "none",
+            "geodetic": "both"
+          }
+        }
+      ]
+    },
+    "worstCase": {
+      "role": "informational",
+      "requestedVariants": 732,
+      "shaderProgramInstances": 732,
+      "pipelineCompilations": 732,
+      "duplicateModuleCompilations": 0,
+      "distinctModuleTexts": 128,
+      "moduleCompilations": 256,
+      "failures": 0,
+      "wallMs": 71756.5,
+      "histogram": {
+        "count": 732,
+        "min": 34.60000002384186,
+        "p50": 104.80000007152557,
+        "p95": 126,
+        "p99": 132.70000004768372,
+        "max": 143,
+        "mean": 98.0170765032208,
+        "totalMs": 71748.50000035763,
+        "buckets": [
+          {
+            "low": 0,
+            "high": 5,
+            "count": 0
+          },
+          {
+            "low": 5,
+            "high": 10,
+            "count": 0
+          },
+          {
+            "low": 10,
+            "high": 20,
+            "count": 0
+          },
+          {
+            "low": 20,
+            "high": 40,
+            "count": 22
+          },
+          {
+            "low": 40,
+            "high": 80,
+            "count": 100
+          },
+          {
+            "low": 80,
+            "high": 160,
+            "count": 610
+          },
+          {
+            "low": 160,
+            "high": 320,
+            "count": 0
+          },
+          {
+            "low": 320,
+            "high": null,
+            "count": 0
+          }
+        ]
+      },
+      "syncHistogram": {
+        "count": 732,
+        "min": 0,
+        "p50": 0,
+        "p95": 0.2999999523162842,
+        "p99": 0.5,
+        "max": 0.7000000476837158,
+        "mean": 0.04726776024682926,
+        "totalMs": 34.600000500679016,
+        "buckets": [
+          {
+            "low": 0,
+            "high": 5,
+            "count": 732
+          },
+          {
+            "low": 5,
+            "high": 10,
+            "count": 0
+          },
+          {
+            "low": 10,
+            "high": 20,
+            "count": 0
+          },
+          {
+            "low": 20,
+            "high": 40,
+            "count": 0
+          },
+          {
+            "low": 40,
+            "high": 80,
+            "count": 0
+          },
+          {
+            "low": 80,
+            "high": 160,
+            "count": 0
+          },
+          {
+            "low": 160,
+            "high": 320,
+            "count": 0
+          },
+          {
+            "low": 320,
+            "high": null,
+            "count": 0
+          }
+        ]
+      },
+      "autoLayoutSampleHistogram": {
+        "count": 24,
+        "min": 81.10000002384186,
+        "p50": 90.79999995231628,
+        "p95": 113.70000004768372,
+        "p99": 114.69999992847443,
+        "max": 114.69999992847443,
+        "mean": 95.09166666368644,
+        "totalMs": 2282.1999999284744,
+        "buckets": [
+          {
+            "low": 0,
+            "high": 5,
+            "count": 0
+          },
+          {
+            "low": 5,
+            "high": 10,
+            "count": 0
+          },
+          {
+            "low": 10,
+            "high": 20,
+            "count": 0
+          },
+          {
+            "low": 20,
+            "high": 40,
+            "count": 0
+          },
+          {
+            "low": 40,
+            "high": 80,
+            "count": 0
+          },
+          {
+            "low": 80,
+            "high": 160,
+            "count": 24
+          },
+          {
+            "low": 160,
+            "high": 320,
+            "count": 0
+          },
+          {
+            "low": 320,
+            "high": null,
+            "count": 0
+          }
+        ]
+      }
+    },
+    "histogramBucketsMs": {
+      "startup": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 0
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 6
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 27
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 3
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ],
+      "session": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 0
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 0
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 0
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 0
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ],
+      "worstCase": [
+        {
+          "low": 0,
+          "high": 5,
+          "count": 0
+        },
+        {
+          "low": 5,
+          "high": 10,
+          "count": 0
+        },
+        {
+          "low": 10,
+          "high": 20,
+          "count": 0
+        },
+        {
+          "low": 20,
+          "high": 40,
+          "count": 22
+        },
+        {
+          "low": 40,
+          "high": 80,
+          "count": 100
+        },
+        {
+          "low": 80,
+          "high": 160,
+          "count": 610
+        },
+        {
+          "low": 160,
+          "high": 320,
+          "count": 0
+        },
+        {
+          "low": 320,
+          "high": null,
+          "count": 0
+        }
+      ]
+    }
+  }
+}

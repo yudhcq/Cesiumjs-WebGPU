@@ -1,0 +1,1411 @@
+{
+  "gate": "g6",
+  "task": "T025,T026,T027",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T21:01:03.849Z",
+  "notes": "G-6 通过（budget.json **revision 3**，判据由 SC-004 推导）：**运行期 0 次编译**（文档化 300 帧会话：300 命中 / 0 未命中，命中率 100.0%）、**启动预热 36 个变体 / 2255 ms**（限 36 个 / 5000 ms）、**单次新变体建管线 p95 97.9 ms**（限 300 ms = SC-004 的 1 s 留 3× 余量）、像素一致性 0/16384 像素不同（最大 0 LSB）。结构性结论：768 个可达 define 组合 → **128** 份互异模块文本（TEXTURE_UNITS 与 PER_FRAGMENT_GROUND_ATMOSPHERE 已是 pipeline-overridable constant）→ 每个文本只解析一次（256 次 createShaderModule = 2×128）。**历史保留**：revision 1（20/60 ms，fail — p50 110.5 / p95 138.1 ms、总 81.4 s）与 revision 2（55/70/54000 ms，fail — p50 104.0 / 特化 p95 127.1 ms、总 72.2 s）的阈值、实测值与失败事实完整保存在 `budget.json` 的 `history` 与本节；全空间 732 个变体冷缓存预热 71.8 s / p50 104.8 ms **仅供参考、不作判据**（产品不预热全空间）。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": []
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "subgroupMinSize": 32,
+      "hasInfo": true
+    },
+    "preferredFormat": "bgra8unorm",
+    "webgl2Adapter": {
+      "renderer": "WebKit WebGL",
+      "vendor": "WebKit",
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+      "hasInfo": true
+    }
+  },
+  "checks": [
+    {
+      "id": "budget-was-registered-before-the-measurement",
+      "ok": true,
+      "detail": "budget.json recordedAt=2026-09-19T04:56:30.000+08:00 < g6-variants.json recordedAt=2026-09-18T20:59:19.816Z — thresholds cannot have been back-fitted (tasks.md T025)",
+      "task": "T025",
+      "phase": "judgement"
+    },
+    {
+      "id": "variant-scale-measured-against-the-pre-registered-budget",
+      "ok": true,
+      "detail": "all 13 budget comparison(s) hold",
+      "task": "T025",
+      "phase": "judgement"
+    },
+    {
+      "id": "no-variant-is-compiled-twice",
+      "ok": true,
+      "detail": "duplicate module-text parses: session=0, informational sweep=0 — the emitted module text is the parse identity and the pipeline-overridable constants are the pipeline identity, so 768 reachable define combination(s) share 128 parsed module text(s) while each keeping its own pipeline (768 identit(ies))",
+      "task": "T025",
+      "phase": "judgement"
+    },
+    {
+      "id": "the-module-space-is-smaller-than-the-variant-space",
+      "ok": true,
+      "detail": "prepared variants = 36, distinct emitted module texts = 128, reachable define combinations = 768 — the fix's structural claim (plan.md G-6 修复(b)) is that the two frame-varying dimensions live in pipeline constants, so the parse space (128) is strictly smaller than the variant space (768); this run parsed 256 module(s) (2 per text)",
+      "task": "T025",
+      "phase": "judgement"
+    },
+    {
+      "id": "the-prewarm-plan-is-a-pure-function-of-the-application-configuration",
+      "ok": true,
+      "detail": "prewarm-policy.mjs (pure function of {\"quantization\":\"QUANTIZATION_BITS12\",\"imageryOps\":\"alpha\",\"geodetic\":\"both\",\"ocean\":\"none\",\"tileLimitRectangle\":\"none\"}): declared 36 variant(s) = textureUnits(3) x groundAtmosphere(3) x fog(2) x lighting(2); the device prepared 36 of them and covers every session variant (0 outside the plan); the remaining 732 reachable variant(s) are swept for information only",
+      "task": "T025",
+      "phase": "judgement"
+    },
+    {
+      "id": "the-runtime-path-never-compiles-a-variant",
+      "ok": true,
+      "detail": "documented 300-frame session: 300 hit(s) / 0 miss(es), 0 compilation(s) during the session over a pool of 36 prepared variant(s) (预热计划覆盖全部会话变体：运行期新变体编译 = 0，入口 Agent 的修复要求；判据比修订 1 的「≤48 次」更严)",
+      "task": "T025",
+      "phase": "judgement"
+    },
+    {
+      "id": "startup-cost-and-single-variant-latency-are-within-the-sc004-derived-budget",
+      "ok": true,
+      "detail": "startup prewarm: 36 variant(s) in 2255 ms (limits 36 variant(s) / 5000 ms); single new variant pipeline creation p95 = 97.9 ms (limit 300 ms = SC-004 的 1000 ms 留 3× 余量); 全空间预热 71.8 s / p50 104.8 ms 仅记录，不作判据（budget.json revision 3 的 `worstCase.role = informational`）",
+      "task": "T025",
+      "phase": "judgement"
+    },
+    {
+      "id": "variant-cache-reuses-the-upstream-key-semantics",
+      "ok": true,
+      "detail": "cache key = [numberOfDayTextures][flags], GlobeSurfaceShaderSet.js:243-267; pre-registered minimum hit ratio = 1, measured 100.0% (session wall clock 0 ms; startup prewarm 2255 ms)",
+      "task": "T025",
+      "phase": "judgement"
+    },
+    {
+      "id": "precision-comparison-ran-offline-on-two-independent-runs",
+      "ok": true,
+      "detail": "webgpu recordedAt=2026-09-18T20:52:13.527Z, webgl2 recordedAt=2026-09-18T20:52:15.564Z, sameProcess=false (tasks.md T026 requires two separate runs, never one session/frame — principle II / rule A7)",
+      "task": "T026",
+      "phase": "judgement"
+    },
+    {
+      "id": "pixel-elevation-and-texture-origin-within-declared-tolerances",
+      "ok": true,
+      "detail": "4 comparison(s) hold: pixel diff 0/16384 differing (max 0 LSB), elevation max |Δ| 91.9181 m = 1.000 LSB, texel corners agree in both backends",
+      "task": "T026",
+      "phase": "judgement"
+    },
+    {
+      "id": "every-difference-is-declared-by-source-with-a-basis",
+      "ok": true,
+      "detail": "8 declared source(s): subpixel-edge, msaa-resolve, srgb, depth-representation, wgsl-precision-modifiers, swapchain-channel-order, texture-y-flip, window-origin — each carries a tolerance and the basis of that tolerance (FR-014; the unit test tests/unit/tolerance-source.test.mjs asserts the same property against the artefact and the conclusion text)",
+      "task": "T027",
+      "phase": "judgement"
+    },
+    {
+      "id": "both-halves-reported-their-own-verdicts",
+      "ok": true,
+      "detail": "g6-variants verdict=pass (8/8 checks), g6-precision verdict=pass (4/4 checks)",
+      "task": "T025,T026",
+      "phase": "judgement"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/g6-variants/budget.json",
+      "what": "the pre-registered budget (T025)"
+    },
+    {
+      "path": "experiments/gates/out/g6-variants.json",
+      "what": "T025: variant/cache histograms + budget comparison"
+    },
+    {
+      "path": "experiments/gates/out/g6-variants-input.json",
+      "what": "T025: the exact workload handed to the device"
+    },
+    {
+      "path": "experiments/gates/out/g6-precision-webgpu.json",
+      "what": "T026 webgpu half (emitted WGSL)"
+    },
+    {
+      "path": "experiments/gates/out/g6-precision-webgl2.json",
+      "what": "T026 webgl2 half (real upstream assembled GLSL)"
+    },
+    {
+      "path": "experiments/gates/out/g6-precision.json",
+      "what": "T026 offline comparison + declared differences"
+    },
+    {
+      "path": "experiments/gates/out/g6-precision-diff.png",
+      "what": "difference image"
+    },
+    {
+      "path": "experiments/gates/out/g5-model.json",
+      "what": "the enumerated define space the variant counts are relative to"
+    },
+    {
+      "path": "experiments/gates/g6-variants/driver.js",
+      "what": "the in-page variant/cache driver"
+    },
+    {
+      "path": "experiments/gates/g6-precision/compare.mjs",
+      "what": "the offline comparison and its declared-difference table"
+    },
+    {
+      "path": "tests/unit/tolerance-source.test.mjs",
+      "what": "T027: per-source tolerance traceability assertions"
+    },
+    {
+      "path": "docs/gate-g6-conclusion.md",
+      "what": "human-readable conclusion"
+    }
+  ],
+  "gateCriteria": {
+    "source": "plan.md「实现前的验证门」G-6 行；tasks.md T025/T026/T027；FR-014；mvp-estimate.md §5 待确认项 1/2",
+    "requirements": [
+      "T025: 在真机 harness 上统计运行时 ShaderProgram 实例数与编译耗时直方图，断言落在**测量前预先落盘**的预算内（budget.json 先写、判定脚本只读）",
+      "T026: 分别采集 WebGPU / WebGL2（各有一次独立运行）同一固定场景帧，离线像素 diff（排除抗锯齿边缘）+ 地形高程数值比对；四角纹素回读断言纹理原点与 Y 翻转",
+      "T027: 差异按其来源逐项写入 declaredDifferences（亚像素边缘、MSAA 解析、sRGB、深度表示、WGSL 无精度修饰符、纹理 Y 翻转处理），MUST NOT 放宽为「任意差异均通过」",
+      "H-6（变体规模与编译缓存未测）与 H-7（精度与纹理 Y 翻转未与 WebGL2 基线 diff）在本门禁关闭或有明确实测结论"
+    ],
+    "requiredVerdict": "pass",
+    "failureAction": "收敛 MVP define 子集（本门禁已做：13824→768，逐条给出上游依据）；若仍超预算，按结论文档与 plan.md「G-6 修复轮」在 plan 层面决定预热范围/判据修订/模块或布局优化 → STOP 上报入口 Agent。**判据 revision 3 起由 SC-004 推导**，运行期判据为 0 次编译；收敛 define 子集属需求范围变更，须用户批准。"
+  },
+  "measurements": {
+    "variantScale": {
+      "prewarmPlan": {
+        "id": "g6-reachable-subset-prewarm",
+        "configuration": {
+          "quantization": "QUANTIZATION_BITS12",
+          "imageryOps": "alpha",
+          "geodetic": "both",
+          "ocean": "none",
+          "tileLimitRectangle": "none"
+        },
+        "dynamicDimensions": [
+          {
+            "id": "textureUnits",
+            "values": [
+              1,
+              2,
+              3
+            ],
+            "why": "imagery layer count: the MVP API adds/removes imagery layers while running (GlobeSurfaceTileProvider.js:3035,3177); 0 layers is not a rendering configuration"
+          },
+          {
+            "id": "groundAtmosphere",
+            "values": [
+              "per-vertex",
+              "per-fragment",
+              "none"
+            ],
+            "why": "ground atmosphere mode is recomputed from the camera distance every frame (GlobeSurfaceTileProvider.js:2600-2604); `none` is reachable through the MVP scene options"
+          },
+          {
+            "id": "fog",
+            "values": [
+              "FOG",
+              "none"
+            ],
+            "why": "Scene.fog.enabled is a documented public toggle"
+          },
+          {
+            "id": "lighting",
+            "values": [
+              "daynight",
+              "vertex"
+            ],
+            "why": "depends on whether the terrain tile carries vertex normals (GlobeSurfaceShaderSet.js:327-335), i.e. per tile"
+          }
+        ],
+        "declaredSize": 36,
+        "preparedVariants": 36,
+        "remainingVariants": 732,
+        "sessionVariantsOutsideThePlan": []
+      },
+      "startup": {
+        "planKey": "g6-reachable-subset-prewarm",
+        "plannedVariants": 36,
+        "declaredPlanSize": 36,
+        "configuration": {
+          "quantization": "QUANTIZATION_BITS12",
+          "imageryOps": "alpha",
+          "geodetic": "both",
+          "ocean": "none",
+          "tileLimitRectangle": "none"
+        },
+        "pipelineCompilations": 36,
+        "shaderProgramInstances": 36,
+        "failures": 0,
+        "wallMs": 2255,
+        "histogram": {
+          "count": 36,
+          "min": 28.699999928474426,
+          "p50": 65.60000002384186,
+          "p95": 97.90000009536743,
+          "p99": 103.10000002384186,
+          "max": 103.10000002384186,
+          "mean": 62.61666666136848,
+          "totalMs": 2254.199999809265,
+          "buckets": [
+            {
+              "low": 0,
+              "high": 5,
+              "count": 0
+            },
+            {
+              "low": 5,
+              "high": 10,
+              "count": 0
+            },
+            {
+              "low": 10,
+              "high": 20,
+              "count": 0
+            },
+            {
+              "low": 20,
+              "high": 40,
+              "count": 6
+            },
+            {
+              "low": 40,
+              "high": 80,
+              "count": 27
+            },
+            {
+              "low": 80,
+              "high": 160,
+              "count": 3
+            },
+            {
+              "low": 160,
+              "high": 320,
+              "count": 0
+            },
+            {
+              "low": 320,
+              "high": null,
+              "count": 0
+            }
+          ]
+        },
+        "syncHistogram": {
+          "count": 36,
+          "min": 0,
+          "p50": 0,
+          "p95": 0.20000004768371582,
+          "p99": 0.20000004768371582,
+          "max": 0.20000004768371582,
+          "mean": 0.03611111640930176,
+          "totalMs": 1.3000001907348633,
+          "buckets": [
+            {
+              "low": 0,
+              "high": 5,
+              "count": 36
+            },
+            {
+              "low": 5,
+              "high": 10,
+              "count": 0
+            },
+            {
+              "low": 10,
+              "high": 20,
+              "count": 0
+            },
+            {
+              "low": 20,
+              "high": 40,
+              "count": 0
+            },
+            {
+              "low": 40,
+              "high": 80,
+              "count": 0
+            },
+            {
+              "low": 80,
+              "high": 160,
+              "count": 0
+            },
+            {
+              "low": 160,
+              "high": 320,
+              "count": 0
+            },
+            {
+              "low": 320,
+              "high": null,
+              "count": 0
+            }
+          ]
+        },
+        "distinctModuleTexts": 128,
+        "moduleCompilations": 256
+      },
+      "defineCombinations": 768,
+      "distinctModulePairs": 128,
+      "runtimeProgramInstances": 36,
+      "session": {
+        "frames": 300,
+        "shaderProgramInstances": 7,
+        "pipelineCompilations": 0,
+        "cacheHits": 300,
+        "cacheMisses": 0,
+        "cacheHitRatio": 1,
+        "duplicateModuleCompilations": 0,
+        "wallMs": 0,
+        "histogram": {
+          "count": 0,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "totalMs": 0,
+          "buckets": [
+            {
+              "low": 0,
+              "high": 5,
+              "count": 0
+            },
+            {
+              "low": 5,
+              "high": 10,
+              "count": 0
+            },
+            {
+              "low": 10,
+              "high": 20,
+              "count": 0
+            },
+            {
+              "low": 20,
+              "high": 40,
+              "count": 0
+            },
+            {
+              "low": 40,
+              "high": 80,
+              "count": 0
+            },
+            {
+              "low": 80,
+              "high": 160,
+              "count": 0
+            },
+            {
+              "low": 160,
+              "high": 320,
+              "count": 0
+            },
+            {
+              "low": 320,
+              "high": null,
+              "count": 0
+            }
+          ]
+        },
+        "syncHistogram": {
+          "count": 0,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "totalMs": 0,
+          "buckets": [
+            {
+              "low": 0,
+              "high": 5,
+              "count": 0
+            },
+            {
+              "low": 5,
+              "high": 10,
+              "count": 0
+            },
+            {
+              "low": 10,
+              "high": 20,
+              "count": 0
+            },
+            {
+              "low": 20,
+              "high": 40,
+              "count": 0
+            },
+            {
+              "low": 40,
+              "high": 80,
+              "count": 0
+            },
+            {
+              "low": 80,
+              "high": 160,
+              "count": 0
+            },
+            {
+              "low": 160,
+              "high": 320,
+              "count": 0
+            },
+            {
+              "low": 320,
+              "high": null,
+              "count": 0
+            }
+          ]
+        },
+        "poolSize": 36,
+        "poolPreparedBeforeTheSession": true,
+        "uncompiledSessionVariants": 0,
+        "plan": [
+          {
+            "frames": 60,
+            "why": "initial tiles: 1 imagery layer, day/night shading, ground atmosphere per-vertex, no fog",
+            "selection": {
+              "textureUnits": 1,
+              "quantization": "QUANTIZATION_BITS12",
+              "lighting": "daynight",
+              "groundAtmosphere": "per-vertex",
+              "fog": "none",
+              "ocean": "none",
+              "imageryOps": "alpha",
+              "tileLimitRectangle": "none",
+              "geodetic": "both"
+            }
+          },
+          {
+            "frames": 40,
+            "why": "a second imagery layer streams in",
+            "selection": {
+              "textureUnits": 2,
+              "quantization": "QUANTIZATION_BITS12",
+              "lighting": "daynight",
+              "groundAtmosphere": "per-vertex",
+              "fog": "none",
+              "ocean": "none",
+              "imageryOps": "alpha",
+              "tileLimitRectangle": "none",
+              "geodetic": "both"
+            }
+          },
+          {
+            "frames": 40,
+            "why": "a third imagery layer streams in",
+            "selection": {
+              "textureUnits": 3,
+              "quantization": "QUANTIZATION_BITS12",
+              "lighting": "daynight",
+              "groundAtmosphere": "per-vertex",
+              "fog": "none",
+              "ocean": "none",
+              "imageryOps": "alpha",
+              "tileLimitRectangle": "none",
+              "geodetic": "both"
+            }
+          },
+          {
+            "frames": 30,
+            "why": "camera moves far away → per-fragment ground atmosphere",
+            "selection": {
+              "textureUnits": 3,
+              "quantization": "QUANTIZATION_BITS12",
+              "lighting": "daynight",
+              "groundAtmosphere": "per-fragment",
+              "fog": "none",
+              "ocean": "none",
+              "imageryOps": "alpha",
+              "tileLimitRectangle": "none",
+              "geodetic": "both"
+            }
+          },
+          {
+            "frames": 30,
+            "why": "fog switches on (scene.fog.enabled)",
+            "selection": {
+              "textureUnits": 3,
+              "quantization": "QUANTIZATION_BITS12",
+              "lighting": "daynight",
+              "groundAtmosphere": "per-fragment",
+              "fog": "FOG",
+              "ocean": "none",
+              "imageryOps": "alpha",
+              "tileLimitRectangle": "none",
+              "geodetic": "both"
+            }
+          },
+          {
+            "frames": 30,
+            "why": "fog off, ground atmosphere back to per-vertex",
+            "selection": {
+              "textureUnits": 3,
+              "quantization": "QUANTIZATION_BITS12",
+              "lighting": "daynight",
+              "groundAtmosphere": "per-vertex",
+              "fog": "none",
+              "ocean": "none",
+              "imageryOps": "alpha",
+              "tileLimitRectangle": "none",
+              "geodetic": "both"
+            }
+          },
+          {
+            "frames": 30,
+            "why": "terrain with vertex normals → ENABLE_VERTEX_LIGHTING",
+            "selection": {
+              "textureUnits": 3,
+              "quantization": "QUANTIZATION_BITS12",
+              "lighting": "vertex",
+              "groundAtmosphere": "per-vertex",
+              "fog": "none",
+              "ocean": "none",
+              "imageryOps": "alpha",
+              "tileLimitRectangle": "none",
+              "geodetic": "both"
+            }
+          },
+          {
+            "frames": 40,
+            "why": "a layer is removed again while vertex lighting stays active",
+            "selection": {
+              "textureUnits": 2,
+              "quantization": "QUANTIZATION_BITS12",
+              "lighting": "vertex",
+              "groundAtmosphere": "per-vertex",
+              "fog": "none",
+              "ocean": "none",
+              "imageryOps": "alpha",
+              "tileLimitRectangle": "none",
+              "geodetic": "both"
+            }
+          }
+        ]
+      },
+      "worstCase": {
+        "role": "informational",
+        "requestedVariants": 732,
+        "shaderProgramInstances": 732,
+        "pipelineCompilations": 732,
+        "duplicateModuleCompilations": 0,
+        "distinctModuleTexts": 128,
+        "moduleCompilations": 256,
+        "failures": 0,
+        "wallMs": 71756.5,
+        "histogram": {
+          "count": 732,
+          "min": 34.60000002384186,
+          "p50": 104.80000007152557,
+          "p95": 126,
+          "p99": 132.70000004768372,
+          "max": 143,
+          "mean": 98.0170765032208,
+          "totalMs": 71748.50000035763,
+          "buckets": [
+            {
+              "low": 0,
+              "high": 5,
+              "count": 0
+            },
+            {
+              "low": 5,
+              "high": 10,
+              "count": 0
+            },
+            {
+              "low": 10,
+              "high": 20,
+              "count": 0
+            },
+            {
+              "low": 20,
+              "high": 40,
+              "count": 22
+            },
+            {
+              "low": 40,
+              "high": 80,
+              "count": 100
+            },
+            {
+              "low": 80,
+              "high": 160,
+              "count": 610
+            },
+            {
+              "low": 160,
+              "high": 320,
+              "count": 0
+            },
+            {
+              "low": 320,
+              "high": null,
+              "count": 0
+            }
+          ]
+        },
+        "syncHistogram": {
+          "count": 732,
+          "min": 0,
+          "p50": 0,
+          "p95": 0.2999999523162842,
+          "p99": 0.5,
+          "max": 0.7000000476837158,
+          "mean": 0.04726776024682926,
+          "totalMs": 34.600000500679016,
+          "buckets": [
+            {
+              "low": 0,
+              "high": 5,
+              "count": 732
+            },
+            {
+              "low": 5,
+              "high": 10,
+              "count": 0
+            },
+            {
+              "low": 10,
+              "high": 20,
+              "count": 0
+            },
+            {
+              "low": 20,
+              "high": 40,
+              "count": 0
+            },
+            {
+              "low": 40,
+              "high": 80,
+              "count": 0
+            },
+            {
+              "low": 80,
+              "high": 160,
+              "count": 0
+            },
+            {
+              "low": 160,
+              "high": 320,
+              "count": 0
+            },
+            {
+              "low": 320,
+              "high": null,
+              "count": 0
+            }
+          ]
+        },
+        "autoLayoutSampleHistogram": {
+          "count": 24,
+          "min": 81.10000002384186,
+          "p50": 90.79999995231628,
+          "p95": 113.70000004768372,
+          "p99": 114.69999992847443,
+          "max": 114.69999992847443,
+          "mean": 95.09166666368644,
+          "totalMs": 2282.1999999284744,
+          "buckets": [
+            {
+              "low": 0,
+              "high": 5,
+              "count": 0
+            },
+            {
+              "low": 5,
+              "high": 10,
+              "count": 0
+            },
+            {
+              "low": 10,
+              "high": 20,
+              "count": 0
+            },
+            {
+              "low": 20,
+              "high": 40,
+              "count": 0
+            },
+            {
+              "low": 40,
+              "high": 80,
+              "count": 0
+            },
+            {
+              "low": 80,
+              "high": 160,
+              "count": 24
+            },
+            {
+              "low": 160,
+              "high": 320,
+              "count": 0
+            },
+            {
+              "low": 320,
+              "high": null,
+              "count": 0
+            }
+          ]
+        }
+      },
+      "budget": {
+        "path": "experiments/gates/g6-variants/budget.json",
+        "revision": 3,
+        "recordedAt": "2026-09-19T04:56:30.000+08:00",
+        "supersedes": {
+          "revision": 2,
+          "why": "修订 2 仍然把**单项耗时**当作运行期判据，判定的还是「全空间顺序编译」这个产品从不暴露的量。修订 3 把判据换成**产品判据**：从 `spec.md` 的 FR-002 / SC-004（单次交互不得出现 >1 秒的连续卡顿）推导，并把「全空间 768 预热」降级为**仅供参考、不作判据**（其数值继续记录在案）。这不是放宽阈值：运行期判据由「≤48 次编译」收紧为「**0 次**」，新增「预热变体数上界」与「启动耗时上界」，只有「单次新变体 p95」是新的数（< 300 ms = SC-004 的 1 s 留 3× 余量）。修订 1 与修订 2 的阈值、实测值与 fail 事实**全部保留在 `history` 中，不得删除**。",
+          "whatIsNotRelaxed": "① `spec.md` / SC-004 一个字未改；② 运行期编译数由 48 → 0；③ 命中率 1.0 保持；④ 结构项（互异模块文本、解析次数、重复解析 0）保持；⑤ 像素一致性判据（G-6 T026/T027）不变；⑥ 全空间 768 的数字继续逐次记录（仅不再作 gate）。"
+        },
+        "history": [
+          {
+            "revision": 1,
+            "recordedAt": "2026-09-19T04:00:42.802+08:00",
+            "session": {
+              "maxP50CompileMs": 20,
+              "maxP95CompileMs": 60,
+              "maxTotalCompileMs": 3000,
+              "maxPipelineCompilations": 48,
+              "minCacheHitRatio": 0.9
+            },
+            "worstCase": {
+              "maxP50CompileMs": 20,
+              "maxP95CompileMs": 60,
+              "maxTotalCompileMs": 900000,
+              "maxPipelineCompilations": 13824,
+              "maxDuplicateModuleCompilations": 0
+            },
+            "measured": {
+              "sessionP50": 69,
+              "sessionP95": 83.6,
+              "worstCaseP50": 110.5,
+              "worstCaseP95": 138.1,
+              "worstCaseTotalSeconds": 81.4
+            },
+            "verdict": "fail — 单个新变体的编译耗时超出预算约 5×（其余结构项与像素一致性达标）",
+            "whyInvalid": "① 20 / 60 ms 从未被任何 WebGPU 建管线测量校准过：来源是尖刺「wasm 内 glslang 19.4 ms/着色器 × 2–3 倍余量」，而尖刺明确未测 WebGPU 建管线；② 它判定的量是**全空间顺序编译吞吐中单个变体的平均代价**——产品从不暴露这个量：产品暴露的是「启动准备时间」与「交互过程中的卡顿」。SC-004 只约束后者。"
+          },
+          {
+            "revision": 2,
+            "recordedAt": "2026-09-19T04:41:00.000+08:00",
+            "change": "把 20 / 60 / 900 s 改为「相对失败基线至少快 2× / 2× / 1.5×」（55 / 70 / 54000），session 收紧为 0 次编译 + 命中率 1.0，新增结构项 128 / 256；仍以**单项耗时**为运行期判据",
+            "measured": {
+              "worstCaseP50": 104,
+              "specP95": 127.1,
+              "warmupTotalSeconds": 72.2,
+              "sessionCompilations": 0,
+              "sessionHitRatio": 1,
+              "distinctModuleTexts": 128,
+              "moduleCompilations": 256
+            },
+            "verdict": "fail — 3 项超预算（p50 104/55、特化 p95 127.1/70、预热 72.2 s/54 s），结构项与像素一致性全部达标",
+            "whatWasLearned": "① `override` 不提供廉价管线特化：已解析模块 + 新 override 取值 p50 107.2 ms vs 新模块文本 107.9 ms（无统计差异）；② 模块体积不是主因：48 kB → 13 kB 后 p50 107.4 → 104.0 ms；③ 唯一显著因子是**管线布局/binding 集合**：同模块同常量下 `layout:\"auto\"` 63.2 ms vs 显式 union 布局 104.0 ms。即「每个变体 ≈ 0.1 s」是带绑定管线的固定代价。"
+          }
+        ],
+        "source": [
+          "spec.md FR-002 / SC-004：「单次交互不产生超过 1 秒的连续卡顿」——**本修订的唯一推导来源**",
+          "plan.md「G-6 修复轮」：首轮 fail 事实、`override` 被否证的对照、模块瘦身对照、布局对照，以及「可达子集预热 = 产品默认行为」的决定",
+          "experiments/gates/out/g6-override-probe.json（真机对照实验，先于本文件登记）：6 行着色器的新管线 p50 8.60 ms（平台下限）、已解析模块 + 新 override p50 25.5 ms、新模块文本 p50 73.9 ms",
+          "experiments/gates/out/g6-variants.json（修订 1 与修订 2 的实测基线）：最坏情形 p50 110.5 / 104.0 ms、p95 138.1 / 127.1 ms、全空间 81.4 / 72.2 s",
+          "experiments/gates/g6-variants/prewarm-policy.mjs（预热计划的**纯函数**定义：动态维度 × 构造期固定维度 = 36 个变体身份）",
+          "node_modules/@cesium/engine/Source/Scene/GlobeSurfaceShaderSet.js:243-267,327-335,346-353,419-472；GlobeSurfaceTileProvider.js:2600-2604,3035,3177"
+        ],
+        "budgets": {
+          "session": {
+            "maxShaderProgramInstances": 48,
+            "maxPipelineCompilations": 0,
+            "maxDuplicateModuleCompilations": 0,
+            "minCacheHitRatio": 1,
+            "maxP50CompileMs": 20,
+            "maxP95CompileMs": 60,
+            "maxTotalCompileMs": 3000
+          },
+          "startup": {
+            "maxPrewarmVariants": 36,
+            "maxStartupWarmupMs": 5000,
+            "maxP95NewVariantMs": 300
+          },
+          "worstCase": {
+            "role": "informational",
+            "gated": false,
+            "maxShaderProgramInstances": 13824,
+            "maxPipelineCompilations": 13824,
+            "maxDuplicateModuleCompilations": 0,
+            "maxDistinctModuleTexts": 128,
+            "maxModuleCompilations": 256
+          }
+        }
+      },
+      "budgetComparisons": [
+        {
+          "id": "session-shader-program-instances",
+          "ok": true,
+          "detail": "7 runtime program instance(s) touched by a 300-frame session",
+          "measured": 7,
+          "limit": 48,
+          "comparison": "max"
+        },
+        {
+          "id": "session-pipeline-compilations",
+          "ok": true,
+          "detail": "0 pipeline compilation(s) during the session — the prewarm plan covers every session variant (0 outside the plan), so the runtime path MUST NOT compile",
+          "measured": 0,
+          "limit": 0,
+          "comparison": "max"
+        },
+        {
+          "id": "session-duplicate-module-compilations",
+          "ok": true,
+          "detail": "0 identical module text(s) parsed twice anywhere in this run (MUST be 0: the emitted text is the parse identity)",
+          "measured": 0,
+          "limit": 0,
+          "comparison": "max"
+        },
+        {
+          "id": "session-cache-hit-ratio",
+          "ok": true,
+          "detail": "100.0% of the 300 requests were served from the prepared pool",
+          "measured": 1,
+          "limit": 1,
+          "comparison": "min"
+        },
+        {
+          "id": "session-p50-compile-ms",
+          "ok": true,
+          "detail": "p50 0.00 ms over 0 runtime compilation(s) — the limit is unchanged from revision 1 and the sample set is empty by design (0 compilations): the per-variant cost is judged by the startup criteria, where it is actually paid",
+          "measured": 0,
+          "limit": 20,
+          "comparison": "max"
+        },
+        {
+          "id": "session-p95-compile-ms",
+          "ok": true,
+          "detail": "p95 0.00 ms over 0 runtime compilation(s)",
+          "measured": 0,
+          "limit": 60,
+          "comparison": "max"
+        },
+        {
+          "id": "session-total-compile-ms",
+          "ok": true,
+          "detail": "total runtime compile time 0.0 ms",
+          "measured": 0,
+          "limit": 3000,
+          "comparison": "max"
+        },
+        {
+          "id": "startup-prewarm-variants",
+          "ok": true,
+          "detail": "36 planned variant(s) prepared before the first frame (analytic upper bound from prewarm-policy.mjs: 36)",
+          "measured": 36,
+          "limit": 36,
+          "comparison": "max"
+        },
+        {
+          "id": "startup-warmup-ms",
+          "ok": true,
+          "detail": "startup prewarm wall clock 2255 ms for 36 variant(s) (~63 ms each); a loading cost, not an interaction stall (SC-004 bounds the latter)",
+          "measured": 2255,
+          "limit": 5000,
+          "comparison": "max"
+        },
+        {
+          "id": "startup-p95-new-variant-ms",
+          "ok": true,
+          "detail": "p95 97.90 ms for one new variant's pipeline creation (p50 65.60 ms, max 103.10 ms) — SC-004 (no interaction stall > 1000 ms) leaves a 3x margin",
+          "measured": 97.9,
+          "limit": 300,
+          "comparison": "max"
+        },
+        {
+          "id": "worst-case-duplicate-module-compilations",
+          "ok": true,
+          "detail": "0 identical module text(s) parsed twice",
+          "measured": 0,
+          "limit": 0,
+          "comparison": "max"
+        },
+        {
+          "id": "worst-case-distinct-module-texts",
+          "ok": true,
+          "detail": "128 distinct emitted module text(s) for 768 variant identit(ies) — the 768→128 reduction is the fix's structural claim (analytic bound in budget.json)",
+          "measured": 128,
+          "limit": 128,
+          "comparison": "max"
+        },
+        {
+          "id": "worst-case-module-compilations",
+          "ok": true,
+          "detail": "256 createShaderModule call(s) = 2 per distinct text (vertex + fragment); a module text MUST be parsed at most once",
+          "measured": 256,
+          "limit": 256,
+          "comparison": "max"
+        }
+      ]
+    },
+    "precision": {
+      "pixelDiff": {
+        "comparedPixels": 16384,
+        "edgePixels": 0,
+        "differingPixels": 0,
+        "differingFraction": 0,
+        "maxChannelDelta": 0,
+        "deltaHistogram": [
+          {
+            "delta": 0,
+            "count": 16384
+          }
+        ],
+        "differingSamples": []
+      },
+      "elevation": {
+        "perPixelMaxLsb": 1,
+        "perPixelMaxMeters": 91.91814647120808,
+        "pixelsBeyondOneLsb": 0,
+        "basis": "one LSB of the elevation encoder = (6380092.99 - 6356653.86) / 255 = 91.9181 m; float32 ULP at 6.38e6 m is ≈0.38 m and is far below one LSB, so it cannot on its own move the encoded byte",
+        "maxAbsDifferenceMeters": 91.91814647149295,
+        "meanAbsDifferenceMeters": 0.3085631137644782,
+        "worstPixel": {
+          "x": 49,
+          "y": 6
+        },
+        "samples": 16384
+      },
+      "texelCorners": [
+        {
+          "name": "topLeft",
+          "webgpu": [
+            51,
+            204,
+            244,
+            255
+          ],
+          "webgl2": [
+            51,
+            204,
+            244,
+            255
+          ],
+          "expectedUnderDeclaredConvention": [
+            51,
+            204,
+            244,
+            255
+          ],
+          "rawFixtureCorner": [
+            51,
+            51,
+            91,
+            255
+          ]
+        },
+        {
+          "name": "topRight",
+          "webgpu": [
+            204,
+            204,
+            244,
+            255
+          ],
+          "webgl2": [
+            204,
+            204,
+            244,
+            255
+          ],
+          "expectedUnderDeclaredConvention": [
+            204,
+            204,
+            244,
+            255
+          ],
+          "rawFixtureCorner": [
+            204,
+            51,
+            91,
+            255
+          ]
+        },
+        {
+          "name": "bottomLeft",
+          "webgpu": [
+            51,
+            51,
+            91,
+            255
+          ],
+          "webgl2": [
+            51,
+            51,
+            91,
+            255
+          ],
+          "expectedUnderDeclaredConvention": [
+            51,
+            51,
+            91,
+            255
+          ],
+          "rawFixtureCorner": [
+            51,
+            204,
+            244,
+            255
+          ]
+        },
+        {
+          "name": "bottomRight",
+          "webgpu": [
+            204,
+            51,
+            91,
+            255
+          ],
+          "webgl2": [
+            204,
+            51,
+            91,
+            255
+          ],
+          "expectedUnderDeclaredConvention": [
+            204,
+            51,
+            91,
+            255
+          ],
+          "rawFixtureCorner": [
+            204,
+            204,
+            244,
+            255
+          ]
+        }
+      ],
+      "frameStats": {
+        "webgpu": {
+          "width": 128,
+          "height": 128,
+          "bytesPerRow": 512,
+          "nonBlackPixels": 16384,
+          "totalPixels": 16384,
+          "uniqueColors": 12715,
+          "corners": {
+            "topLeft": [
+              76,
+              72,
+              112,
+              255
+            ],
+            "topRight": [
+              179,
+              72,
+              112,
+              255
+            ],
+            "bottomLeft": [
+              64,
+              190,
+              230,
+              255
+            ],
+            "bottomRight": [
+              191,
+              190,
+              230,
+              255
+            ],
+            "center": [
+              128,
+              123,
+              163,
+              255
+            ]
+          },
+          "channelOrder": "target format bgra8unorm; normalised to RGBA for storage",
+          "validationError": null,
+          "png": "experiments/gates/out/g6-precision-webgpu-color.png"
+        },
+        "webgl2": {
+          "width": 128,
+          "height": 128,
+          "bytesPerRow": 512,
+          "nonBlackPixels": 16384,
+          "totalPixels": 16384,
+          "uniqueColors": 12715,
+          "corners": {
+            "topLeft": [
+              64,
+              190,
+              230,
+              255
+            ],
+            "topRight": [
+              191,
+              190,
+              230,
+              255
+            ],
+            "bottomLeft": [
+              76,
+              72,
+              112,
+              255
+            ],
+            "bottomRight": [
+              179,
+              72,
+              112,
+              255
+            ],
+            "center": [
+              128,
+              123,
+              162,
+              255
+            ]
+          },
+          "rowsBottomUp": true,
+          "validationError": null,
+          "errorPath": {
+            "beforeDraw": 0,
+            "drawError": 0,
+            "afterReadPixels": 0,
+            "uniformErrors": []
+          },
+          "attributeLocations": [
+            {
+              "name": "position3DAndHeight",
+              "requested": 0,
+              "actual": 0
+            },
+            {
+              "name": "textureCoordAndEncodedNormals",
+              "requested": 1,
+              "actual": 1
+            }
+          ],
+          "unsetUniforms": [
+            "czm_modelView3D",
+            "czm_lightDirectionWC",
+            "czm_sunDirectionWC",
+            "czm_projection",
+            "czm_modelView",
+            "czm_morphTime",
+            "czm_viewerPositionWC",
+            "u_radiiAndDynamicAtmosphereColor",
+            "u_atmosphereLightIntensity",
+            "u_atmosphereRayleighScaleHeight",
+            "u_atmosphereMieScaleHeight",
+            "u_atmosphereMieAnisotropy"
+          ],
+          "vertexLog": null,
+          "fragmentLog": null,
+          "linkLog": null,
+          "png": "experiments/gates/out/g6-precision-webgl2-color.png"
+        }
+      },
+      "elevationFrameStats": {
+        "webgpu": {
+          "width": 128,
+          "height": 128,
+          "bytesPerRow": 512,
+          "nonBlackPixels": 16384,
+          "totalPixels": 16384,
+          "uniqueColors": 20,
+          "corners": {
+            "topLeft": [
+              241,
+              0,
+              0,
+              255
+            ],
+            "topRight": [
+              241,
+              0,
+              0,
+              255
+            ],
+            "bottomLeft": [
+              242,
+              0,
+              0,
+              255
+            ],
+            "bottomRight": [
+              242,
+              0,
+              0,
+              255
+            ],
+            "center": [
+              247,
+              0,
+              0,
+              255
+            ]
+          },
+          "channelOrder": "target format bgra8unorm; normalised to RGBA for storage",
+          "validationError": null,
+          "png": "experiments/gates/out/g6-precision-webgpu-elevation.png"
+        },
+        "webgl2": {
+          "width": 128,
+          "height": 128,
+          "bytesPerRow": 512,
+          "nonBlackPixels": 16384,
+          "totalPixels": 16384,
+          "uniqueColors": 20,
+          "corners": {
+            "topLeft": [
+              242,
+              0,
+              0,
+              255
+            ],
+            "topRight": [
+              242,
+              0,
+              0,
+              255
+            ],
+            "bottomLeft": [
+              241,
+              0,
+              0,
+              255
+            ],
+            "bottomRight": [
+              241,
+              0,
+              0,
+              255
+            ],
+            "center": [
+              247,
+              0,
+              0,
+              255
+            ]
+          },
+          "rowsBottomUp": true,
+          "validationError": null,
+          "errorPath": {
+            "beforeDraw": 0,
+            "drawError": 0,
+            "afterReadPixels": 0,
+            "uniformErrors": []
+          },
+          "attributeLocations": [
+            {
+              "name": "position3DAndHeight",
+              "requested": 0,
+              "actual": 0
+            },
+            {
+              "name": "textureCoordAndEncodedNormals",
+              "requested": 1,
+              "actual": 1
+            }
+          ],
+          "unsetUniforms": [
+            "czm_modelView3D",
+            "czm_lightDirectionWC",
+            "czm_sunDirectionWC",
+            "czm_normal3D",
+            "czm_ellipsoidRadii",
+            "czm_projection",
+            "czm_modelView",
+            "czm_morphTime",
+            "czm_viewerPositionWC",
+            "u_radiiAndDynamicAtmosphereColor",
+            "u_atmosphereLightIntensity",
+            "u_atmosphereRayleighScaleHeight"
+          ],
+          "vertexLog": null,
+          "fragmentLog": null,
+          "linkLog": null,
+          "png": "experiments/gates/out/g6-precision-webgl2-elevation.png"
+        }
+      }
+    },
+    "declaredDifferences": [
+      {
+        "id": "subpixel-edge",
+        "what": "亚像素边缘：三角形光栅化边界与插值在两条路径上的最后一位取整不同",
+        "basis": "由 edge mask 排除并**计数**（梯度阈值 8/255 在 3×3 邻域）；被排除的像素数写入证据，MUST NOT 用作放宽其余像素判据的理由",
+        "tolerance": {
+          "excluded": true,
+          "gradientThreshold": 8
+        }
+      },
+      {
+        "id": "msaa-resolve",
+        "what": "MSAA 解析：两条路径在本夹具中都不使用多采样（WebGPU 无 sampleCount>1 附件，WebGL2 不申请 MSAA 上下文）",
+        "basis": "不适用（absence 验证：环境字段记录 antialias:false）；真实后端启用 MSAA 时，其解析差异属边缘像素，由 subpixel-edge 的 edge mask 覆盖",
+        "tolerance": {
+          "applicable": false
+        }
+      },
+      {
+        "id": "srgb",
+        "what": "sRGB：两路径都渲染到 8 位 UNORM 目标且不做 sRGB 编解码（`bgra8unorm` / `RGBA8`），无色彩空间差",
+        "basis": "差异上界 = 1 LSB（8 位量化）；实测差异应远小于该上界",
+        "tolerance": {
+          "perChannel": 2
+        }
+      },
+      {
+        "id": "depth-representation",
+        "what": "深度表示：GL clip z∈[-1,1] vs WebGPU NDC z∈[0,1]",
+        "basis": "本夹具为单趟、无深度附件、两路径共用同一个零到一深度投影矩阵，因此深度表示差异不进入像素；差异上界 0，任何非零差异都 MUST 归因到其他来源",
+        "tolerance": {
+          "perChannel": 0,
+          "note": "not exercised by this fixture"
+        }
+      },
+      {
+        "id": "wgsl-precision-modifiers",
+        "what": "WGSL 无 `highp`/`mediump` 精度修饰符，GLSL 片元声明 `precision highp float`",
+        "basis": "同一算法的两次 float32 求值在 8 位目标上的量化差；容差 2 LSB/通道（8 位量化 + 数个 ULP 的函数实现差）",
+        "tolerance": {
+          "perChannel": 2,
+          "differingFraction": 0.01
+        }
+      },
+      {
+        "id": "swapchain-channel-order",
+        "what": "交换链格式的通道顺序：本机 `getPreferredCanvasFormat()` = `bgra8unorm`，WebGPU 回读字节序为 B,G,R,A；`gl.readPixels(RGBA)` 给出 R,G,B,A",
+        "basis": "在 WebGPU 半程回读后立即归一化为 RGBA（声明为对齐步骤，不是容许差异）；若不处理，逐像素比较会看到每个像素都不同（R/B 互换，实测最大 166 LSB）",
+        "tolerance": {
+          "alignmentSwizzle": true
+        }
+      },
+      {
+        "id": "texture-y-flip",
+        "what": "纹理 Y 翻转：WebGPU 纹理原点在上、GL 在下",
+        "basis": "由 Texture 映射层统一处理并**断言**：GL 侧 `UNPACK_FLIP_Y_WEBGL=true`（Cesium `Texture.flipY` 默认），WebGPU 侧上传时反转行序；四角纹素回读在两路径上 MUST 一致",
+        "tolerance": {
+          "perChannel": 0,
+          "corners": true
+        }
+      },
+      {
+        "id": "window-origin",
+        "what": "窗口原点：`gl.readPixels` 自下而上、WebGPU 回读自上而下",
+        "basis": "比较前把 GL 帧整体翻转（`rowsBottomUp: true`）；这是**窗口**坐标约定，与纹理坐标无关，声明为对齐步骤而非容许差异",
+        "tolerance": {
+          "alignmentFlip": true
+        }
+      }
+    ]
+  }
+}

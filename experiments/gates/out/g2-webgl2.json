@@ -1,0 +1,726 @@
+{
+  "label": "webgl2",
+  "backend": "webgl2",
+  "handoff": "none",
+  "browserVersion": "153.0.8010.36",
+  "pageId": "webgl2-mu7d535i",
+  "consoleMessages": [],
+  "pageErrors": [],
+  "requestFailures": [],
+  "report": {
+    "backend": "webgl2",
+    "handoffMode": "none",
+    "startedAt": "2026-09-18T19:40:15.840Z",
+    "bundleUrl": "/experiments/gates/out/g2-webgl2/bundle.js",
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "webgpuApi": true,
+      "webgl2Api": true,
+      "devicePixelRatio": 1,
+      "crossOriginIsolated": false
+    },
+    "prefetch": null,
+    "handoff": null,
+    "construction": {
+      "startTick": 1,
+      "endTick": 51,
+      "threw": false,
+      "error": null,
+      "contextIsStub": false,
+      "contextConstructorName": "Context",
+      "contextIdentity": false,
+      "contextIsReplaced": false
+    },
+    "scene": {
+      "canvasIsGateCanvas": true,
+      "drawingBufferWidth": 300,
+      "drawingBufferHeight": 150,
+      "logarithmicDepthBuffer": true,
+      "msaaSupported": true,
+      "msaaSamples": 4,
+      "cameraNear": 0.1,
+      "cameraFar": 10000000000,
+      "contextDrawingBufferWidth": 300,
+      "contextDrawingBufferHeight": 150,
+      "contextFragmentDepth": true,
+      "contextDepthTexture": true,
+      "contextMsaa": true,
+      "contextWebgl2": true,
+      "contextId": "3866fce3-c217-44a5-a200-2b7c3e07eea6"
+    },
+    "capabilities": null,
+    "contextLimits": {
+      "instrumented": 23,
+      "writesDuringConstruction": [
+        {
+          "member": "_maximumCombinedTextureImageUnits",
+          "value": 32,
+          "phase": "construction",
+          "tick": 2
+        },
+        {
+          "member": "_maximumCubeMapSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 3
+        },
+        {
+          "member": "_maximumFragmentUniformVectors",
+          "value": 1024,
+          "phase": "construction",
+          "tick": 4
+        },
+        {
+          "member": "_maximumTextureImageUnits",
+          "value": 16,
+          "phase": "construction",
+          "tick": 5
+        },
+        {
+          "member": "_maximumRenderbufferSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 6
+        },
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 7
+        },
+        {
+          "member": "_maximum3DTextureSize",
+          "value": 2048,
+          "phase": "construction",
+          "tick": 8
+        },
+        {
+          "member": "_maximumVaryingVectors",
+          "value": 30,
+          "phase": "construction",
+          "tick": 9
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 10
+        },
+        {
+          "member": "_maximumVertexTextureImageUnits",
+          "value": 16,
+          "phase": "construction",
+          "tick": 11
+        },
+        {
+          "member": "_maximumVertexUniformVectors",
+          "value": 4095,
+          "phase": "construction",
+          "tick": 12
+        },
+        {
+          "member": "_maximumSamples",
+          "value": 8,
+          "phase": "construction",
+          "tick": 13
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 14
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 15
+        },
+        {
+          "member": "_minimumAliasedPointSize",
+          "value": 1,
+          "phase": "construction",
+          "tick": 16
+        },
+        {
+          "member": "_maximumAliasedPointSize",
+          "value": 1024,
+          "phase": "construction",
+          "tick": 17
+        },
+        {
+          "member": "_maximumViewportWidth",
+          "value": 32767,
+          "phase": "construction",
+          "tick": 18
+        },
+        {
+          "member": "_maximumViewportHeight",
+          "value": 32767,
+          "phase": "construction",
+          "tick": 19
+        },
+        {
+          "member": "_highpFloatSupported",
+          "value": true,
+          "phase": "construction",
+          "tick": 20
+        },
+        {
+          "member": "_highpIntSupported",
+          "value": true,
+          "phase": "construction",
+          "tick": 21
+        },
+        {
+          "member": "_maximumTextureFilterAnisotropy",
+          "value": 16,
+          "phase": "construction",
+          "tick": 22
+        },
+        {
+          "member": "_maximumDrawBuffers",
+          "value": 8,
+          "phase": "construction",
+          "tick": 23
+        },
+        {
+          "member": "_maximumColorAttachments",
+          "value": 8,
+          "phase": "construction",
+          "tick": 24
+        }
+      ],
+      "logicLayerReadsDuringConstruction": [
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 25
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 26
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 27
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 28
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 29
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 30
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 31
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 32
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 33
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 34
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 35
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 36
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 37
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 38
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 39
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 40
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 41
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 42
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 43
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 44
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 45
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 46
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 47
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 48
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 49
+        },
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 50
+        }
+      ],
+      "reads": [
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 25
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 26
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 27
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 28
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 29
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 30
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 31
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 32
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 33
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 34
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 35
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 36
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 37
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 38
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 39
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 40
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 41
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 42
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 43
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 44
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 45
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 46
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 47
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 48
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 49
+        },
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 50
+        },
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "after",
+          "tick": 52
+        },
+        {
+          "member": "_maximumSamples",
+          "value": 8,
+          "phase": "after",
+          "tick": 53
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "after",
+          "tick": 54
+        },
+        {
+          "member": "_maximum3DTextureSize",
+          "value": 2048,
+          "phase": "after",
+          "tick": 55
+        },
+        {
+          "member": "_maximumTextureFilterAnisotropy",
+          "value": 16,
+          "phase": "after",
+          "tick": 56
+        }
+      ],
+      "writes": [
+        {
+          "member": "_maximumCombinedTextureImageUnits",
+          "value": 32,
+          "phase": "construction",
+          "tick": 2
+        },
+        {
+          "member": "_maximumCubeMapSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 3
+        },
+        {
+          "member": "_maximumFragmentUniformVectors",
+          "value": 1024,
+          "phase": "construction",
+          "tick": 4
+        },
+        {
+          "member": "_maximumTextureImageUnits",
+          "value": 16,
+          "phase": "construction",
+          "tick": 5
+        },
+        {
+          "member": "_maximumRenderbufferSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 6
+        },
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 7
+        },
+        {
+          "member": "_maximum3DTextureSize",
+          "value": 2048,
+          "phase": "construction",
+          "tick": 8
+        },
+        {
+          "member": "_maximumVaryingVectors",
+          "value": 30,
+          "phase": "construction",
+          "tick": 9
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 16,
+          "phase": "construction",
+          "tick": 10
+        },
+        {
+          "member": "_maximumVertexTextureImageUnits",
+          "value": 16,
+          "phase": "construction",
+          "tick": 11
+        },
+        {
+          "member": "_maximumVertexUniformVectors",
+          "value": 4095,
+          "phase": "construction",
+          "tick": 12
+        },
+        {
+          "member": "_maximumSamples",
+          "value": 8,
+          "phase": "construction",
+          "tick": 13
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 14
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 15
+        },
+        {
+          "member": "_minimumAliasedPointSize",
+          "value": 1,
+          "phase": "construction",
+          "tick": 16
+        },
+        {
+          "member": "_maximumAliasedPointSize",
+          "value": 1024,
+          "phase": "construction",
+          "tick": 17
+        },
+        {
+          "member": "_maximumViewportWidth",
+          "value": 32767,
+          "phase": "construction",
+          "tick": 18
+        },
+        {
+          "member": "_maximumViewportHeight",
+          "value": 32767,
+          "phase": "construction",
+          "tick": 19
+        },
+        {
+          "member": "_highpFloatSupported",
+          "value": true,
+          "phase": "construction",
+          "tick": 20
+        },
+        {
+          "member": "_highpIntSupported",
+          "value": true,
+          "phase": "construction",
+          "tick": 21
+        },
+        {
+          "member": "_maximumTextureFilterAnisotropy",
+          "value": 16,
+          "phase": "construction",
+          "tick": 22
+        },
+        {
+          "member": "_maximumDrawBuffers",
+          "value": 8,
+          "phase": "construction",
+          "tick": 23
+        },
+        {
+          "member": "_maximumColorAttachments",
+          "value": 8,
+          "phase": "construction",
+          "tick": 24
+        }
+      ]
+    },
+    "reads": null,
+    "branches": [],
+    "loudFailures": [],
+    "probes": {
+      "getContextPhase": "after",
+      "instanceofUpstreamContext": true,
+      "upstreamContextIsGateStub": false,
+      "glReference": {
+        "maximumTextureSize": 16384,
+        "maximumSamples": 8,
+        "maximumVertexAttributes": 16,
+        "maximum3DTextureSize": 2048
+      },
+      "protobufReaderProbe": {
+        "readerType": "function",
+        "createIsFunction": true,
+        "rootType": "undefined",
+        "keys": [
+          "default",
+          "build",
+          "Writer",
+          "BufferWriter",
+          "Reader",
+          "BufferReader",
+          "util",
+          "rpc",
+          "roots",
+          "configure"
+        ]
+      },
+      "contextLimitsAfterConstruction": {
+        "maximumTextureSize": 16384,
+        "maximumSamples": 8,
+        "maximumVertexAttributes": 16,
+        "maximum3DTextureSize": 2048,
+        "maximumTextureFilterAnisotropy": 16
+      },
+      "destroyed": true,
+      "contextDestroyedAfterSceneDestroy": null
+    },
+    "errors": [],
+    "contextLimitsInstrumented": 23,
+    "finishedAt": "2026-09-18T19:40:16.143Z"
+  },
+  "error": null
+}

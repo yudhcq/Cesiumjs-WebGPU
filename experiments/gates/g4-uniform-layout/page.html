@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-4 gate — real-device uniform layout assertion</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+      }
+    </style>
+  </head>
+  <body>
+    <p>
+      G-4 gate device page (tasks.md T019). It compiles the <strong>generated</strong> WGSL
+      (<code>experiments/gates/out/g4-uniform.wgsl</code>), writes the uniform struct strictly through
+      the CPU layout table, renders one pixel per uniform slot and reads the pixels back. The runner
+      (<code>run-gpu.mjs</code>) collects the result through <code>window.__g4</code>.
+    </p>
+    <canvas id="g4-canvas" width="1" height="1"></canvas>
+    <script type="module" src="./gpu-probe.js"></script>
+  </body>
+</html>

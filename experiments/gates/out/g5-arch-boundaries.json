@@ -1,0 +1,24 @@
+{
+  "tool": "check-arch-boundaries",
+  "generatedAt": "2026-09-18T20:50:32.427Z",
+  "root": "E:\\work\\CesiumjsWebGpu",
+  "rulesRequested": [
+    "A9"
+  ],
+  "mode": "A9",
+  "results": [
+    {
+      "rule": "A9",
+      "title": "logic-layer shader view stays GLSL",
+      "status": "no-match",
+      "violations": [],
+      "summary": {
+        "probes": 14,
+        "patchLayerFiles": 0
+      }
+    }
+  ],
+  "violationCount": 0,
+  "missingTargets": 0,
+  "verdict": "pass"
+}

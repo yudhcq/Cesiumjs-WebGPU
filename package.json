@@ -24,6 +24,7 @@
     "ci:local": "node tools/scripts/run.mjs ci:local"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "29.0.3",
     "@rollup/plugin-node-resolve": "16.0.3",
     "@rollup/plugin-typescript": "12.3.0",
     "@webgpu/types": "0.1.72",

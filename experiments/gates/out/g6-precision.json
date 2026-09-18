@@ -1,0 +1,573 @@
+{
+  "gate": "g6-precision",
+  "task": "T026",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T20:52:15.823Z",
+  "notes": "离线比较两个**独立运行**采到的同一固定场景帧（webgpu: 2026-09-18T20:52:13.527Z；webgl2: 2026-09-18T20:52:15.564Z）。差异按来源逐项声明（8 条），容差给出依据；任何无法归因到已声明来源的差异都会使本门禁 fail（FR-014：MUST NOT 放宽为「任意差异通过」）。WebGL2 帧为自下而上的窗口原点，比较前整体翻转（声明为对齐步骤，与纹理坐标无关）。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "webgpu": {
+      "node": "v22.20.0",
+      "platform": "win32 x64",
+      "browser": {
+        "channel": "chrome",
+        "version": "153.0.8010.36",
+        "headless": true,
+        "launchArgs": []
+      },
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "lovelace",
+        "hasInfo": true
+      },
+      "preferredFormat": "bgra8unorm",
+      "textureFlipPolicy": "row order reversed on upload (WebGPU has no UNPACK_FLIP_Y_WEBGL) — the Texture mapping layer policy"
+    },
+    "webgl2": {
+      "node": "v22.20.0",
+      "platform": "win32 x64",
+      "browser": {
+        "channel": "chrome",
+        "version": "153.0.8010.36",
+        "headless": true,
+        "launchArgs": []
+      },
+      "adapter": {
+        "renderer": "WebKit WebGL",
+        "vendor": "WebKit",
+        "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+        "hasInfo": true
+      },
+      "preferredFormat": null,
+      "textureFlipPolicy": "UNPACK_FLIP_Y_WEBGL = true (Cesium Texture.flipY default, Renderer/Texture.js:27)"
+    }
+  },
+  "runs": {
+    "webgpu": {
+      "recordedAt": "2026-09-18T20:52:13.527Z",
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "lovelace",
+        "hasInfo": true
+      }
+    },
+    "webgl2": {
+      "recordedAt": "2026-09-18T20:52:15.564Z",
+      "adapter": {
+        "renderer": "WebKit WebGL",
+        "vendor": "WebKit",
+        "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+        "hasInfo": true
+      }
+    },
+    "sameProcess": false
+  },
+  "checks": [
+    {
+      "id": "color-frame-diff-within-declared-tolerances",
+      "ok": true,
+      "detail": "emitted-WGSL frame vs upstream-GLSL frame: 0/16384 compared pixel(s) differ (0.000%, budget 1.00%), max channel delta 0 LSB (budget 2); 0 edge pixel(s) excluded by the declared edge mask (gradient > 8/255); first differences: []",
+      "source": "wgsl-precision-modifiers"
+    },
+    {
+      "id": "no-undeclared-difference-source-in-the-color-frame",
+      "ok": true,
+      "detail": "every differing pixel is inside the declared `wgsl-precision-modifiers` / `srgb` bounds; the diff histogram is published (1 bucket(s)) so an unexplained tail would be visible",
+      "source": "FR-014"
+    },
+    {
+      "id": "terrain-elevation-agrees-numerically",
+      "ok": true,
+      "detail": "decoded terrain radius through the SAME vertex stage in both backends: max |Δ| = 91.9181 m (1.000 LSB, budget 1 LSB = 91.918 m), mean |Δ| = 0.3086 m over 16384 pixel(s); pixels differing by more than one LSB: 0; encoder range [6356653.86, 6380092.99] m; worst pixel index 817 (49, 6)",
+      "source": "wgsl-precision-modifiers"
+    },
+    {
+      "id": "texture-origin-and-y-flip-are-handled-by-the-mapping-layer",
+      "ok": true,
+      "detail": "texel probe corners (webgpu | webgl2 | fixture texel under the declared convention): topLeft=[51,204,244]|[51,204,244]|[51,204,244]  topRight=[204,204,244]|[204,204,244]|[204,204,244]  bottomLeft=[51,51,91]|[51,51,91]|[51,51,91]  bottomRight=[204,51,91]|[204,51,91]|[204,51,91] — four distinct texels are reached, both backends agree within 2 LSB, and both match the fixture under the declared flip convention within 6 LSB (bilinear sampling at the texel centre). Policy (recorded in each half's environment.textureFlipPolicy): GL uses UNPACK_FLIP_Y_WEBGL=true (Cesium Texture.flipY default, Renderer/Texture.js:27); WebGPU has no unpack flag and its origin is the top-left, so the row order is reversed on upload — the two are equivalent, which is what this assertion establishes. The probe uses a screen-consistent uv in both APIs (gl_FragCoord.y is bottom-up, WGSL's position.y is top-down).",
+      "source": "texture-y-flip"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/out/g6-precision-webgpu.json",
+      "what": "webgpu half (frame + elevation + texel probe)"
+    },
+    {
+      "path": "experiments/gates/out/g6-precision-webgl2.json",
+      "what": "webgl2 half (real upstream assembled GLSL)"
+    },
+    {
+      "path": "experiments/gates/out/g6-precision-diff.png",
+      "what": "per-pixel difference image (4× amplified)"
+    },
+    {
+      "path": "experiments/gates/out/g6-precision-webgpu-color.png",
+      "what": "webgpu shaded frame"
+    },
+    {
+      "path": "experiments/gates/out/g6-precision-webgl2-color.png",
+      "what": "webgl2 shaded frame"
+    },
+    {
+      "path": "experiments/gates/g6-precision/compare.mjs",
+      "what": "this comparison (including the declared difference table)"
+    }
+  ],
+  "declaredDifferences": [
+    {
+      "id": "subpixel-edge",
+      "what": "亚像素边缘：三角形光栅化边界与插值在两条路径上的最后一位取整不同",
+      "basis": "由 edge mask 排除并**计数**（梯度阈值 8/255 在 3×3 邻域）；被排除的像素数写入证据，MUST NOT 用作放宽其余像素判据的理由",
+      "tolerance": {
+        "excluded": true,
+        "gradientThreshold": 8
+      }
+    },
+    {
+      "id": "msaa-resolve",
+      "what": "MSAA 解析：两条路径在本夹具中都不使用多采样（WebGPU 无 sampleCount>1 附件，WebGL2 不申请 MSAA 上下文）",
+      "basis": "不适用（absence 验证：环境字段记录 antialias:false）；真实后端启用 MSAA 时，其解析差异属边缘像素，由 subpixel-edge 的 edge mask 覆盖",
+      "tolerance": {
+        "applicable": false
+      }
+    },
+    {
+      "id": "srgb",
+      "what": "sRGB：两路径都渲染到 8 位 UNORM 目标且不做 sRGB 编解码（`bgra8unorm` / `RGBA8`），无色彩空间差",
+      "basis": "差异上界 = 1 LSB（8 位量化）；实测差异应远小于该上界",
+      "tolerance": {
+        "perChannel": 2
+      }
+    },
+    {
+      "id": "depth-representation",
+      "what": "深度表示：GL clip z∈[-1,1] vs WebGPU NDC z∈[0,1]",
+      "basis": "本夹具为单趟、无深度附件、两路径共用同一个零到一深度投影矩阵，因此深度表示差异不进入像素；差异上界 0，任何非零差异都 MUST 归因到其他来源",
+      "tolerance": {
+        "perChannel": 0,
+        "note": "not exercised by this fixture"
+      }
+    },
+    {
+      "id": "wgsl-precision-modifiers",
+      "what": "WGSL 无 `highp`/`mediump` 精度修饰符，GLSL 片元声明 `precision highp float`",
+      "basis": "同一算法的两次 float32 求值在 8 位目标上的量化差；容差 2 LSB/通道（8 位量化 + 数个 ULP 的函数实现差）",
+      "tolerance": {
+        "perChannel": 2,
+        "differingFraction": 0.01
+      }
+    },
+    {
+      "id": "swapchain-channel-order",
+      "what": "交换链格式的通道顺序：本机 `getPreferredCanvasFormat()` = `bgra8unorm`，WebGPU 回读字节序为 B,G,R,A；`gl.readPixels(RGBA)` 给出 R,G,B,A",
+      "basis": "在 WebGPU 半程回读后立即归一化为 RGBA（声明为对齐步骤，不是容许差异）；若不处理，逐像素比较会看到每个像素都不同（R/B 互换，实测最大 166 LSB）",
+      "tolerance": {
+        "alignmentSwizzle": true
+      }
+    },
+    {
+      "id": "texture-y-flip",
+      "what": "纹理 Y 翻转：WebGPU 纹理原点在上、GL 在下",
+      "basis": "由 Texture 映射层统一处理并**断言**：GL 侧 `UNPACK_FLIP_Y_WEBGL=true`（Cesium `Texture.flipY` 默认），WebGPU 侧上传时反转行序；四角纹素回读在两路径上 MUST 一致",
+      "tolerance": {
+        "perChannel": 0,
+        "corners": true
+      }
+    },
+    {
+      "id": "window-origin",
+      "what": "窗口原点：`gl.readPixels` 自下而上、WebGPU 回读自上而下",
+      "basis": "比较前把 GL 帧整体翻转（`rowsBottomUp: true`）；这是**窗口**坐标约定，与纹理坐标无关，声明为对齐步骤而非容许差异",
+      "tolerance": {
+        "alignmentFlip": true
+      }
+    }
+  ],
+  "measurements": {
+    "pixelDiff": {
+      "comparedPixels": 16384,
+      "edgePixels": 0,
+      "differingPixels": 0,
+      "differingFraction": 0,
+      "maxChannelDelta": 0,
+      "deltaHistogram": [
+        {
+          "delta": 0,
+          "count": 16384
+        }
+      ],
+      "differingSamples": []
+    },
+    "elevation": {
+      "perPixelMaxLsb": 1,
+      "perPixelMaxMeters": 91.91814647120808,
+      "pixelsBeyondOneLsb": 0,
+      "basis": "one LSB of the elevation encoder = (6380092.99 - 6356653.86) / 255 = 91.9181 m; float32 ULP at 6.38e6 m is ≈0.38 m and is far below one LSB, so it cannot on its own move the encoded byte",
+      "maxAbsDifferenceMeters": 91.91814647149295,
+      "meanAbsDifferenceMeters": 0.3085631137644782,
+      "worstPixel": {
+        "x": 49,
+        "y": 6
+      },
+      "samples": 16384
+    },
+    "texelCorners": [
+      {
+        "name": "topLeft",
+        "webgpu": [
+          51,
+          204,
+          244,
+          255
+        ],
+        "webgl2": [
+          51,
+          204,
+          244,
+          255
+        ],
+        "expectedUnderDeclaredConvention": [
+          51,
+          204,
+          244,
+          255
+        ],
+        "rawFixtureCorner": [
+          51,
+          51,
+          91,
+          255
+        ]
+      },
+      {
+        "name": "topRight",
+        "webgpu": [
+          204,
+          204,
+          244,
+          255
+        ],
+        "webgl2": [
+          204,
+          204,
+          244,
+          255
+        ],
+        "expectedUnderDeclaredConvention": [
+          204,
+          204,
+          244,
+          255
+        ],
+        "rawFixtureCorner": [
+          204,
+          51,
+          91,
+          255
+        ]
+      },
+      {
+        "name": "bottomLeft",
+        "webgpu": [
+          51,
+          51,
+          91,
+          255
+        ],
+        "webgl2": [
+          51,
+          51,
+          91,
+          255
+        ],
+        "expectedUnderDeclaredConvention": [
+          51,
+          51,
+          91,
+          255
+        ],
+        "rawFixtureCorner": [
+          51,
+          204,
+          244,
+          255
+        ]
+      },
+      {
+        "name": "bottomRight",
+        "webgpu": [
+          204,
+          51,
+          91,
+          255
+        ],
+        "webgl2": [
+          204,
+          51,
+          91,
+          255
+        ],
+        "expectedUnderDeclaredConvention": [
+          204,
+          51,
+          91,
+          255
+        ],
+        "rawFixtureCorner": [
+          204,
+          204,
+          244,
+          255
+        ]
+      }
+    ],
+    "frameStats": {
+      "webgpu": {
+        "width": 128,
+        "height": 128,
+        "bytesPerRow": 512,
+        "nonBlackPixels": 16384,
+        "totalPixels": 16384,
+        "uniqueColors": 12715,
+        "corners": {
+          "topLeft": [
+            76,
+            72,
+            112,
+            255
+          ],
+          "topRight": [
+            179,
+            72,
+            112,
+            255
+          ],
+          "bottomLeft": [
+            64,
+            190,
+            230,
+            255
+          ],
+          "bottomRight": [
+            191,
+            190,
+            230,
+            255
+          ],
+          "center": [
+            128,
+            123,
+            163,
+            255
+          ]
+        },
+        "channelOrder": "target format bgra8unorm; normalised to RGBA for storage",
+        "validationError": null,
+        "png": "experiments/gates/out/g6-precision-webgpu-color.png"
+      },
+      "webgl2": {
+        "width": 128,
+        "height": 128,
+        "bytesPerRow": 512,
+        "nonBlackPixels": 16384,
+        "totalPixels": 16384,
+        "uniqueColors": 12715,
+        "corners": {
+          "topLeft": [
+            64,
+            190,
+            230,
+            255
+          ],
+          "topRight": [
+            191,
+            190,
+            230,
+            255
+          ],
+          "bottomLeft": [
+            76,
+            72,
+            112,
+            255
+          ],
+          "bottomRight": [
+            179,
+            72,
+            112,
+            255
+          ],
+          "center": [
+            128,
+            123,
+            162,
+            255
+          ]
+        },
+        "rowsBottomUp": true,
+        "validationError": null,
+        "errorPath": {
+          "beforeDraw": 0,
+          "drawError": 0,
+          "afterReadPixels": 0,
+          "uniformErrors": []
+        },
+        "attributeLocations": [
+          {
+            "name": "position3DAndHeight",
+            "requested": 0,
+            "actual": 0
+          },
+          {
+            "name": "textureCoordAndEncodedNormals",
+            "requested": 1,
+            "actual": 1
+          }
+        ],
+        "unsetUniforms": [
+          "czm_modelView3D",
+          "czm_lightDirectionWC",
+          "czm_sunDirectionWC",
+          "czm_projection",
+          "czm_modelView",
+          "czm_morphTime",
+          "czm_viewerPositionWC",
+          "u_radiiAndDynamicAtmosphereColor",
+          "u_atmosphereLightIntensity",
+          "u_atmosphereRayleighScaleHeight",
+          "u_atmosphereMieScaleHeight",
+          "u_atmosphereMieAnisotropy"
+        ],
+        "vertexLog": null,
+        "fragmentLog": null,
+        "linkLog": null,
+        "png": "experiments/gates/out/g6-precision-webgl2-color.png"
+      }
+    },
+    "elevationFrameStats": {
+      "webgpu": {
+        "width": 128,
+        "height": 128,
+        "bytesPerRow": 512,
+        "nonBlackPixels": 16384,
+        "totalPixels": 16384,
+        "uniqueColors": 20,
+        "corners": {
+          "topLeft": [
+            241,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            241,
+            0,
+            0,
+            255
+          ],
+          "bottomLeft": [
+            242,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            242,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            247,
+            0,
+            0,
+            255
+          ]
+        },
+        "channelOrder": "target format bgra8unorm; normalised to RGBA for storage",
+        "validationError": null,
+        "png": "experiments/gates/out/g6-precision-webgpu-elevation.png"
+      },
+      "webgl2": {
+        "width": 128,
+        "height": 128,
+        "bytesPerRow": 512,
+        "nonBlackPixels": 16384,
+        "totalPixels": 16384,
+        "uniqueColors": 20,
+        "corners": {
+          "topLeft": [
+            242,
+            0,
+            0,
+            255
+          ],
+          "topRight": [
+            242,
+            0,
+            0,
+            255
+          ],
+          "bottomLeft": [
+            241,
+            0,
+            0,
+            255
+          ],
+          "bottomRight": [
+            241,
+            0,
+            0,
+            255
+          ],
+          "center": [
+            247,
+            0,
+            0,
+            255
+          ]
+        },
+        "rowsBottomUp": true,
+        "validationError": null,
+        "errorPath": {
+          "beforeDraw": 0,
+          "drawError": 0,
+          "afterReadPixels": 0,
+          "uniformErrors": []
+        },
+        "attributeLocations": [
+          {
+            "name": "position3DAndHeight",
+            "requested": 0,
+            "actual": 0
+          },
+          {
+            "name": "textureCoordAndEncodedNormals",
+            "requested": 1,
+            "actual": 1
+          }
+        ],
+        "unsetUniforms": [
+          "czm_modelView3D",
+          "czm_lightDirectionWC",
+          "czm_sunDirectionWC",
+          "czm_normal3D",
+          "czm_ellipsoidRadii",
+          "czm_projection",
+          "czm_modelView",
+          "czm_morphTime",
+          "czm_viewerPositionWC",
+          "u_radiiAndDynamicAtmosphereColor",
+          "u_atmosphereLightIntensity",
+          "u_atmosphereRayleighScaleHeight"
+        ],
+        "vertexLog": null,
+        "fragmentLog": null,
+        "linkLog": null,
+        "png": "experiments/gates/out/g6-precision-webgl2-elevation.png"
+      }
+    }
+  }
+}

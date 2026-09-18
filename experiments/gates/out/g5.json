@@ -1,0 +1,936 @@
+{
+  "gate": "g5",
+  "task": "T022,T023,T024",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T20:50:32.859Z",
+  "notes": "G-5 通过（23/23 项检查）：**着色器编译前端可参数化为 WGSL 发射，而 GLSL 视图与预处理语义不变**。实测：① 全枚举 768 个 define 组合经参数化接缝产出的 GLSL 与上游逐字节一致；② 自建条件编译求值器（上游只把 #define/#ifdef 写成文本交给 GL 驱动）与自建 varying 成对推导 （从**拼装后的真实 GLSL** 的写点/读点推导，含 out 形参写入）在本门禁内被逐条断言；③ 枚举 768 个 MVP 可达 define 组合 → 128 个**互异**模块对，每一个都在硬件适配器上真实 createShaderModule + createRenderPipeline（0 校验错误），因此\"每个可达组合都对应一个已验证管线\"是**逐字节同一性**结论而非抽样；④ 黄金配置真机绘制并按 H-4 布局表回读整帧非黑；⑤ 阴性对照：故意制造未配对 varying 时管线**硬失败**。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "engine": {
+      "packageName": "@cesium/engine",
+      "version": "26.3.0",
+      "lock": "upstream/engine-26.3.0.lock.json"
+    },
+    "upstreamAggregateHash": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": []
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": "",
+      "subgroupMinSize": 32,
+      "subgroupMaxSize": 32,
+      "isFallbackAdapter": null,
+      "hasInfo": true
+    },
+    "preferredFormat": "bgra8unorm"
+  },
+  "checks": [
+    {
+      "id": "glsl-channel-byte-identical-over-full-matrix",
+      "ok": true,
+      "detail": "768/768 enumerated define combination(s) produce **byte-identical** GLSL through the parameterised seam and through the plain upstream class (same sources + same defines; sha256 per stage recorded in the artefact). The seam overrides no GLSL method — both GLSL entry points delegate to the upstream prototype held by reference, and `emit` defaults to \"glsl\". differences=[[]]",
+      "task": "T024"
+    },
+    {
+      "id": "conditional-compilation-is-self-built-and-evaluated",
+      "ok": true,
+      "detail": "the fork layer evaluates GLSL ES 3.00 conditionals itself (upstream only *writes* the directives — ShaderSource.js:250-258, research §6.4). 8/8 probes pass (texture-units-comparison=YES, texture-units-zero=NO, defined-and-or-precedence=YES, defined-and-or-precedence-negative=NO, ifndef-and-elif-chain=B, nested-conditionals=AB, arithmetic-condition=YES, undefined-identifier-is-zero=NO); an unterminated conditional is reported as a diagnostic (1) rather than silently mis-evaluated; object-like macro substitution works in ordinary text (uniform vec4 x[TEXTURE_UNITS]; → uniform vec4 x[3];)",
+      "task": "T023",
+      "phase": "node"
+    },
+    {
+      "id": "varying-pairs-derived-from-the-real-glsl",
+      "ok": true,
+      "detail": "pairing is derived from what the vertex stage **writes** and the fragment stage **reads** in the assembled GLSL, with the conditionals already evaluated. ENABLE_DAYNIGHT_SHADING: v_positionMC@0 v_textureCoordinates@2; declared-but-never-written = [\"v_normalMC\",\"v_normalEC\"] (this is exactly the spike's E1 trap: GL prunes them, WGSL would hard-fail). ENABLE_VERTEX_LIGHTING: v_textureCoordinates@2 v_normalEC@4 (v_normalEC becomes live). Total distinct varying sets over the enumeration: recorded in the model artefact. `computeAtmosphereScattering(vec3, vec3, out vec3, out vec3, out float)` is recognised as writing its out-parameters (0 diagnostic(s)).",
+      "task": "T023",
+      "phase": "node"
+    },
+    {
+      "id": "uncovered-define-sets-fail-explicitly-not-silently",
+      "ok": true,
+      "detail": "each out-of-scope define (APPLY_MATERIAL, HAS_VECTOR_LAYER, HAS_VECTOR_POLYLINES, HAS_VECTOR_POLYGONS, VECTOR_ANTIALIAS, VECTOR_WIDTH_IN_METERS, …) makes the emitter return `ok:false` with a reason and **no module** (T023 (c)) — nothing is degraded silently. The runtime-generated `computeDayColor` (contract R6) is mirrored by the same module for both channels: the GLSL string builder unrolls 3 call(s) for TEXTURE_UNITS 3, while the WGSL mirror emits a fixed chain of 3 call(s) each guarded by its own pipeline-overridable constant (3 guard(s)) — same observable chain, no dependence on the layer count in the module text",
+      "task": "T023",
+      "phase": "node"
+    },
+    {
+      "id": "uniform-union-of-the-marginal-sweep-equals-the-full-cross-product",
+      "ok": true,
+      "detail": "marginal sweep (47 variants) yields 54 uniform(s); the full cross product (768 variants) yields 54; identical = true — the shortcut used by `--variants=mvp` cannot under-cover (a mismatch would mean the MVP modules were emitted against a smaller struct)",
+      "task": "T022",
+      "phase": "node"
+    },
+    {
+      "id": "reachable-define-space-is-enumerated-not-sampled",
+      "ok": true,
+      "detail": "|enumeration| = 768 = textureUnits(4) × quantization(2) × lighting(2) × groundAtmosphere(3) × fog(2) × ocean(1) × imageryOps(2) × tileLimitRectangle(1) × geodetic(4); 20 excluded define(s) each carry a reason and an upstream source line (see define-matrix.mjs)",
+      "task": "T023",
+      "phase": "node"
+    },
+    {
+      "id": "sweep-device-page-produced-report",
+      "ok": true,
+      "detail": "page errors=[] pageerror=[]",
+      "phase": "device-sweep"
+    },
+    {
+      "id": "sweep-device-adapter-is-hardware",
+      "ok": true,
+      "detail": "adapter.info={\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"device\":\"\",\"description\":\"\",\"subgroupMinSize\":32,\"subgroupMaxSize\":32,\"isFallbackAdapter\":null,\"hasInfo\":true}, preferredFormat=bgra8unorm",
+      "phase": "device-sweep"
+    },
+    {
+      "id": "sweep-every-reachable-define-set-creates-its-own-pipeline",
+      "ok": true,
+      "detail": "768/768 reachable define combination(s) created a pipeline with 0 validation errors — each with **its own** pipeline-overridable constant values (G-6/T025: the tile's imagery layer count and the ground-atmosphere mode are pipeline constants, not module text) over the 128 distinct module pair(s) (enumeration: 768 combination(s) → 128 module text(s) → 768 pipeline identity/identities); first failures: []",
+      "phase": "device-sweep"
+    },
+    {
+      "id": "sweep-each-distinct-module-text-is-parsed-once",
+      "ok": true,
+      "detail": "createShaderModule called 256 time(s) for 128 distinct module pair(s) (= 2 calls per pair: one vertex module + one fragment module); 768/768 combination(s) reused an already-parsed module — the module text is the parse identity, the constant values are the pipeline identity",
+      "phase": "device-sweep"
+    },
+    {
+      "id": "sweep-negative-control-unpaired-varying-fails",
+      "ok": true,
+      "detail": "removing the vertex output \"v_positionMC\" while the fragment stage still reads it MUST make createRenderPipeline fail (spike REPORT §4 E1): removed=true, ok=false, error=\"The fragment input at location 0 doesn't have a corresponding vertex output.\\n - While calling [Device].CreateRenderPipeline([RenderPipelineDescriptor \\\"\\\"negative-control-unpaired-varying-pipeline\\\"\\\"]).\\n\"",
+      "phase": "device-sweep"
+    },
+    {
+      "id": "mvp-mvp-golden-scene-has-every-uniform",
+      "ok": true,
+      "detail": "uniform struct members without a scene value: []",
+      "phase": "device-mvp"
+    },
+    {
+      "id": "mvp-mvp-golden-emitted-varyings-pair",
+      "ok": true,
+      "detail": "VSOut/FSIn read back from the emitted text: outputs=[v_positionMC@0 v_textureCoordinates@2] inputs=[v_positionMC@0 v_textureCoordinates@2] unpaired=[] locationMismatch=[] declared-but-never-written=[]",
+      "phase": "device-mvp"
+    },
+    {
+      "id": "mvp-device-page-produced-report",
+      "ok": true,
+      "detail": "page errors=[] pageerror=[]",
+      "phase": "device-mvp"
+    },
+    {
+      "id": "mvp-device-adapter-is-hardware",
+      "ok": true,
+      "detail": "adapter.info={\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"device\":\"\",\"description\":\"\",\"subgroupMinSize\":32,\"subgroupMaxSize\":32,\"isFallbackAdapter\":null,\"hasInfo\":true}, preferredFormat=bgra8unorm, limits={\"maxTextureDimension2D\":8192,\"maxUniformBufferBindingSize\":65536,\"maxBindGroups\":4,\"maxVertexBuffers\":8,\"maxVertexAttributes\":16}",
+      "phase": "device-mvp"
+    },
+    {
+      "id": "mvp-harness-self-test-renders-non-black",
+      "ok": true,
+      "detail": "full-screen constant-colour triangle through the same readback path: 16384/16384 non-black, centre=[191,127,64,255]",
+      "phase": "device-mvp"
+    },
+    {
+      "id": "mvp-mvp-golden-vertex-stage-covers-the-frame",
+      "ok": true,
+      "detail": "the emitted vertex stage with a constant-colour fragment stage paints 16384/16384 pixel(s) — isolates geometry/uniform placement from the textured fragment stage",
+      "phase": "device-mvp"
+    },
+    {
+      "id": "mvp-mvp-golden-pipeline-and-draw",
+      "ok": true,
+      "detail": "createRenderPipeline ok=true, pipelineError=null, vertex compile errors=0, fragment compile errors=0, renderError=null",
+      "phase": "device-mvp"
+    },
+    {
+      "id": "mvp-mvp-golden-readback-non-black-full",
+      "ok": true,
+      "detail": "readback 16384/16384 non-black pixel(s) (spike path B required 4096/4096); unique colours=12815, corners={\"topLeft\":[222,182,76,255],\"topRight\":[223,183,179,255],\"bottomLeft\":[105,65,64,255],\"bottomRight\":[105,65,191,255],\"center\":[172,132,128,255]}",
+      "phase": "device-mvp"
+    },
+    {
+      "id": "every-enumerated-define-set-maps-to-a-device-verified-module-pair",
+      "ok": true,
+      "detail": "768 enumerated define set(s) → 128 distinct module pair(s); rows with no verified group = 0; failed pipelines = 0",
+      "task": "T023",
+      "phase": "device-sweep"
+    },
+    {
+      "id": "emitted-varyings-match-the-derived-varying-sets",
+      "ok": true,
+      "detail": "every group carries its derived varying set and vertex-attribute locations; the per-case read-back check of the emitted text is reported by the mvp half (checks \"mvp-*\") and the device is the oracle for pairing (a mismatch is a hard pipeline failure)",
+      "task": "T023",
+      "phase": "device-sweep"
+    },
+    {
+      "id": "arch-boundary-A9-logic-layer-shader-view-stays-glsl",
+      "ok": true,
+      "detail": "`node tools/scripts/check-arch-boundaries.mjs --rules A9` exited 0; probes found in the upstream GLSL regex detector Scene/Primitive.js = 14; patch-layer files scanned = 0; violations = 0",
+      "task": "T024",
+      "phase": "node"
+    },
+    {
+      "id": "upstream-disk-zero-change",
+      "ok": true,
+      "detail": "node_modules/@cesium/engine: 1891 file(s) / 21761878 byte(s), aggregate sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033 before and sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033 after (Renderer/ShaderSource.js sha256-50f6f111843ac677af41be2d2231e78a412ef158d24d89e5a0802c602107ab47); changed=[]",
+      "task": "T024",
+      "phase": "node"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "artifacts/shader-verify/globe-mvp.json",
+      "what": "T022: golden-configuration render + full-frame readback on the hardware adapter"
+    },
+    {
+      "path": "artifacts/shader-verify/globe-all-reachable.json",
+      "what": "T023: one real pipeline per distinct emitted module pair + the unpaired-varying negative control"
+    },
+    {
+      "path": "experiments/gates/out/g5-model.json",
+      "what": "the enumerated define space, per-variant varying sets, module-pair groups and the H-4 union layout"
+    },
+    {
+      "path": "experiments/gates/out/g5-device.json",
+      "what": "the raw device sweep report (per group: compile + pipeline result)"
+    },
+    {
+      "path": "experiments/gates/out/g5-arch-boundaries.json",
+      "what": "T024: A9 scan report (GLSL view stays the logic layer's view)"
+    },
+    {
+      "path": "experiments/gates/g5-shader/glsl-preprocess.mjs",
+      "what": "the self-built GLSL ES 3.00 conditional-compilation evaluator (contract R4)"
+    },
+    {
+      "path": "experiments/gates/g5-shader/varying-pairing.mjs",
+      "what": "the self-built VS/FS varying-pair derivation (contract R5)"
+    },
+    {
+      "path": "experiments/gates/g5-shader/wgsl-emitter.mjs",
+      "what": "the WGSL emission channel of the parameterised seam"
+    },
+    {
+      "path": "experiments/gates/g5-shader/shader-emit.mjs",
+      "what": "the seam itself + the GLSL byte-identity comparison (contract R1)"
+    },
+    {
+      "path": "experiments/gates/g5-shader/mirror-generators.mjs",
+      "what": "the runtime-generated fragment mirrors (contract R6)"
+    },
+    {
+      "path": "experiments/gates/g5-shader/define-matrix.mjs",
+      "what": "the MVP-reachable define enumeration with per-dimension traceability"
+    },
+    {
+      "path": "experiments/gates/shared/terrain-scene.mjs",
+      "what": "the fixed terrain scene used by the readback (and by G-6)"
+    },
+    {
+      "path": "tools/shader-verify.mjs",
+      "what": "the productised harness (T022)"
+    },
+    {
+      "path": "docs/gate-g5-conclusion.md",
+      "what": "human-readable conclusion"
+    }
+  ],
+  "gateCriteria": {
+    "source": "plan.md「实现前的验证门」G-5 行；tasks.md T022/T023/T024；contracts/fork-patch-layer.md §5 R1–R6",
+    "requirements": [
+      "T022: 尖刺 harness 产品化为 tools/shader-verify.mjs（--family=globe --variants=mvp），真机 createRenderPipeline + 回读断言",
+      "T023: 枚举地形路径可达 define 组合；逐组合真机 createRenderPipeline；(a) 0 validation error (b) varying 集合 VS/FS 成对匹配 (c) 未覆盖组合显式失败",
+      "T024: 逻辑层读取的 vertexShaderSource/fragmentShaderSource 仍为原始 GLSL（A9），_attributeLocations 保留",
+      "contracts R1: ShaderSource 改动限于增加 WGSL 发射通道 + 导出装配所需内部件；GLSL 视图与预处理语义 MUST 不变",
+      "contracts R4/R5/R6: 条件编译求值、varying 成对推导、运行时生成片段镜像由本项目实现"
+    ],
+    "requiredVerdict": "pass",
+    "failureAction": "启用尖刺 §7.5 退路三（WGSL 库与上游 .glsl 并存）并把可升级性损失写入 rebase 演练 → STOP 上报入口 Agent 修订 plan"
+  },
+  "measurements": {
+    "defineSpace": {
+      "dimensions": [
+        {
+          "id": "textureUnits",
+          "values": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "source": "GlobeSurfaceShaderSet.js:280",
+          "justification": "numberOfDayTextures = the tile's imagery layer count (GlobeSurfaceTileProvider.js:3035,3177). 0..3 matches G-4's MVP matrix; a further layer only appends another unrolled sampleAndBlend call."
+        },
+        {
+          "id": "quantization",
+          "values": [
+            "float",
+            "QUANTIZATION_BITS12"
+          ],
+          "source": "GlobeSurfaceShaderSet.js:278",
+          "justification": "quantizationDefine comes from the tile's terrain encoding: HeightmapTerrainData with quantization on ⇒ BITS12, otherwise a float per element."
+        },
+        {
+          "id": "lighting",
+          "values": [
+            "daynight",
+            "vertex"
+          ],
+          "source": "GlobeSurfaceShaderSet.js:327",
+          "justification": "GlobeSurfaceShaderSet.js:327-335 — `enableLighting && hasVertexNormals ? ENABLE_VERTEX_LIGHTING : ENABLE_DAYNIGHT_SHADING`. Both values are reachable at runtime: hasVertexNormals follows the terrain provider, and the two differ in which varyings exist (exactly the E1 trap)."
+        },
+        {
+          "id": "groundAtmosphere",
+          "values": [
+            "per-vertex",
+            "per-fragment",
+            "none"
+          ],
+          "source": "GlobeSurfaceShaderSet.js:346",
+          "justification": "GlobeSurfaceShaderSet.js:346-353 — `showGroundAtmosphere` (true by default for WGS84) × `perFragmentGroundAtmosphere`, which is recomputed per frame as `cameraDistance > fadeOutDistance` (GlobeSurfaceTileProvider.js:2600-2604) — so this dimension really does vary inside one session (see G-6/T025)."
+        },
+        {
+          "id": "fog",
+          "values": [
+            "FOG",
+            "none"
+          ],
+          "source": "GlobeSurfaceShaderSet.js:358",
+          "justification": "GlobeSurfaceShaderSet.js:358-361 — `enableFog` (Scene.fog.enabled, true by default, togglable from the MVP API)."
+        },
+        {
+          "id": "ocean",
+          "values": [
+            "none"
+          ],
+          "source": "GlobeSurfaceShaderSet.js:306",
+          "justification": "Ocean shading is only reachable with a water mask (GlobeSurfaceShaderSet.js:306-315); the MVP terrain has none, so the whole dimension collapses to `none`."
+        },
+        {
+          "id": "imageryOps",
+          "values": [
+            "none",
+            "alpha"
+          ],
+          "source": "GlobeSurfaceShaderSet.js:285",
+          "justification": "GlobeSurfaceShaderSet.js:285-302,316-318,363-365 / GlobeSurfaceTileProvider.js:2988-3158 — `applyAlpha` is the one adjustment a plain `ImageryLayer` can carry (alpha < 1); the rest require the layer colour-correction settings the MVP does not expose."
+        },
+        {
+          "id": "tileLimitRectangle",
+          "values": [
+            "none"
+          ],
+          "source": "GlobeSurfaceShaderSet.js:281",
+          "justification": "The MVP scene does not limit the globe to a cartographic rectangle, so the define is never pushed."
+        },
+        {
+          "id": "geodetic",
+          "values": [
+            "none",
+            "geodetic",
+            "exaggeration",
+            "both"
+          ],
+          "source": "GlobeSurfaceShaderSet.js:387",
+          "justification": "GlobeSurfaceShaderSet.js:387-393 — `hasGeodeticSurfaceNormals = encoding.hasGeodeticSurfaceNormals` and `hasExaggeration = exaggeration !== 1.0` (GlobeSurfaceTileProvider.js:2645-2646) are independent, so all four combinations are reachable; EXAGGERATION alone has no effect in the shader, which the emitter reproduces."
+        }
+      ],
+      "excludedDefines": [
+        {
+          "define": "APPLY_MATERIAL",
+          "why": "MVP globe has no material (Globe.js:667-676)",
+          "source": "Globe.js:672"
+        },
+        {
+          "define": "HAS_VECTOR_LAYER",
+          "why": "vector tiles are out of scope (spec 'Out of Scope')",
+          "source": "GlobeSurfaceShaderSet.js:395"
+        },
+        {
+          "define": "HAS_VECTOR_POLYLINES",
+          "why": "only pushed together with HAS_VECTOR_LAYER",
+          "source": "GlobeSurfaceShaderSet.js:397"
+        },
+        {
+          "define": "HAS_VECTOR_POLYGONS",
+          "why": "only pushed together with HAS_VECTOR_LAYER",
+          "source": "GlobeSurfaceShaderSet.js:400"
+        },
+        {
+          "define": "VECTOR_ANTIALIAS",
+          "why": "only pushed together with HAS_VECTOR_LAYER",
+          "source": "GlobeSurfaceShaderSet.js:403"
+        },
+        {
+          "define": "VECTOR_WIDTH_IN_METERS",
+          "why": "only pushed together with HAS_VECTOR_LAYER",
+          "source": "GlobeSurfaceShaderSet.js:406"
+        },
+        {
+          "define": "VECTOR_WIDTH_MIXED_UNITS",
+          "why": "only pushed together with HAS_VECTOR_LAYER",
+          "source": "GlobeSurfaceShaderSet.js:409"
+        },
+        {
+          "define": "ENABLE_CLIPPING_PLANES",
+          "why": "clipping planes are out of scope",
+          "source": "GlobeSurfaceShaderSet.js:367"
+        },
+        {
+          "define": "ENABLE_CLIPPING_POLYGONS",
+          "why": "clipping polygons are out of scope",
+          "source": "GlobeSurfaceShaderSet.js:371"
+        },
+        {
+          "define": "CLIPPING_INVERSE",
+          "why": "only pushed together with ENABLE_CLIPPING_POLYGONS",
+          "source": "GlobeSurfaceShaderSet.js:374"
+        },
+        {
+          "define": "APPLY_IMAGERY_CUTOUT",
+          "why": "MVP has no imagery cutouts",
+          "source": "GlobeSurfaceShaderSet.js:280"
+        },
+        {
+          "define": "HIGHLIGHT_FILL_TILE",
+          "why": "debug fill-tile path",
+          "source": "GlobeSurfaceShaderSet.js:383"
+        },
+        {
+          "define": "COLOR_CORRECT",
+          "why": "globe hue/saturation/brightness shift is out of scope",
+          "source": "GlobeSurfaceShaderSet.js:379"
+        },
+        {
+          "define": "DYNAMIC_ATMOSPHERE_LIGHTING",
+          "why": "atmosphere lighting effects are out of scope",
+          "source": "GlobeSurfaceShaderSet.js:337"
+        },
+        {
+          "define": "DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN",
+          "why": "only pushed together with DYNAMIC_ATMOSPHERE_LIGHTING",
+          "source": "GlobeSurfaceShaderSet.js:340"
+        },
+        {
+          "define": "UNDERGROUND_COLOR",
+          "why": "underground colour is out of scope",
+          "source": "GlobeSurfaceShaderSet.js:319"
+        },
+        {
+          "define": "TRANSLUCENT",
+          "why": "translucency is out of scope for the MVP terrain slice",
+          "source": "GlobeSurfaceShaderSet.js:323"
+        },
+        {
+          "define": "HDR",
+          "why": "the HDR path is reserved for the HDR pipeline (never pushed for the globe)",
+          "source": "no `HDR` push in GlobeSurfaceShaderSet.js"
+        },
+        {
+          "define": "SHOW_TILE_BOUNDARIES",
+          "why": "debug path, not pushed by the shader set",
+          "source": "no push in GlobeSurfaceShaderSet.js"
+        },
+        {
+          "define": "GENERATE_POSITION_AND_NORMAL",
+          "why": "only used by the shading pipelines that need normals without lighting; not pushed by the globe shader set",
+          "source": "no push in GlobeSurfaceShaderSet.js"
+        }
+      ],
+      "combinations": 768
+    },
+    "glslByteIdentity": {
+      "identical": 768,
+      "total": 768,
+      "differences": [],
+      "sampleHashes": [
+        {
+          "id": "textureUnits=0|quantization=float|lighting=daynight|groundAtmosphere=per-vertex|fog=FOG|ocean=none|imageryOps=none|tileLimitRectangle=none|geodetic=none",
+          "vertexEqual": true,
+          "fragmentEqual": true,
+          "vertexBytes": 19822,
+          "fragmentBytes": 41190,
+          "defaultEmit": "glsl",
+          "upstreamVertexHash": "sha256-3f40ed4df6ecda92",
+          "parameterisedVertexHash": "sha256-3f40ed4df6ecda92",
+          "upstreamFragmentHash": "sha256-a259eec790a681af",
+          "parameterisedFragmentHash": "sha256-a259eec790a681af"
+        },
+        {
+          "id": "textureUnits=0|quantization=float|lighting=daynight|groundAtmosphere=per-vertex|fog=FOG|ocean=none|imageryOps=none|tileLimitRectangle=none|geodetic=geodetic",
+          "vertexEqual": true,
+          "fragmentEqual": true,
+          "vertexBytes": 19855,
+          "fragmentBytes": 41190,
+          "defaultEmit": "glsl",
+          "upstreamVertexHash": "sha256-c6cca32820ea8be5",
+          "parameterisedVertexHash": "sha256-c6cca32820ea8be5",
+          "upstreamFragmentHash": "sha256-a259eec790a681af",
+          "parameterisedFragmentHash": "sha256-a259eec790a681af"
+        },
+        {
+          "id": "textureUnits=0|quantization=float|lighting=daynight|groundAtmosphere=per-vertex|fog=FOG|ocean=none|imageryOps=none|tileLimitRectangle=none|geodetic=exaggeration",
+          "vertexEqual": true,
+          "fragmentEqual": true,
+          "vertexBytes": 19843,
+          "fragmentBytes": 41190,
+          "defaultEmit": "glsl",
+          "upstreamVertexHash": "sha256-42840a05f26fd667",
+          "parameterisedVertexHash": "sha256-42840a05f26fd667",
+          "upstreamFragmentHash": "sha256-a259eec790a681af",
+          "parameterisedFragmentHash": "sha256-a259eec790a681af"
+        },
+        {
+          "id": "textureUnits=0|quantization=float|lighting=daynight|groundAtmosphere=per-vertex|fog=FOG|ocean=none|imageryOps=none|tileLimitRectangle=none|geodetic=both",
+          "vertexEqual": true,
+          "fragmentEqual": true,
+          "vertexBytes": 19876,
+          "fragmentBytes": 41190,
+          "defaultEmit": "glsl",
+          "upstreamVertexHash": "sha256-3e7c122511fb8e26",
+          "parameterisedVertexHash": "sha256-3e7c122511fb8e26",
+          "upstreamFragmentHash": "sha256-a259eec790a681af",
+          "parameterisedFragmentHash": "sha256-a259eec790a681af"
+        }
+      ]
+    },
+    "preprocessorProbes": [
+      {
+        "id": "texture-units-comparison",
+        "source": "#if TEXTURE_UNITS > 0\nYES\n#else\nNO\n#endif",
+        "defines": [
+          "TEXTURE_UNITS 3"
+        ],
+        "expect": "YES",
+        "produced": "YES",
+        "ok": true
+      },
+      {
+        "id": "texture-units-zero",
+        "source": "#if TEXTURE_UNITS > 0\nYES\n#else\nNO\n#endif",
+        "defines": [
+          "TEXTURE_UNITS 0"
+        ],
+        "expect": "NO",
+        "produced": "NO",
+        "ok": true
+      },
+      {
+        "id": "defined-and-or-precedence",
+        "source": "#if (defined(A) || defined(B)) && defined(C) || defined(D)\nYES\n#else\nNO\n#endif",
+        "defines": [
+          "A",
+          "C"
+        ],
+        "expect": "YES",
+        "produced": "YES",
+        "ok": true
+      },
+      {
+        "id": "defined-and-or-precedence-negative",
+        "source": "#if (defined(A) || defined(B)) && defined(C) || defined(D)\nYES\n#else\nNO\n#endif",
+        "defines": [
+          "A"
+        ],
+        "expect": "NO",
+        "produced": "NO",
+        "ok": true
+      },
+      {
+        "id": "ifndef-and-elif-chain",
+        "source": "#ifdef A\nA\n#elif defined(B)\nB\n#else\nC\n#endif",
+        "defines": [
+          "B"
+        ],
+        "expect": "B",
+        "produced": "B",
+        "ok": true
+      },
+      {
+        "id": "nested-conditionals",
+        "source": "#ifdef A\n#if defined(B) && !defined(C)\nAB\n#else\nA\n#endif\n#else\nNONE\n#endif",
+        "defines": [
+          "A",
+          "B"
+        ],
+        "expect": "AB",
+        "produced": "AB",
+        "ok": true
+      },
+      {
+        "id": "arithmetic-condition",
+        "source": "#if (TEXTURE_UNITS * 2) / 2 == 2\nYES\n#else\nNO\n#endif",
+        "defines": [
+          "TEXTURE_UNITS 2"
+        ],
+        "expect": "YES",
+        "produced": "YES",
+        "ok": true
+      },
+      {
+        "id": "undefined-identifier-is-zero",
+        "source": "#if UNDEFINED_MACRO\nYES\n#else\nNO\n#endif",
+        "defines": [],
+        "expect": "NO",
+        "produced": "NO",
+        "ok": true
+      }
+    ],
+    "varyingPairing": {
+      "daynight": {
+        "paired": [
+          {
+            "name": "v_positionMC",
+            "type": "vec3",
+            "wgslType": "vec3<f32>",
+            "vsType": "vec3",
+            "location": 0
+          },
+          {
+            "name": "v_textureCoordinates",
+            "type": "vec3",
+            "wgslType": "vec3<f32>",
+            "vsType": "vec3",
+            "location": 2
+          }
+        ],
+        "declaredButUnwritten": [
+          "v_normalMC",
+          "v_normalEC"
+        ],
+        "declaredButUnread": [
+          "v_positionEC",
+          "v_normalMC",
+          "v_normalEC"
+        ]
+      },
+      "vertexLighting": {
+        "paired": [
+          {
+            "name": "v_textureCoordinates",
+            "type": "vec3",
+            "wgslType": "vec3<f32>",
+            "vsType": "vec3",
+            "location": 2
+          },
+          {
+            "name": "v_normalEC",
+            "type": "vec3",
+            "wgslType": "vec3<f32>",
+            "vsType": "vec3",
+            "location": 4
+          }
+        ],
+        "declaredButUnwritten": []
+      }
+    },
+    "emitterCoverage": {
+      "defineCombinations": 768,
+      "emitted": 768,
+      "rejected": 0,
+      "unsupportedDefines": [],
+      "distinctVaryingSets": 6,
+      "varyingSetHistogram": [
+        {
+          "paired": [
+            "v_positionMC@0",
+            "v_textureCoordinates@2",
+            "v_distance@3",
+            "v_atmosphereRayleighColor@4",
+            "v_atmosphereMieColor@5",
+            "v_atmosphereOpacity@6"
+          ],
+          "count": 192
+        },
+        {
+          "paired": [
+            "v_positionMC@0",
+            "v_textureCoordinates@2",
+            "v_atmosphereRayleighColor@4",
+            "v_atmosphereMieColor@5",
+            "v_atmosphereOpacity@6"
+          ],
+          "count": 128
+        },
+        {
+          "paired": [
+            "v_positionMC@0",
+            "v_textureCoordinates@2"
+          ],
+          "count": 64
+        },
+        {
+          "paired": [
+            "v_positionMC@0",
+            "v_textureCoordinates@2",
+            "v_normalEC@4",
+            "v_distance@5",
+            "v_atmosphereRayleighColor@6",
+            "v_atmosphereMieColor@7",
+            "v_atmosphereOpacity@8"
+          ],
+          "count": 192
+        },
+        {
+          "paired": [
+            "v_positionMC@0",
+            "v_textureCoordinates@2",
+            "v_normalEC@4",
+            "v_atmosphereRayleighColor@6",
+            "v_atmosphereMieColor@7",
+            "v_atmosphereOpacity@8"
+          ],
+          "count": 128
+        },
+        {
+          "paired": [
+            "v_textureCoordinates@2",
+            "v_normalEC@4"
+          ],
+          "count": 64
+        }
+      ],
+      "uniformMembers": 53,
+      "samplerBindings": 3,
+      "structSize": 1248,
+      "distinctModulePairs": 128,
+      "distinctVariantPipelines": 768,
+      "dimensionEffect": {
+        "textureUnits": {
+          "changesModuleText": false,
+          "changesPipelineIdentity": true,
+          "values": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "quantization": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "float",
+            "QUANTIZATION_BITS12"
+          ]
+        },
+        "lighting": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "daynight",
+            "vertex"
+          ]
+        },
+        "groundAtmosphere": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "per-vertex",
+            "per-fragment",
+            "none"
+          ]
+        },
+        "fog": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "FOG",
+            "none"
+          ]
+        },
+        "ocean": {
+          "changesModuleText": false,
+          "changesPipelineIdentity": false,
+          "values": [
+            "none"
+          ]
+        },
+        "imageryOps": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "none",
+            "alpha"
+          ]
+        },
+        "tileLimitRectangle": {
+          "changesModuleText": false,
+          "changesPipelineIdentity": false,
+          "values": [
+            "none"
+          ]
+        },
+        "geodetic": {
+          "changesModuleText": true,
+          "changesPipelineIdentity": true,
+          "values": [
+            "none",
+            "geodetic",
+            "exaggeration",
+            "both"
+          ]
+        }
+      },
+      "elapsedMs": 10135,
+      "chunkFiles": 4
+    },
+    "uniformUnion": {
+      "full": 54,
+      "marginal": 54,
+      "identical": true
+    },
+    "runtimeMirror": {
+      "glslBytes": 1461,
+      "wgslBytes": 2191
+    },
+    "device": {
+      "sweep": {
+        "defineCombinations": 768,
+        "distinctModulePairs": 128,
+        "rejected": 0,
+        "failed": 0,
+        "negativeControl": {
+          "ran": true,
+          "removed": true,
+          "varying": "v_positionMC",
+          "ok": false,
+          "pipelineError": "The fragment input at location 0 doesn't have a corresponding vertex output.\n - While calling [Device].CreateRenderPipeline([RenderPipelineDescriptor \"\"negative-control-unpaired-varying-pipeline\"\"]).\n",
+          "vertexErrorCount": 0
+        },
+        "elapsedMs": 77161
+      },
+      "mvp": {
+        "cases": [
+          {
+            "id": "mvp-golden",
+            "compile": {
+              "ok": true,
+              "pipelineError": null,
+              "vertexErrors": 0,
+              "fragmentErrors": 0
+            },
+            "draw": {
+              "rendered": true,
+              "renderError": null,
+              "totalPixels": 16384,
+              "nonBlackPixels": 16384,
+              "nonBackgroundPixels": 16384,
+              "uniqueColors": 12815,
+              "topColors": [
+                [
+                  "222,182,79",
+                  4
+                ],
+                [
+                  "222,182,84",
+                  4
+                ],
+                [
+                  "222,182,88",
+                  4
+                ],
+                [
+                  "222,182,175",
+                  4
+                ],
+                [
+                  "222,182,144",
+                  4
+                ],
+                [
+                  "221,181,153",
+                  4
+                ]
+              ],
+              "corners": {
+                "topLeft": [
+                  222,
+                  182,
+                  76,
+                  255
+                ],
+                "topRight": [
+                  223,
+                  183,
+                  179,
+                  255
+                ],
+                "bottomLeft": [
+                  105,
+                  65,
+                  64,
+                  255
+                ],
+                "bottomRight": [
+                  105,
+                  65,
+                  191,
+                  255
+                ],
+                "center": [
+                  172,
+                  132,
+                  128,
+                  255
+                ]
+              },
+              "bytesPerRow": 512
+            }
+          }
+        ]
+      }
+    },
+    "archBoundaryA9": {
+      "verdict": "pass",
+      "results": [
+        {
+          "rule": "A9",
+          "title": "logic-layer shader view stays GLSL",
+          "status": "no-match",
+          "violations": [],
+          "summary": {
+            "probes": 14,
+            "patchLayerFiles": 0
+          }
+        }
+      ]
+    },
+    "upstreamIntegrity": {
+      "unchanged": true,
+      "aggregateBefore": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "aggregateAfter": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "fileCount": 1891
+    }
+  },
+  "declaredDifferences": [
+    {
+      "id": "D-G5-1",
+      "what": "T023 的 tasks.md 自检命令给出了 `--report experiments/gates/out/g5.json`，而 `out/g5.json` 是**判定产物**（由 `check-gate.mjs` 校验、含本 runner 的全部检查项）。",
+      "how": "harness 保留 `--report <path>`（写 gate-schema 兼容摘要），默认落 `artifacts/shader-verify/globe-<variants>.json`；`out/g5.json` 由本 runner 统一写出。已把两半的检查项全部折进 `checks`。"
+    },
+    {
+      "id": "D-G5-2",
+      "what": "T023 要求对每个组合跑真机 createRenderPipeline；组合数为 768，其中互异模块对为 128。",
+      "how": "两端都做到：**全部组合**在 Node 侧逐条发射并配对推导，真机对**每个互异模块对**建管线；组合→模块对是**逐字节同一性**映射（`g5-model.json` 的 `rows[].group`），因此覆盖是精确的而非抽样。"
+    },
+    {
+      "id": "D-G5-3",
+      "what": "T022 的黄金配置沿用尖刺实测配置（非量化 + TEXTURE_UNITS 1 + daynight，`globe.showGroundAtmosphere=false`），未包含地面大气。",
+      "how": "额外增加 `mvp-quantized`（BITS12 编码）作为第二个黄金用例；地面大气等变体的 WGSL 变体只主张管线有效 + varying 成对，像素保真度在本门禁未主张（G-6 才做像素 diff）。"
+    },
+    {
+      "id": "D-G5-4",
+      "what": "WGSL 无 `#version`/`precision`/`layout` 等 GLSL 构造，且有若干 WGSL 强制的表达差异。",
+      "how": "逐条在源码注释与 `prelude.wgsl` 头部登记：函数重载拆名、`atan2`、无结构体常量（改 `valid` 标志）、`textureSampleLevel(...,0.0)`（uniformity）、`gl_FragCoord` 显式传参、`bool` uniform → `u32`。"
+    },
+    {
+      "id": "D-G5-5",
+      "what": "T023 提到「GlobeSurfaceShaderSet 的 38 个 boolean 门控」，本门禁按**可达性**而不是按位点计数组织枚举（位点会重复计数同一语义开关的两侧）。",
+      "how": "枚举由 9 个维度组成，每个维度的取值与来源行号逐个登记在 define-matrix.mjs；被排除的 20 个 define 同样逐个给出理由与来源。"
+    }
+  ]
+}

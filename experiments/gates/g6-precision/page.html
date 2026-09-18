@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-6 gate — precision / texture-origin probe</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      canvas { image-rendering: pixelated; display: block; }
+      code { color: #9fd3ff; }
+    </style>
+  </head>
+  <body>
+    <p>
+      G-6 precision probe (tasks.md T026, hypothesis H-7). <strong>One backend per run</strong>: the
+      runner passes <code>backend: "webgpu"</code> or <code>backend: "webgl2"</code>, never both. The
+      same fixed terrain scene is rendered by the emitted WGSL and by the real upstream assembled
+      GLSL; the comparison is offline (<code>compare.mjs --offscreen</code>).
+    </p>
+    <script type="module" src="./probe.js"></script>
+  </body>
+</html>

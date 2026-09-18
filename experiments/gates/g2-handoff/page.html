@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-2 gate — device handoff and synchronous Scene construction</title>
+    <!-- no favicon request: keeps the console transcript free of a 404 that would mask real errors -->
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      #g2-container {
+        position: relative;
+        width: 320px;
+        height: 200px;
+        margin: 12px;
+        background: #000;
+      }
+      canvas#g2-canvas {
+        display: block;
+        width: 320px;
+        height: 200px;
+      }
+      #g2-note {
+        margin: 12px;
+        max-width: 70ch;
+      }
+      code {
+        color: #9fd0ff;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The canvas lives inside a positioned parent because upstream `Scene` appends its credit
+         container to `canvas.parentNode` (Scene.js:164). -->
+    <div id="g2-container"><canvas id="g2-canvas"></canvas></div>
+    <p id="g2-note">
+      G-2 gate page (tasks.md T016). It loads a real Rollup bundle
+      (<code>?bundle=…</code>) that was produced by the production alias plugin, and drives one of two
+      backends per page load: <code>?backend=webgpu</code> (prefetch <code>adapter/device</code> →
+      handoff slot → <strong>synchronous</strong> <code>new Scene()</code>) or
+      <code>?backend=webgl2</code> (empty manifest → the upstream WebGL2 <code>Context</code>).
+      The result is collected by <code>run.mjs</code> through <code>window.__g2.report</code>.
+    </p>
+    <script type="module" src="./probe.js"></script>
+  </body>
+</html>

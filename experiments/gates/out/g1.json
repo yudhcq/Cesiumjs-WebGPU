@@ -1,0 +1,785 @@
+{
+  "gate": "g1",
+  "task": "T015",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T18:40:15.102Z",
+  "notes": "G-1 通过：T008 别名插件在真实构建链（Rollup + 门禁清单）中把 Scene/Scene.js:40 的相对导入 '../Renderer/Context.js' 改写为本项目实现，上游 Renderer/Context.js 未进入模块图（1296 个上游模块中 46 个 Renderer 模块被保留、Context.js 被替换）；浏览器中被替换的 Context 由真实上游 Scene 构造并消费：模块身份（深路径导入 === 门禁实现）、scene.drawingBuffer* 公开 getter 取自替换实现、fragmentDepth→_logDepthBuffer→相机 near/far 链路按我们的值分支、未在清单内的上游 ContextLimits 收到能力值（16384/16384/2048/8/16）；构建前后 node_modules/@cesium/engine 逐字节未变（1891 文件聚合哈希一致）；逻辑层零覆盖（logicLayerOverrides=0）；W2 才拥有的成员以 category=not-implemented 显式失败（MUST NOT 静默）。边界：本门禁只证明“接缝可用”，不证明 WebGPU 后端可用（W2/T042+）；不渲染任何一帧；见 findings（F-1 CJS 互操作、F-2 桶文件）与 taskDeviations。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "engine": {
+      "packageName": "@cesium/engine",
+      "version": "26.3.0",
+      "lock": "upstream/engine-26.3.0.lock.json"
+    },
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": [],
+      "note": "zero launch flags: headless Chrome exposes a hardware WebGPU adapter on this machine",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36"
+    },
+    "gpu": {
+      "webgpu": {
+        "available": true,
+        "reason": null,
+        "adapterInfo": {
+          "vendor": "nvidia",
+          "architecture": "lovelace",
+          "device": "",
+          "description": "",
+          "subgroupMinSize": 32,
+          "subgroupMaxSize": 32
+        },
+        "isFallbackAdapter": null,
+        "preferredFormat": "bgra8unorm",
+        "requestDeviceOk": true
+      }
+    },
+    "webgl2": {
+      "available": true
+    }
+  },
+  "checks": [
+    {
+      "id": "upstream-baseline-version",
+      "ok": true,
+      "detail": "installed @cesium/engine 26.3.0; upstream/engine-26.3.0.lock.json 26.3.0 (cesium 1.145.0)",
+      "phase": "build"
+    },
+    {
+      "id": "detector-literals-unique",
+      "ok": true,
+      "detail": "\"this._originalGLContext = glContext;\" x1 in upstream Context.js; \"this._logDepthBuffer = Scene.defaultLogDepthBuffer && context.fragmentDepth;\" x1 in upstream Scene.js (the presence/absence probes below depend on this)",
+      "phase": "build"
+    },
+    {
+      "id": "build-rewrite-scene-relative-import",
+      "ok": true,
+      "detail": "Scene/Scene.js:40 `import Context from \"../Renderer/Context.js\"` resolved to \"experiments/gates/g1-alias/Renderer/Context.js\" during the real Rollup run",
+      "phase": "build"
+    },
+    {
+      "id": "build-rewrite-bare-deep-import",
+      "ok": true,
+      "detail": "bare deep import \"@cesium/engine/Source/Renderer/Context.js\" resolved to \"experiments/gates/g1-alias/Renderer/Context.js\"",
+      "phase": "build"
+    },
+    {
+      "id": "build-upstream-context-absent-from-graph",
+      "ok": true,
+      "detail": "graph: upstream Renderer/Context.js present=false, gate-local Renderer/Context.js present=true, upstream Scene/Scene.js present=true",
+      "phase": "build"
+    },
+    {
+      "id": "build-bundle-text-probe",
+      "ok": true,
+      "detail": "bundle contains the upstream Scene.js control snippet=true, contains upstream Context.js snippet=false, contains the gate stub marker=true",
+      "phase": "build"
+    },
+    {
+      "id": "whitelist-exhaustive",
+      "ok": true,
+      "detail": "rewritten set == manifest set: missing=[] extra=[] (manifest 1, rewritten 1)",
+      "phase": "build"
+    },
+    {
+      "id": "logic-layer-overrides-zero",
+      "ok": true,
+      "detail": "logicLayerOverrides=0; repo-local modules in the graph=[experiments/gates/g1-alias/Renderer/Context.js, experiments/gates/g1-alias/entry.js]; upstream logic-layer modules bundled=1250",
+      "phase": "build"
+    },
+    {
+      "id": "no-unresolved-imports",
+      "ok": true,
+      "detail": "14 rollup warning(s), codes=[\"CIRCULAR_DEPENDENCY\",\"MISSING_EXPORT\"]; UNRESOLVED_IMPORT entries=0 (an unresolved import would survive into the browser bundle)",
+      "phase": "build"
+    },
+    {
+      "id": "missing-exports-attributable-to-cjs-interop",
+      "ok": true,
+      "detail": "MISSING_EXPORT warning(s): 1; each one MUST be attributable to the F-1 CommonJS wrapper (mersenne-twister/src/mersenne-twister.js, urijs/src/URI.js, urijs/src/IPv6.js, urijs/src/punycode.js, urijs/src/SecondLevelDomains.js, lerc/LercDecode.js, grapheme-splitter/index.js, bitmap-sdf/index.js, protobufjs/dist/minimal/protobuf.js). Detail: node_modules/@cesium/engine/Source/Scene/GoogleEarthEnterpriseImageryProvider.js (482:26): \"Reader\" is not exported by \"node_modules/protobufjs/dist/minimal/protobuf.js\", imported by \"node_modules/@cesium/engine/Source/Scene/GoogleEarthEnterpriseImageryProvider.js\".",
+      "phase": "build"
+    },
+    {
+      "id": "kept-modules-stay-upstream",
+      "ok": true,
+      "detail": "not-in-manifest modules are never rewritten (ContextLimits -> upstream, Scene -> upstream); 46 upstream Renderer module(s) bundled, Context.js excluded=[true]",
+      "phase": "build"
+    },
+    {
+      "id": "third-party-cjs-interop-recorded",
+      "ok": true,
+      "detail": "9 CommonJS/UMD module(s) wrapped at build time (finding F-1: no CJS plugin in the approved dependency set): mersenne-twister/src/mersenne-twister.js [-]; urijs/src/URI.js [./punycode ./IPv6 ./SecondLevelDomains]; urijs/src/IPv6.js [-]; urijs/src/punycode.js [-]; urijs/src/SecondLevelDomains.js [-]; lerc/LercDecode.js [-]; grapheme-splitter/index.js [-]; bitmap-sdf/index.js [-]; protobufjs/dist/minimal/protobuf.js [long]",
+      "phase": "build"
+    },
+    {
+      "id": "private-members-confined-to-gate-assertions",
+      "ok": true,
+      "detail": "\"_context\" occurrences under packages/cesium-webgpu/{src,backend-webgpu} (implementation path, .d.ts excluded): 0",
+      "phase": "build"
+    },
+    {
+      "id": "upstream-disk-unchanged",
+      "ok": true,
+      "detail": "aggregate sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033 -> sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033; files 1891 -> 1891; changed=[] (the alias plugin rewrites at build time only — node_modules is never edited)",
+      "phase": "runtime"
+    },
+    {
+      "id": "runtime-probe-produced-report",
+      "ok": true,
+      "detail": "probe completed at 2026-09-18T18:40:14.695Z; construction threw=false; page-level error=none",
+      "phase": "runtime"
+    },
+    {
+      "id": "scene-constructed-through-replacement",
+      "ok": true,
+      "detail": "new Scene({canvas}) with no context injected → constructor=\"G1AliasContext\", instanceof bundle Context=true, instanceof the gate-local file=true, deep-import identity=true, stub flag=true, marker=G1-ALIAS-CONTEXT-STUB-v1, id=G1-ALIAS-CONTEXT-STUB-v1-1",
+      "phase": "runtime"
+    },
+    {
+      "id": "replacement-consumed-by-scene",
+      "ok": true,
+      "detail": "the replacement recorded 1 construction(s) and the upstream Scene read fragmentDepth x4, drawingBufferWidth x9, drawingBufferHeight x9, uniformState x1 (Scene.js:195/715-720; uniformState is built by upstream Context.js:335); scene.canvas is the gate canvas=true",
+      "phase": "runtime"
+    },
+    {
+      "id": "scene-public-api-served-by-replacement",
+      "ok": true,
+      "detail": "scene.drawingBufferWidth/Height = 320/200 (the upstream public getters delegate to the replacement) vs context 320/200; GL context acquired=true (webgl2) drawing buffer 320/200",
+      "glBacked": true,
+      "phase": "runtime"
+    },
+    {
+      "id": "capability-flags-reach-kept-upstream-module",
+      "ok": true,
+      "detail": "Renderer/ContextLimits.js (kept upstream, not in the manifest) received the replacement's values: maximumTextureSize=16384 (gl=16384), maximumSamples=8 (gl=8), maximumVertexAttributes=16, maximum3DTextureSize=2048",
+      "applicable": true,
+      "phase": "runtime"
+    },
+    {
+      "id": "logic-layer-capability-branch-followed-replacement",
+      "ok": true,
+      "detail": "Scene.js:195 `_logDepthBuffer = Scene.defaultLogDepthBuffer && context.fragmentDepth` → true (defaultLogDepthBuffer=true, our fragmentDepth=true, linkage=true); Scene.js:723-726 then set camera near/far = 0.1/10000000000 (camera=Camera)",
+      "applicable": true,
+      "phase": "runtime"
+    },
+    {
+      "id": "replacement-fails-loudly-not-silently",
+      "ok": true,
+      "detail": "probes: context.draw(...) → threw=true category=not-implemented; context.defaultTexture → threw=true category=not-implemented; recorded capabilities=[draw, defaultTexture] (a replacement MUST NOT return silent empty values)",
+      "phase": "runtime"
+    },
+    {
+      "id": "webgpu-adapter-info-recorded",
+      "ok": true,
+      "detail": "adapter.info={\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"device\":\"\",\"description\":\"\",\"subgroupMinSize\":32,\"subgroupMaxSize\":32}, preferredFormat=bgra8unorm, isFallbackAdapter=null, requestDevice()=true",
+      "phase": "runtime"
+    },
+    {
+      "id": "no-uncaught-page-errors",
+      "ok": true,
+      "detail": "0 uncaught page error(s)",
+      "phase": "runtime"
+    },
+    {
+      "id": "no-console-errors",
+      "ok": true,
+      "detail": "0 console message(s) — errors: []",
+      "phase": "runtime"
+    },
+    {
+      "id": "environment-recorded",
+      "ok": true,
+      "detail": "node=v22.20.0, browser=chrome 153.0.8010.36 headless=true, webgl2=true, webgpu=true (nvidia/lovelace)",
+      "phase": "runtime"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/out/g1-build.json",
+      "what": "Rollup build evidence: per-resolution trace, module-graph classification, whitelist exhaustiveness, bundle text probes, CJS interop records"
+    },
+    {
+      "path": "experiments/gates/out/g1-runtime.json",
+      "what": "raw in-page probe report (scene construction, consumption counters, ContextLimits values, loud-failure probes, console/page errors)"
+    },
+    {
+      "path": "experiments/gates/out/g1-alias/bundle.js",
+      "what": "the real build output loaded by the browser (upstream Scene graph + gate-local Renderer/Context.js)"
+    },
+    {
+      "path": "experiments/gates/out/g1-run.log",
+      "what": "runner transcript of this execution"
+    },
+    {
+      "path": "experiments/gates/g1-alias/manifest.gate.json",
+      "what": "gate-local replacement manifest (1 entry: Renderer/Context.js, kind=replace, glCallSites=46)"
+    },
+    {
+      "path": "experiments/gates/g1-alias/Renderer/Context.js",
+      "what": "the replacement implementation consumed by the upstream Scene"
+    },
+    {
+      "path": "experiments/gates/g1-alias/entry.js",
+      "what": "bundle entry: upstream deep imports + gate-local implementation"
+    },
+    {
+      "path": "experiments/gates/g1-alias/build.mjs",
+      "what": "real build chain (Rollup + tools/rollup-plugin-engine-patch.mjs + CJS interop)"
+    },
+    {
+      "path": "experiments/gates/g1-alias/cjs-interop.mjs",
+      "what": "finding F-1: CommonJS interop wrapper required by the upstream engine's dependencies"
+    },
+    {
+      "path": "experiments/gates/g1-alias/probe.js",
+      "what": "in-page assertions (module identity, consumption, capability linkage, loud failures)"
+    },
+    {
+      "path": "experiments/gates/g1-alias/page.html",
+      "what": "gate page constructing the upstream Scene"
+    },
+    {
+      "path": "experiments/gates/g1-alias/upstream-integrity.mjs",
+      "what": "upstream content-hash snapshot/diff used by the zero-change assertion"
+    },
+    {
+      "path": "tools/rollup-plugin-engine-patch.mjs",
+      "what": "the T008 alias plugin under test"
+    },
+    {
+      "path": "upstream/engine-26.3.0.lock.json",
+      "what": "pinned upstream baseline (26.3.0 / cesium 1.145.0)"
+    },
+    {
+      "path": "experiments/gates/out/g1-control-no-rewrite.json",
+      "what": "negative control: the same harness with an empty manifest MUST detect that the upstream Context is NOT replaced"
+    },
+    {
+      "path": "docs/gate-g1-conclusion.md",
+      "what": "human-readable conclusion (basis, evidence paths, verdict, consequences)"
+    }
+  ],
+  "gateCriteria": {
+    "source": "plan.md「实现前的验证门」G-1 行；tasks.md T015",
+    "rewrittenModule": "Renderer/Context.js",
+    "consumptionModule": "Scene/Scene.js (relative import at line 40)",
+    "requiredVerdict": "pass",
+    "failureAction": "切换到整仓 fork（F1），补丁清单与审计方式不变 → STOP 上报入口 Agent 修订 plan"
+  },
+  "measurements": {
+    "upstreamIntegrity": {
+      "unchanged": true,
+      "aggregateBefore": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "aggregateAfter": "sha256-35a5dbbb1c5f964c9ef122762fd2a3e97b9aebfdbff0c6c78aa136b1a1124033",
+      "fileCountBefore": 1891,
+      "fileCountAfter": 1891,
+      "changedDetails": [],
+      "detailsAdded": [],
+      "detailsRemoved": [],
+      "detailsBefore": {
+        "Source/Renderer/AutomaticUniforms.js": "sha256-fd57375edf8e9b21ec49f018a7157b6cc40dc1083b67b891f2cb3407c89238fe",
+        "Source/Renderer/Buffer.js": "sha256-110cce1938c2a3c530ab52c6545fdb5ab3a8e9da728f81178682dd8a932e5ebc",
+        "Source/Renderer/BufferUsage.js": "sha256-5a883ca1dfb4d3989695c841f57c25d9bbb5ea272fa7eedc95b56d662b0d9db6",
+        "Source/Renderer/ClearCommand.js": "sha256-8fe47e6de7194d8af7e38c8e8b1d68dc5e90ec8b2df439577312faf8e82aab6c",
+        "Source/Renderer/ComputeCommand.js": "sha256-e531a391c99657cb1a8e42683134516d4af0d5df29e81df3bd668a6e58289af8",
+        "Source/Renderer/ComputeEngine.js": "sha256-d5b0c0d4853ffda6178504286d97b4c77742481bcb9052b49d0daa8f0e2bbb94",
+        "Source/Renderer/Context.js": "sha256-3d7fa4ec0c97df6c9e1a2142f6b7ee527c37ce339f744b22edee402d60d90b83",
+        "Source/Renderer/ContextLimits.js": "sha256-b24965ae722646629ab80da5bd1185be920d17370518653350320211c64cbb89",
+        "Source/Renderer/CubeMap.js": "sha256-8dc4f3c5a6963aed75513e9a7896d9bfd0c571f9d15d30040fc7d64fc54cbeb5",
+        "Source/Renderer/CubeMapFace.js": "sha256-ab8bc1fb0668902a6b3e57f6eff685a63e7ecfb1a418c9b835da683c5d4d68e9",
+        "Source/Renderer/DrawCommand.js": "sha256-7264cecd7f062a55d8bfd159a602775d459ca983a743a0553f496c7a8102a7b6",
+        "Source/Renderer/Framebuffer.js": "sha256-9779f0740817e99b28428e81596d17dee4cab1ff992c75ce5ec7fa0036863ec1",
+        "Source/Renderer/FramebufferManager.js": "sha256-8289584a486decaebcf2c318f176f7e58e8b6000988309755ed3ae11015bfd5b",
+        "Source/Renderer/MipmapHint.js": "sha256-6b5ca2eb75c272709bdec174e4250299f30f2f7175ab8ae5c3028bdc79de0821",
+        "Source/Renderer/MultisampleFramebuffer.js": "sha256-b364eb1d71f37b0f662a9ee2e60396d2c28896dda915c8af41ae955b8a2478aa",
+        "Source/Renderer/Pass.js": "sha256-5b231da76955383455bc64deed470d464022216c130c05e51bf76e0ff13e6d1c",
+        "Source/Renderer/PassState.js": "sha256-60e6caf56451cb7b26b04d472dd10309ac1fb39791cf3fb9ad7516b178f994c3",
+        "Source/Renderer/PickId.js": "sha256-e7cde4170d6ff73dcbb97b4a533266ebe1ec819c8a84d08283989da47b01cd30",
+        "Source/Renderer/PixelDatatype.js": "sha256-ea1a2b8f4e8a725816c633fdc01926f52a7cf691b675ad3986e80ec60c4becbb",
+        "Source/Renderer/RenderState.js": "sha256-39c29a732e36593c12154df8a130e0bb50a72ad568af42f4b7e153184e285a30",
+        "Source/Renderer/Renderbuffer.js": "sha256-096bf88e4a3a8f1f752640eec88f2c7c5d5cd600c050184a50d4ee9e3928a227",
+        "Source/Renderer/RenderbufferFormat.js": "sha256-ecbba5b6689febe4a69aa2ffdb36a547a2017e050ed44669a19a2d3c19238ef0",
+        "Source/Renderer/Sampler.js": "sha256-fb65fced667103116bc5b3e8a7c4a005805a4bf0975f9da4359f6147864320b1",
+        "Source/Renderer/ShaderBuilder.js": "sha256-c887183c13753e11f5201cc2de826fe73b8e52119e1d9765546afe8c1b786e7f",
+        "Source/Renderer/ShaderCache.js": "sha256-897695313fe04cf4237e5a02cd522c223b4b1567fdd1e6fa6a7b514f437fa8ce",
+        "Source/Renderer/ShaderDestination.js": "sha256-f11f2ed44ef5e69e06fc0d93faa2569a55589e8f7f35b395c4f6a550c66bd90d",
+        "Source/Renderer/ShaderFunction.js": "sha256-cbc2174f42ecb1b95fd057c4d3dcc3455501ef38e430c7a89e989f808f302c2d",
+        "Source/Renderer/ShaderProgram.js": "sha256-b0ae609324f012437311fc443f483802917be375e3015c647173080dd15dba4f",
+        "Source/Renderer/ShaderSource.js": "sha256-50f6f111843ac677af41be2d2231e78a412ef158d24d89e5a0802c602107ab47",
+        "Source/Renderer/ShaderStruct.js": "sha256-5855dcaf0957c45bb02e5b58227e272cad3f81e52e9b152fa3ae0ca5dd872000",
+        "Source/Renderer/SharedContext.js": "sha256-b52aa496829a661dc20784c28cc515adffe547a753e6df477e8ef5dc6df59315",
+        "Source/Renderer/Sync.js": "sha256-78f93116bfdddb530bdfc5e1c7162c9d990b2d606eb9fc3562275289527b64c3",
+        "Source/Renderer/Texture.js": "sha256-39fe8aee366ccdbccfdee8ad2662316a17c06193ec8288416456b9e367aeba42",
+        "Source/Renderer/Texture3D.js": "sha256-a942bf4f9afcb094a67ec0cc6f903d349592972dc9d8d91dfd50fff7e0e3304b",
+        "Source/Renderer/TextureAtlas.js": "sha256-42ec7a99c52b2506781a2599d3ca28edae30c5a98eda302c2494e03c5c6bbdb1",
+        "Source/Renderer/TextureCache.js": "sha256-9ebba22337dbe3110d418c91523706d56a36b77fc38dc3b2cadecbbc38e34f6d",
+        "Source/Renderer/TextureMagnificationFilter.js": "sha256-4e0f87ce250ff9f478a62c12e3bda889cde2ad0152fe6a4a57ba7f7dc39e8a9e",
+        "Source/Renderer/TextureMinificationFilter.js": "sha256-3586076b7384e7c955244db203ad33cfb59aad965dc47306e3dded71c4924aac",
+        "Source/Renderer/TextureWrap.js": "sha256-d4eb2208cc71f58f4638a92574886053b01733d6ef837317c3840058c1c53fad",
+        "Source/Renderer/UniformState.js": "sha256-365623296dfb9a27f7f43769c0b10242de680c9a864dcfbe5995e6b19a8805c6",
+        "Source/Renderer/VertexArray.js": "sha256-4064f982a4a2ee8a6abebb8a47dd8603d21643efebcc05b1c66c21926fe21a42",
+        "Source/Renderer/VertexArrayFacade.js": "sha256-eb2c223e9b89e580228b8669029a266917421327ea366c59725237b0a378a530",
+        "Source/Renderer/createUniform.js": "sha256-312594d8b4269a76c5ca147455b761f4f2cf80933894f2eeafe1767f3a6fb16b",
+        "Source/Renderer/createUniformArray.js": "sha256-7e8bccfbe39d035faf8029ab46f91102b368ed20062ff376dc2d173d8d6615f5",
+        "Source/Renderer/demodernizeShader.js": "sha256-ecae6df4a5e083cf7d8acb1bb0a4926e3eee3cff637bae43b79eab7b76e7c0a0",
+        "Source/Renderer/freezeRenderState.js": "sha256-19fc5c80f01d4d8cbd0a6c2da10ab5d7251c25e7f420a96a20a747b5f7f31688",
+        "Source/Renderer/loadCubeMap.js": "sha256-06814e1ffd9ea0052f5f2bc32d230a68331a46860d77da844d4297d71acfa36b",
+        "Source/Scene/Scene.js": "sha256-d7679e58a9c5349053209dac94592bbd554c4d686a81944466a045a6ad191a4a"
+      },
+      "detailsAfter": {
+        "Source/Renderer/AutomaticUniforms.js": "sha256-fd57375edf8e9b21ec49f018a7157b6cc40dc1083b67b891f2cb3407c89238fe",
+        "Source/Renderer/Buffer.js": "sha256-110cce1938c2a3c530ab52c6545fdb5ab3a8e9da728f81178682dd8a932e5ebc",
+        "Source/Renderer/BufferUsage.js": "sha256-5a883ca1dfb4d3989695c841f57c25d9bbb5ea272fa7eedc95b56d662b0d9db6",
+        "Source/Renderer/ClearCommand.js": "sha256-8fe47e6de7194d8af7e38c8e8b1d68dc5e90ec8b2df439577312faf8e82aab6c",
+        "Source/Renderer/ComputeCommand.js": "sha256-e531a391c99657cb1a8e42683134516d4af0d5df29e81df3bd668a6e58289af8",
+        "Source/Renderer/ComputeEngine.js": "sha256-d5b0c0d4853ffda6178504286d97b4c77742481bcb9052b49d0daa8f0e2bbb94",
+        "Source/Renderer/Context.js": "sha256-3d7fa4ec0c97df6c9e1a2142f6b7ee527c37ce339f744b22edee402d60d90b83",
+        "Source/Renderer/ContextLimits.js": "sha256-b24965ae722646629ab80da5bd1185be920d17370518653350320211c64cbb89",
+        "Source/Renderer/CubeMap.js": "sha256-8dc4f3c5a6963aed75513e9a7896d9bfd0c571f9d15d30040fc7d64fc54cbeb5",
+        "Source/Renderer/CubeMapFace.js": "sha256-ab8bc1fb0668902a6b3e57f6eff685a63e7ecfb1a418c9b835da683c5d4d68e9",
+        "Source/Renderer/DrawCommand.js": "sha256-7264cecd7f062a55d8bfd159a602775d459ca983a743a0553f496c7a8102a7b6",
+        "Source/Renderer/Framebuffer.js": "sha256-9779f0740817e99b28428e81596d17dee4cab1ff992c75ce5ec7fa0036863ec1",
+        "Source/Renderer/FramebufferManager.js": "sha256-8289584a486decaebcf2c318f176f7e58e8b6000988309755ed3ae11015bfd5b",
+        "Source/Renderer/MipmapHint.js": "sha256-6b5ca2eb75c272709bdec174e4250299f30f2f7175ab8ae5c3028bdc79de0821",
+        "Source/Renderer/MultisampleFramebuffer.js": "sha256-b364eb1d71f37b0f662a9ee2e60396d2c28896dda915c8af41ae955b8a2478aa",
+        "Source/Renderer/Pass.js": "sha256-5b231da76955383455bc64deed470d464022216c130c05e51bf76e0ff13e6d1c",
+        "Source/Renderer/PassState.js": "sha256-60e6caf56451cb7b26b04d472dd10309ac1fb39791cf3fb9ad7516b178f994c3",
+        "Source/Renderer/PickId.js": "sha256-e7cde4170d6ff73dcbb97b4a533266ebe1ec819c8a84d08283989da47b01cd30",
+        "Source/Renderer/PixelDatatype.js": "sha256-ea1a2b8f4e8a725816c633fdc01926f52a7cf691b675ad3986e80ec60c4becbb",
+        "Source/Renderer/RenderState.js": "sha256-39c29a732e36593c12154df8a130e0bb50a72ad568af42f4b7e153184e285a30",
+        "Source/Renderer/Renderbuffer.js": "sha256-096bf88e4a3a8f1f752640eec88f2c7c5d5cd600c050184a50d4ee9e3928a227",
+        "Source/Renderer/RenderbufferFormat.js": "sha256-ecbba5b6689febe4a69aa2ffdb36a547a2017e050ed44669a19a2d3c19238ef0",
+        "Source/Renderer/Sampler.js": "sha256-fb65fced667103116bc5b3e8a7c4a005805a4bf0975f9da4359f6147864320b1",
+        "Source/Renderer/ShaderBuilder.js": "sha256-c887183c13753e11f5201cc2de826fe73b8e52119e1d9765546afe8c1b786e7f",
+        "Source/Renderer/ShaderCache.js": "sha256-897695313fe04cf4237e5a02cd522c223b4b1567fdd1e6fa6a7b514f437fa8ce",
+        "Source/Renderer/ShaderDestination.js": "sha256-f11f2ed44ef5e69e06fc0d93faa2569a55589e8f7f35b395c4f6a550c66bd90d",
+        "Source/Renderer/ShaderFunction.js": "sha256-cbc2174f42ecb1b95fd057c4d3dcc3455501ef38e430c7a89e989f808f302c2d",
+        "Source/Renderer/ShaderProgram.js": "sha256-b0ae609324f012437311fc443f483802917be375e3015c647173080dd15dba4f",
+        "Source/Renderer/ShaderSource.js": "sha256-50f6f111843ac677af41be2d2231e78a412ef158d24d89e5a0802c602107ab47",
+        "Source/Renderer/ShaderStruct.js": "sha256-5855dcaf0957c45bb02e5b58227e272cad3f81e52e9b152fa3ae0ca5dd872000",
+        "Source/Renderer/SharedContext.js": "sha256-b52aa496829a661dc20784c28cc515adffe547a753e6df477e8ef5dc6df59315",
+        "Source/Renderer/Sync.js": "sha256-78f93116bfdddb530bdfc5e1c7162c9d990b2d606eb9fc3562275289527b64c3",
+        "Source/Renderer/Texture.js": "sha256-39fe8aee366ccdbccfdee8ad2662316a17c06193ec8288416456b9e367aeba42",
+        "Source/Renderer/Texture3D.js": "sha256-a942bf4f9afcb094a67ec0cc6f903d349592972dc9d8d91dfd50fff7e0e3304b",
+        "Source/Renderer/TextureAtlas.js": "sha256-42ec7a99c52b2506781a2599d3ca28edae30c5a98eda302c2494e03c5c6bbdb1",
+        "Source/Renderer/TextureCache.js": "sha256-9ebba22337dbe3110d418c91523706d56a36b77fc38dc3b2cadecbbc38e34f6d",
+        "Source/Renderer/TextureMagnificationFilter.js": "sha256-4e0f87ce250ff9f478a62c12e3bda889cde2ad0152fe6a4a57ba7f7dc39e8a9e",
+        "Source/Renderer/TextureMinificationFilter.js": "sha256-3586076b7384e7c955244db203ad33cfb59aad965dc47306e3dded71c4924aac",
+        "Source/Renderer/TextureWrap.js": "sha256-d4eb2208cc71f58f4638a92574886053b01733d6ef837317c3840058c1c53fad",
+        "Source/Renderer/UniformState.js": "sha256-365623296dfb9a27f7f43769c0b10242de680c9a864dcfbe5995e6b19a8805c6",
+        "Source/Renderer/VertexArray.js": "sha256-4064f982a4a2ee8a6abebb8a47dd8603d21643efebcc05b1c66c21926fe21a42",
+        "Source/Renderer/VertexArrayFacade.js": "sha256-eb2c223e9b89e580228b8669029a266917421327ea366c59725237b0a378a530",
+        "Source/Renderer/createUniform.js": "sha256-312594d8b4269a76c5ca147455b761f4f2cf80933894f2eeafe1767f3a6fb16b",
+        "Source/Renderer/createUniformArray.js": "sha256-7e8bccfbe39d035faf8029ab46f91102b368ed20062ff376dc2d173d8d6615f5",
+        "Source/Renderer/demodernizeShader.js": "sha256-ecae6df4a5e083cf7d8acb1bb0a4926e3eee3cff637bae43b79eab7b76e7c0a0",
+        "Source/Renderer/freezeRenderState.js": "sha256-19fc5c80f01d4d8cbd0a6c2da10ab5d7251c25e7f420a96a20a747b5f7f31688",
+        "Source/Renderer/loadCubeMap.js": "sha256-06814e1ffd9ea0052f5f2bc32d230a68331a46860d77da844d4297d71acfa36b",
+        "Source/Scene/Scene.js": "sha256-d7679e58a9c5349053209dac94592bbd554c4d686a81944466a045a6ad191a4a"
+      }
+    },
+    "build": {
+      "bundle": {
+        "file": "experiments/gates/out/g1-alias/bundle.js",
+        "bytes": 7625267,
+        "chunks": [
+          "bundle.js"
+        ],
+        "containsStubMarker": true,
+        "containsUpstreamSceneSnippet": true,
+        "containsUpstreamContextSnippet": false
+      },
+      "graph": {
+        "moduleCount": 1406,
+        "upstreamEngineModules": 1296,
+        "gateLocalModules": [
+          "experiments/gates/g1-alias/Renderer/Context.js",
+          "experiments/gates/g1-alias/entry.js"
+        ],
+        "upstreamLogicLayerModules": 1250,
+        "thirdPartyModules": 108,
+        "otherModules": []
+      },
+      "logicLayerOverrides": 0,
+      "whitelist": {
+        "ok": true,
+        "manifestModules": [
+          "Renderer/Context.js"
+        ],
+        "rewritten": [
+          "Renderer/Context.js"
+        ],
+        "missing": [],
+        "extra": []
+      },
+      "rewriteRecords": [
+        {
+          "source": "E:\\work\\CesiumjsWebGpu\\experiments\\gates\\g1-alias\\entry.js",
+          "importer": null,
+          "resolved": "experiments/gates/g1-alias/entry.js",
+          "external": false
+        },
+        {
+          "source": "@cesium/engine/Source/Renderer/Context.js",
+          "importer": "experiments/gates/g1-alias/entry.js",
+          "resolved": "experiments/gates/g1-alias/Renderer/Context.js",
+          "external": false
+        },
+        {
+          "source": "E:\\work\\CesiumjsWebGpu\\experiments\\gates\\g1-alias\\Renderer\\Context.js",
+          "importer": "experiments/gates/g1-alias/entry.js",
+          "resolved": "experiments/gates/g1-alias/Renderer/Context.js",
+          "external": false
+        },
+        {
+          "source": "./Renderer/Context.js",
+          "importer": "experiments/gates/g1-alias/entry.js",
+          "resolved": "experiments/gates/g1-alias/Renderer/Context.js",
+          "external": false
+        },
+        {
+          "source": "../Renderer/Context.js",
+          "importer": "node_modules/@cesium/engine/Source/Scene/Scene.js",
+          "resolved": "experiments/gates/g1-alias/Renderer/Context.js",
+          "external": false
+        },
+        {
+          "source": "./Context.js",
+          "importer": "node_modules/@cesium/engine/Source/Renderer/SharedContext.js",
+          "resolved": "experiments/gates/g1-alias/Renderer/Context.js",
+          "external": false
+        },
+        {
+          "source": "./Source/Renderer/Context.js",
+          "importer": "node_modules/@cesium/engine/index.js",
+          "resolved": "experiments/gates/g1-alias/Renderer/Context.js",
+          "external": false
+        }
+      ],
+      "directRewrite": {
+        "upstreamModule": "Renderer/Context.js",
+        "shouldRewriteUpstreamContext": true,
+        "relativeFromScene": "experiments/gates/g1-alias/Renderer/Context.js",
+        "bareDeepImport": "experiments/gates/g1-alias/Renderer/Context.js",
+        "keptModuleUnaffected": null,
+        "upstreamSceneUnaffected": null
+      },
+      "cjsInterop": {
+        "excludedPrefixes": [
+          "node_modules/@cesium/engine"
+        ],
+        "wrapped": [
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/mersenne-twister/src/mersenne-twister.js",
+            "requires": [],
+            "unresolvedRequires": []
+          },
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/urijs/src/URI.js",
+            "requires": [
+              "./punycode",
+              "./IPv6",
+              "./SecondLevelDomains"
+            ],
+            "unresolvedRequires": []
+          },
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/urijs/src/IPv6.js",
+            "requires": [],
+            "unresolvedRequires": []
+          },
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/urijs/src/punycode.js",
+            "requires": [],
+            "unresolvedRequires": []
+          },
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/urijs/src/SecondLevelDomains.js",
+            "requires": [],
+            "unresolvedRequires": []
+          },
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/lerc/LercDecode.js",
+            "requires": [],
+            "unresolvedRequires": []
+          },
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/grapheme-splitter/index.js",
+            "requires": [],
+            "unresolvedRequires": []
+          },
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/bitmap-sdf/index.js",
+            "requires": [],
+            "unresolvedRequires": []
+          },
+          {
+            "id": "E:/work/CesiumjsWebGpu/node_modules/protobufjs/dist/minimal/protobuf.js",
+            "requires": [
+              "long"
+            ],
+            "unresolvedRequires": []
+          }
+        ]
+      },
+      "warnings": [
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/Cesium3DTileBatchTable.js -> node_modules/@cesium/engine/Source/Scene/BatchTableHierarchy.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTileBatchTable.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/index.js -> node_modules/@cesium/engine/Source/DataSources/Cesium3DTilesetVisualizer.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTileset.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTile.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTileContentFactory.js -> node_modules/@cesium/engine/Source/Scene/Model/Model3DTileContent.js -> node_modules/@cesium/engine/Source/Scene/Model/Model.js -> node_modules/@cesium/engine/Source/Scene/GltfLoader.js -> node_modules/@cesium/engine/Source/Scene/GltfStructuralMetadataLoader.js -> node_modules/@cesium/engine/Source/Scene/parseStructuralMetadata.js -> node_modules/@cesium/engine/Source/Scene/PropertyTable.js -> node_modules/@cesium/engine/index.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/index.js -> node_modules/@cesium/engine/Source/DataSources/Cesium3DTilesetVisualizer.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTileset.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTile.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTileContentFactory.js -> node_modules/@cesium/engine/Source/Scene/Model/Model3DTileContent.js -> node_modules/@cesium/engine/Source/Scene/Model/Model.js -> node_modules/@cesium/engine/Source/Scene/GltfLoader.js -> node_modules/@cesium/engine/Source/Scene/GltfStructuralMetadataLoader.js -> node_modules/@cesium/engine/Source/Scene/parseStructuralMetadata.js -> node_modules/@cesium/engine/Source/Scene/StructuralMetadata.js -> node_modules/@cesium/engine/index.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/IonImageryProviderFactory.js -> node_modules/@cesium/engine/Source/Scene/Google2DImageryProvider.js -> node_modules/@cesium/engine/Source/Scene/IonImageryProviderFactory.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/index.js -> node_modules/@cesium/engine/Source/DataSources/Cesium3DTilesetVisualizer.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTileset.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTile.js -> node_modules/@cesium/engine/Source/Scene/Cesium3DTileContentFactory.js -> node_modules/@cesium/engine/Source/Scene/Vector3DTileContent.js -> node_modules/@cesium/engine/Source/Scene/Vector3DTilePoints.js -> node_modules/@cesium/engine/Source/Scene/LabelCollection.js -> node_modules/@cesium/engine/index.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/Scene.js -> node_modules/@cesium/engine/Source/Scene/DerivedCommand.js -> node_modules/@cesium/engine/index.js -> node_modules/@cesium/engine/Source/Widget/CesiumWidget.js -> node_modules/@cesium/engine/Source/Scene/Scene.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/index.js -> node_modules/@cesium/engine/Source/Widget/CesiumWidget.js -> node_modules/@cesium/engine/Source/Scene/VoxelPrimitive.js -> node_modules/@cesium/engine/Source/Scene/VoxelContent.js -> node_modules/@cesium/engine/index.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/DerivedCommand.js -> node_modules/@cesium/engine/index.js -> node_modules/@cesium/engine/Source/Scene/DerivedCommand.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/I3SDataProvider.js -> node_modules/@cesium/engine/Source/Scene/I3SLayer.js -> node_modules/@cesium/engine/Source/Scene/I3SNode.js -> node_modules/@cesium/engine/Source/Scene/I3SDataProvider.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/I3SDataProvider.js -> node_modules/@cesium/engine/Source/Scene/I3SLayer.js -> node_modules/@cesium/engine/Source/Scene/I3SNode.js -> node_modules/@cesium/engine/Source/Scene/I3SFeature.js -> node_modules/@cesium/engine/Source/Scene/I3SDataProvider.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/I3SDataProvider.js -> node_modules/@cesium/engine/Source/Scene/I3SStatistics.js -> node_modules/@cesium/engine/Source/Scene/I3SDataProvider.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/I3SDataProvider.js -> node_modules/@cesium/engine/Source/Scene/I3SSublayer.js -> node_modules/@cesium/engine/Source/Scene/I3SDataProvider.js",
+          "id": null
+        },
+        {
+          "code": "CIRCULAR_DEPENDENCY",
+          "message": "Circular dependency: node_modules/@cesium/engine/Source/Scene/Scene.js -> node_modules/@cesium/engine/Source/Scene/DerivedCommand.js -> node_modules/@cesium/engine/index.js -> node_modules/@cesium/engine/Source/Scene/Scene.js",
+          "id": null
+        },
+        {
+          "code": "MISSING_EXPORT",
+          "message": "node_modules/@cesium/engine/Source/Scene/GoogleEarthEnterpriseImageryProvider.js (482:26): \"Reader\" is not exported by \"node_modules/protobufjs/dist/minimal/protobuf.js\", imported by \"node_modules/@cesium/engine/Source/Scene/GoogleEarthEnterpriseImageryProvider.js\".",
+          "id": "node_modules/@cesium/engine/Source/Scene/GoogleEarthEnterpriseImageryProvider.js"
+        }
+      ]
+    },
+    "runtime": {
+      "startedAt": "2026-09-18T18:40:14.363Z",
+      "bundleLoaded": true,
+      "bundleUrl": "../out/g1-alias/bundle.js",
+      "marker": "G1-ALIAS-CONTEXT-STUB-v1",
+      "implementation": "experiments/gates/g1-alias/Renderer/Context.js",
+      "contextIdentity": true,
+      "canvas": {
+        "id": "g1-canvas",
+        "parentId": "g1-container",
+        "width": 320,
+        "height": 200,
+        "clientWidth": 320,
+        "clientHeight": 200,
+        "hasParentNode": true
+      },
+      "construction": {
+        "threw": false,
+        "error": null
+      },
+      "consumption": {
+        "contextConstructorName": "G1AliasContext",
+        "contextInstanceOfBundleContext": true,
+        "contextInstanceOfLocalFile": true,
+        "gateStubFlag": true,
+        "stubMarkerOnContext": "G1-ALIAS-CONTEXT-STUB-v1",
+        "contextId": "G1-ALIAS-CONTEXT-STUB-v1-1",
+        "sceneDrawingBufferWidth": 320,
+        "sceneDrawingBufferHeight": 200,
+        "contextDrawingBufferWidth": 320,
+        "contextDrawingBufferHeight": 200,
+        "glContextAcquired": true,
+        "glContextType": "webgl2",
+        "glDrawingBufferWidth": 320,
+        "glDrawingBufferHeight": 200,
+        "fragmentDepth": true,
+        "sceneDefaultLogDepthBuffer": true,
+        "sceneLogDepthBuffer": true,
+        "logDepthLinkageHolds": true,
+        "cameraNear": 0.1,
+        "cameraFar": 10000000000,
+        "cameraServedByScene": "Camera",
+        "sceneCanvasIsGateCanvas": true,
+        "sceneMsaaSamples": 4,
+        "probeGlDrawingBufferWidth": 8
+      },
+      "upstreamLimits": {
+        "module": "node_modules/@cesium/engine/Source/Renderer/ContextLimits.js (not in the manifest)",
+        "maximumTextureSize": 16384,
+        "maximumCubeMapSize": 16384,
+        "maximum3DTextureSize": 2048,
+        "maximumSamples": 8,
+        "maximumVertexAttributes": 16,
+        "maximumTextureImageUnits": 16,
+        "glMaximumTextureSize": 16384,
+        "glMaximumSamples": 8,
+        "writtenByReplacement": true
+      },
+      "notImplementedProbes": {
+        "method": {
+          "description": "context.draw(...)",
+          "threw": true,
+          "value": null,
+          "error": {
+            "name": "G1AliasContextNotImplemented",
+            "message": "G-1 alias stub (Renderer/Context.js replacement): \"draw\" is not implemented. This gate only proves the module-level replacement seam (tasks.md T015); the WebGPU backend is W2. The stub fails loudly instead of returning an empty/black result.",
+            "category": "not-implemented",
+            "capability": "draw",
+            "stack": "G1AliasContextNotImplemented: G-1 alias stub (Renderer/Context.js replacement): \"draw\" is not implemented. This gate only proves the module-level replacement seam (tasks.md T015); the WebGPU backend is W2. The stub fails loudly instead of returning an empty/black result.\n    at notImplemented (http://127.0.0.1:40885/experiments/gates/out/g1-alias/bundle.js:44096:17)\n    at G1AliasContext.value (http://127.0.0.1:40885/experiments/gates/out/g1-alias/bundle.js:44412:13)\n    at http://127.0.0.1:40885/experiments/gates/g1-alias/probe.js:203:66\n    at probe (http://127.0.0.1:40885/experiments/gates/g1-alias/probe.js:56:58)\n    at runProbe (http://127.0.0.1:40885/experiments/gates/g1-alias/probe.js:203:25)"
+          }
+        },
+        "accessor": {
+          "description": "context.defaultTexture",
+          "threw": true,
+          "value": null,
+          "error": {
+            "name": "G1AliasContextNotImplemented",
+            "message": "G-1 alias stub (Renderer/Context.js replacement): \"defaultTexture\" is not implemented. This gate only proves the module-level replacement seam (tasks.md T015); the WebGPU backend is W2. The stub fails loudly instead of returning an empty/black result.",
+            "category": "not-implemented",
+            "capability": "defaultTexture",
+            "stack": "G1AliasContextNotImplemented: G-1 alias stub (Renderer/Context.js replacement): \"defaultTexture\" is not implemented. This gate only proves the module-level replacement seam (tasks.md T015); the WebGPU backend is W2. The stub fails loudly instead of returning an empty/black result.\n    at notImplemented (http://127.0.0.1:40885/experiments/gates/out/g1-alias/bundle.js:44096:17)\n    at G1AliasContext.get (http://127.0.0.1:40885/experiments/gates/out/g1-alias/bundle.js:44394:13)\n    at http://127.0.0.1:40885/experiments/gates/g1-alias/probe.js:204:73\n    at probe (http://127.0.0.1:40885/experiments/gates/g1-alias/probe.js:56:58)\n    at runProbe (http://127.0.0.1:40885/experiments/gates/g1-alias/probe.js:204:27)"
+          }
+        },
+        "allCategoryNotImplemented": true
+      },
+      "destroyObservation": {
+        "note": "informational only: what upstream Scene.destroy() reached through the replacement; the WebGPU resource/teardown semantics belong to W2 (T042+)",
+        "threw": false,
+        "error": null,
+        "sceneContextAfterDestroy": "cleared"
+      },
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+        "devicePixelRatio": 1,
+        "webgl2Available": true,
+        "webgpu": {
+          "available": true,
+          "reason": null,
+          "adapterInfo": {
+            "vendor": "nvidia",
+            "architecture": "lovelace",
+            "device": "",
+            "description": "",
+            "subgroupMinSize": 32,
+            "subgroupMaxSize": 32
+          },
+          "isFallbackAdapter": null,
+          "preferredFormat": "bgra8unorm",
+          "requestDeviceOk": true
+        }
+      },
+      "diagnostics": {
+        "constructionCount": 1,
+        "constructions": [
+          {
+            "marker": "G1-ALIAS-CONTEXT-STUB-v1",
+            "canvas": {
+              "width": 320,
+              "height": 200,
+              "clientWidth": 320,
+              "clientHeight": 200
+            },
+            "glContextType": "webgl2",
+            "webgl2": true,
+            "webglOptions": {
+              "alpha": false,
+              "stencil": true,
+              "powerPreference": "high-performance"
+            }
+          }
+        ],
+        "reads": {
+          "fragmentDepth": 4,
+          "drawingBufferWidth": 9,
+          "drawingBufferHeight": 9,
+          "depthTexture": 10,
+          "colorBufferFloat": 2,
+          "floatBlend": 2,
+          "drawBuffers": 2,
+          "uniformState": 1
+        },
+        "notImplemented": [
+          "draw",
+          "defaultTexture"
+        ]
+      },
+      "finishedAt": "2026-09-18T18:40:14.695Z"
+    },
+    "runtimeConsole": {
+      "consoleMessages": [],
+      "pageErrors": [],
+      "requestFailures": []
+    }
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "title": "上游依赖含 CommonJS-only 包，批准的依赖集（T004）没有 CJS 互操作插件",
+      "detail": "@cesium/engine 的 Source/** 直接 import mersenne-twister / urijs / grapheme-splitter / bitmap-sdf / lerc / protobufjs（browserify 产物）等 CommonJS 包；缺少 @rollup/plugin-commonjs 时 Rollup 在绑定默认导入阶段直接报错。本门禁以 experiments/gates/g1-alias/cjs-interop.mjs 在构建期包裹这些模块（原始代码逐字执行，不改上游磁盘）。产物化影响：W1/T009 的 dist（内嵌经替换的上游源码）MUST 具备等价能力；protobufjs 的具名导入（Reader）在本门禁中为 undefined，且仅位于门禁未触及的代码路径。",
+      "scope": "gate-local workaround; the product build MUST solve this properly"
+    },
+    {
+      "id": "F-2",
+      "title": "上游 index.js 桶文件被 5 处自引用引入，门禁包因此覆盖近整个引擎（1296 个上游模块 / 约 7.6 MB）",
+      "detail": "Scene 闭包内 Source/Scene/{DerivedCommand,PropertyTable,StructuralMetadata,VoxelContent}.js 与 LabelCollection.js 以 `import { x } from \"@cesium/engine\"` 自引用桶文件，Rollup 必须解析 index.js 的全部再导出。门禁据此把几乎整仓上游图纳入构建与断言（对 G-1 是更强的证据）；但产品打包要控制体积，需在 W1 明确桶文件处理策略（T009/T033 范围）。",
+      "scope": "informational"
+    }
+  ],
+  "taskDeviations": [
+    {
+      "id": "D-1",
+      "what": "T015 要求“用 T008 的别名插件在真实构建链中替换 Renderer/Context.js”；正式清单 packages/cesium-webgpu/backend-webgpu/manifest.json 属 Phase 3（T031），本门禁不得抢先落地。",
+      "how": "门禁使用同 schema 的 experiments/gates/g1-alias/manifest.gate.json（唯一条目 Renderer/Context.js，kind=replace，glCallSites=46），通过插件选项 manifestPath/localRoot 指向它；插件与解析逻辑与生产一致。"
+    },
+    {
+      "id": "D-2",
+      "what": "生产构建链（rollup.config.mjs）额外用 @rollup/plugin-typescript 编译 packages/**；门禁的替换实现是 .js。",
+      "how": "门禁只运行与“模块级替换”直接相关的插件次序（T008 别名插件 → node-resolve → CJS 互操作）；TS 插件不参与 .js 替换文件的解析，不影响接缝结论。"
+    },
+    {
+      "id": "D-3",
+      "what": "替换实现真实覆盖了上游 Scene 构造期读取面（以 WebGL2 承载上下文获取），但 draw/clear/资源类未实现。",
+      "how": "凡 W2 才拥有的成员一律抛 category=not-implemented（T037 同款纪律）；门禁只断言“替换生效且不炸”，不渲染任何一帧。"
+    }
+  ]
+}

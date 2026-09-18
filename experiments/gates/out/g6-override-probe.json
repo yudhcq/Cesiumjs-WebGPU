@@ -1,0 +1,202 @@
+{
+  "tool": "g6-override-probe",
+  "purpose": "G-6 fix route selection: is a new WGSL pipeline-overridable-constant VALUE on an already-parsed module cheaper than a new module text? Not a gate — this report decides the route and is archived as evidence.",
+  "recordedAt": "2026-09-18T20:33:32.286Z",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": []
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "hasInfo": true
+    },
+    "preferredFormat": "bgra8unorm"
+  },
+  "samples": 16,
+  "requestedKeys": [
+    "sha256-74e870ed98efd409_sha256-be301f14d1188e3f",
+    "sha256-61772a9f5e995c4e_sha256-d0fc5872f0520363",
+    "sha256-b32c1fc4e820158c_sha256-32b38aa262af9d8e"
+  ],
+  "measurements": {
+    "representative": {
+      "key": "sha256-74e870ed98efd409_sha256-be301f14d1188e3f",
+      "vertexBytes": 24154,
+      "fragmentBytes": 25334,
+      "attributes": 3
+    },
+    "moduleIdentity": {
+      "vertexModuleKey": "fnv-78fe9864",
+      "fragmentModuleKey": "fnv-19660a17",
+      "shaderModuleCallsTotal": 66,
+      "note": "the probe declares its override-bearing modules exactly once; only the trivial/fresh-module workloads create new modules per sample"
+    },
+    "samples": 16,
+    "overrideValues": [
+      {
+        "probeChainLength": 1,
+        "probeSelector": 0
+      },
+      {
+        "probeChainLength": 2,
+        "probeSelector": 1
+      },
+      {
+        "probeChainLength": 3,
+        "probeSelector": 0
+      },
+      {
+        "probeChainLength": 4,
+        "probeSelector": 1
+      },
+      {
+        "probeChainLength": 5,
+        "probeSelector": 0
+      },
+      {
+        "probeChainLength": 6,
+        "probeSelector": 1
+      },
+      {
+        "probeChainLength": 7,
+        "probeSelector": 0
+      },
+      {
+        "probeChainLength": 8,
+        "probeSelector": 1
+      },
+      {
+        "probeChainLength": 1,
+        "probeSelector": 0
+      },
+      {
+        "probeChainLength": 2,
+        "probeSelector": 1
+      },
+      {
+        "probeChainLength": 3,
+        "probeSelector": 0
+      },
+      {
+        "probeChainLength": 4,
+        "probeSelector": 1
+      },
+      {
+        "probeChainLength": 5,
+        "probeSelector": 0
+      },
+      {
+        "probeChainLength": 6,
+        "probeSelector": 1
+      },
+      {
+        "probeChainLength": 7,
+        "probeSelector": 0
+      },
+      {
+        "probeChainLength": 8,
+        "probeSelector": 1
+      }
+    ],
+    "trivial": {
+      "count": 16,
+      "min": 8,
+      "p50": 8.600000023841858,
+      "p95": 25,
+      "max": 25,
+      "mean": 9.818750001490116,
+      "totalMs": 157.10000002384186
+    },
+    "freshModuleNewText": {
+      "count": 16,
+      "min": 71.5,
+      "p50": 73.89999997615814,
+      "p95": 78,
+      "max": 78,
+      "mean": 74.06875000149012,
+      "totalMs": 1185.1000000238419
+    },
+    "cachedModuleNewOverride": {
+      "count": 16,
+      "min": 0.19999992847442627,
+      "p50": 25.5,
+      "p95": 42.90000009536743,
+      "max": 42.90000009536743,
+      "mean": 14.1875,
+      "totalMs": 227
+    },
+    "cachedModuleSameOverride": {
+      "count": 16,
+      "min": 0.10000002384185791,
+      "p50": 0.20000004768371582,
+      "p95": 26.899999976158142,
+      "max": 26.899999976158142,
+      "mean": 1.8999999985098839,
+      "totalMs": 30.399999976158142
+    }
+  },
+  "histograms": {
+    "trivial": {
+      "count": 16,
+      "min": 8,
+      "p50": 8.600000023841858,
+      "p95": 25,
+      "max": 25,
+      "mean": 9.818750001490116,
+      "totalMs": 157.10000002384186
+    },
+    "freshModuleNewText": {
+      "count": 16,
+      "min": 71.5,
+      "p50": 73.89999997615814,
+      "p95": 78,
+      "max": 78,
+      "mean": 74.06875000149012,
+      "totalMs": 1185.1000000238419
+    },
+    "cachedModuleNewOverride": {
+      "count": 16,
+      "min": 0.19999992847442627,
+      "p50": 25.5,
+      "p95": 42.90000009536743,
+      "max": 42.90000009536743,
+      "mean": 14.1875,
+      "totalMs": 227
+    },
+    "cachedModuleSameOverride": {
+      "count": 16,
+      "min": 0.10000002384185791,
+      "p50": 0.20000004768371582,
+      "p95": 26.899999976158142,
+      "max": 26.899999976158142,
+      "mean": 1.8999999985098839,
+      "totalMs": 30.399999976158142
+    }
+  },
+  "pageNotes": [
+    "2026-09-18T20:33:29.570Z input /experiments/gates/out/g6-override-probe-input.json",
+    "2026-09-18T20:33:30.121Z loaded 3 representative module pair(s)",
+    "2026-09-18T20:33:31.814Z trivial p50=8.60ms; fresh module p50=73.90ms; cached module + new override p50=25.50ms; cached module + same override p50=0.20ms"
+  ],
+  "errors": [],
+  "evidence": [
+    {
+      "path": "experiments/gates/g6-variants/override-probe/probe.js",
+      "what": "the in-page probe (four workloads, same timing discipline as the gate driver)"
+    },
+    {
+      "path": "experiments/gates/out/g6-override-probe-input.json",
+      "what": "the exact representative module pairs handed to the page"
+    },
+    {
+      "path": "experiments/gates/out/g5-model.json",
+      "what": "the emission model the representatives are taken from"
+    }
+  ]
+}

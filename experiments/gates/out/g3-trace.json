@@ -1,0 +1,1808 @@
+{
+  "gate": "g3-trace",
+  "task": "T020",
+  "recordedAt": "2026-09-18T19:40:18.978Z",
+  "notes": "T020 录制产物：上游原版 WebGL2 globe/地形路径的**单帧**平台调用序列（bindFramebuffer/draw*/clear*/viewport/scissor/blitFramebuffer 等）。由 platform-trace.js 包装 WebGL2RenderingContext.prototype 采集，未修改上游实现、未读取上游 @private 成员。",
+  "environment": {
+    "node": "v22.20.0",
+    "browser": "153.0.8010.36",
+    "channel": "chrome",
+    "headless": true
+  },
+  "scene": {
+    "contextConstructor": "Context",
+    "webgl2": true,
+    "drawingBufferWidth": 300,
+    "drawingBufferHeight": 150,
+    "msaaSupported": true,
+    "msaaSamples": 4,
+    "logarithmicDepthBuffer": true,
+    "depthTexture": true,
+    "stencilBuffer": true,
+    "maximumSamples": 8,
+    "maximumDrawBuffers": 8,
+    "maximumColorAttachments": 8,
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+    "globeTilesLoaded": true,
+    "terrainProvider": "EllipsoidTerrainProvider",
+    "tilesLoadedAfterFrame": true
+  },
+  "frame": {
+    "warmupFrames": 15,
+    "warmup": [
+      {
+        "index": 12,
+        "tilesLoaded": false
+      },
+      {
+        "index": 13,
+        "tilesLoaded": false
+      },
+      {
+        "index": 14,
+        "tilesLoaded": true
+      }
+    ],
+    "durationMs": 3.600000023841858,
+    "operationCount": 83,
+    "tilesLoadedBeforeFrame": true
+  },
+  "summary": {
+    "operationCount": 83,
+    "drawCount": 9,
+    "clearCount": 8,
+    "blitCount": 3,
+    "bindFramebufferCount": 21,
+    "viewportCount": 8,
+    "scissorCount": 0,
+    "triangleCount": 2290,
+    "targets": [
+      "default",
+      "fb-3",
+      "fb-6",
+      "fb-4",
+      "fb-5",
+      "fb-7",
+      "fb-8"
+    ],
+    "programs": 0
+  },
+  "finalState": {
+    "sequence": 83,
+    "drawFramebuffer": {
+      "id": "default",
+      "kind": "default-framebuffer",
+      "color": [
+        "canvas"
+      ],
+      "depthStencil": "canvas",
+      "sampleCount": 1
+    },
+    "readFramebuffer": {
+      "id": "default",
+      "kind": "default-framebuffer",
+      "color": [
+        "canvas"
+      ],
+      "depthStencil": "canvas",
+      "sampleCount": 1
+    },
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "width": 300,
+      "height": 150
+    },
+    "scissorRect": null,
+    "scissorEnabled": false
+  },
+  "ops": [
+    {
+      "seq": 1,
+      "op": "trace-start",
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 2,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 3,
+      "op": "viewport",
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 150
+      },
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 4,
+      "op": "clear",
+      "mask": 17408,
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 5,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 6,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "fb-3",
+      "previousTargetId": "default",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 7,
+      "op": "clear",
+      "mask": 17408,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 8,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 9,
+      "op": "clear",
+      "mask": 16384,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 10,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 11,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "fb-6",
+      "previousTargetId": "fb-3",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)",
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-6",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 12,
+      "op": "clear",
+      "mask": 16384,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)",
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-6",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 13,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)",
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-6",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 14,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "fb-3",
+      "previousTargetId": "fb-6",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 15,
+      "op": "clear",
+      "mask": 17408,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 16,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 17,
+      "op": "clear",
+      "mask": 256,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 18,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 19,
+      "op": "clear",
+      "mask": 1024,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 20,
+      "op": "enable",
+      "capability": 2884
+    },
+    {
+      "seq": 21,
+      "op": "enable",
+      "capability": 2929
+    },
+    {
+      "seq": 22,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 23,
+      "op": "viewport",
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 150
+      },
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 24,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 25,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 1710,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 26,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 27,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 1710,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 28,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 29,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 1710,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 30,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 31,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 1710,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 32,
+      "op": "bindFramebuffer",
+      "target": "READ_FRAMEBUFFER",
+      "targetId": "fb-3",
+      "previousTargetId": "fb-3",
+      "changed": false,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 33,
+      "op": "bindFramebuffer",
+      "target": "DRAW_FRAMEBUFFER",
+      "targetId": "fb-4",
+      "previousTargetId": "fb-3",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 34,
+      "op": "blitFramebuffer",
+      "source": {
+        "id": "fb-3",
+        "kind": "framebuffer",
+        "color": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencil": "renderbuffer(rb-2)",
+        "sampleCount": 1
+      },
+      "destination": {
+        "id": "fb-4",
+        "kind": "framebuffer",
+        "color": [
+          "texture(untracked)"
+        ],
+        "depthStencil": "texture(untracked)",
+        "sampleCount": 1
+      },
+      "rect": {
+        "src": [
+          0,
+          0,
+          300,
+          150
+        ],
+        "dst": [
+          0,
+          0,
+          300,
+          150
+        ]
+      },
+      "mask": 16640,
+      "filter": 9728,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 35,
+      "op": "bindFramebuffer",
+      "target": "READ_FRAMEBUFFER",
+      "targetId": "default",
+      "previousTargetId": "fb-4",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 36,
+      "op": "bindFramebuffer",
+      "target": "DRAW_FRAMEBUFFER",
+      "targetId": "default",
+      "previousTargetId": "fb-4",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 37,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "fb-5",
+      "previousTargetId": "default",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-5",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 38,
+      "op": "disable",
+      "capability": 2884
+    },
+    {
+      "seq": 39,
+      "op": "disable",
+      "capability": 2929
+    },
+    {
+      "seq": 40,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-5",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 41,
+      "op": "viewport",
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 150
+      },
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-5",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 42,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 43,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 6,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-5",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 44,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-5",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 45,
+      "op": "viewport",
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 150
+      },
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-5",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 46,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "fb-3",
+      "previousTargetId": "fb-5",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 47,
+      "op": "clear",
+      "mask": 256,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 48,
+      "op": "enable",
+      "capability": 2884
+    },
+    {
+      "seq": 49,
+      "op": "enable",
+      "capability": 2929
+    },
+    {
+      "seq": 50,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 51,
+      "op": "viewport",
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 150
+      },
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 52,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 53,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 6,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 54,
+      "op": "bindFramebuffer",
+      "target": "READ_FRAMEBUFFER",
+      "targetId": "fb-3",
+      "previousTargetId": "fb-3",
+      "changed": false,
+      "identity": {
+        "colorTargets": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencilTarget": "renderbuffer(rb-2)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-3",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 55,
+      "op": "bindFramebuffer",
+      "target": "DRAW_FRAMEBUFFER",
+      "targetId": "fb-4",
+      "previousTargetId": "fb-3",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 56,
+      "op": "blitFramebuffer",
+      "source": {
+        "id": "fb-3",
+        "kind": "framebuffer",
+        "color": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencil": "renderbuffer(rb-2)",
+        "sampleCount": 1
+      },
+      "destination": {
+        "id": "fb-4",
+        "kind": "framebuffer",
+        "color": [
+          "texture(untracked)"
+        ],
+        "depthStencil": "texture(untracked)",
+        "sampleCount": 1
+      },
+      "rect": {
+        "src": [
+          0,
+          0,
+          300,
+          150
+        ],
+        "dst": [
+          0,
+          0,
+          300,
+          150
+        ]
+      },
+      "mask": 16640,
+      "filter": 9728,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 57,
+      "op": "bindFramebuffer",
+      "target": "READ_FRAMEBUFFER",
+      "targetId": "default",
+      "previousTargetId": "fb-4",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 58,
+      "op": "bindFramebuffer",
+      "target": "DRAW_FRAMEBUFFER",
+      "targetId": "default",
+      "previousTargetId": "fb-4",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 59,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "fb-7",
+      "previousTargetId": "default",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)",
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-7",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 60,
+      "op": "disable",
+      "capability": 2884
+    },
+    {
+      "seq": 61,
+      "op": "disable",
+      "capability": 2929
+    },
+    {
+      "seq": 62,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)",
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-7",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 63,
+      "op": "viewport",
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 150
+      },
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)",
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-7",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 64,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 65,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 6,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)",
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-7",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 66,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "fb-8",
+      "previousTargetId": "fb-7",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-8",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 67,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-8",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 68,
+      "op": "viewport",
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 150
+      },
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-8",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 69,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 70,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 6,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-8",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 71,
+      "op": "bindFramebuffer",
+      "target": "READ_FRAMEBUFFER",
+      "targetId": "fb-3",
+      "previousTargetId": "fb-8",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": null,
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-8",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 72,
+      "op": "bindFramebuffer",
+      "target": "DRAW_FRAMEBUFFER",
+      "targetId": "fb-4",
+      "previousTargetId": "fb-8",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 73,
+      "op": "blitFramebuffer",
+      "source": {
+        "id": "fb-3",
+        "kind": "framebuffer",
+        "color": [
+          "renderbuffer(rb-1)"
+        ],
+        "depthStencil": "renderbuffer(rb-2)",
+        "sampleCount": 1
+      },
+      "destination": {
+        "id": "fb-4",
+        "kind": "framebuffer",
+        "color": [
+          "texture(untracked)"
+        ],
+        "depthStencil": "texture(untracked)",
+        "sampleCount": 1
+      },
+      "rect": {
+        "src": [
+          0,
+          0,
+          300,
+          150
+        ],
+        "dst": [
+          0,
+          0,
+          300,
+          150
+        ]
+      },
+      "mask": 16640,
+      "filter": 9728,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 74,
+      "op": "bindFramebuffer",
+      "target": "READ_FRAMEBUFFER",
+      "targetId": "default",
+      "previousTargetId": "fb-4",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "texture(untracked)"
+        ],
+        "depthStencilTarget": "texture(untracked)",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "fb-4",
+        "targetKind": "framebuffer"
+      }
+    },
+    {
+      "seq": 75,
+      "op": "bindFramebuffer",
+      "target": "DRAW_FRAMEBUFFER",
+      "targetId": "default",
+      "previousTargetId": "fb-4",
+      "changed": true,
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 76,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "default",
+      "previousTargetId": "default",
+      "changed": false,
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 77,
+      "op": "disable",
+      "capability": "SCISSOR_TEST",
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 78,
+      "op": "viewport",
+      "viewport": {
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 150
+      },
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 79,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 80,
+      "op": "drawElements",
+      "kind": "draw",
+      "mode": 4,
+      "count": 6,
+      "type": 5123,
+      "offset": 0,
+      "instanceCount": 1,
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 81,
+      "op": "useProgram",
+      "program": null
+    },
+    {
+      "seq": 82,
+      "op": "bindFramebuffer",
+      "target": "FRAMEBUFFER",
+      "targetId": "default",
+      "previousTargetId": "default",
+      "changed": false,
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    },
+    {
+      "seq": 83,
+      "op": "trace-stop",
+      "identity": {
+        "colorTargets": [
+          "canvas"
+        ],
+        "depthStencilTarget": "canvas",
+        "sampleCount": 1,
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 150
+        },
+        "scissorRect": null,
+        "targetId": "default",
+        "targetKind": "default-framebuffer"
+      }
+    }
+  ]
+}

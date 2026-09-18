@@ -1,0 +1,1958 @@
+{
+  "gate": "g4",
+  "task": "T018",
+  "verdict": "pass",
+  "recordedAt": "2026-09-18T20:39:32.940Z",
+  "notes": "G-4 通过：地形着色器 uniform 布局由**拼装后的真实 GLSL**（上游 ShaderSource + Globe.js:679-687 的真实源与 GlobeSurfaceShaderSet:278-377 的真实 define）实际引用的名字集合生成，覆盖 MVP define 矩阵 13 个变体的并集（58 个 struct 成员 + 5 个 sampler 绑定，默认配置 52 个成员）；含 mat3 列 16 字节填充（size 48）、vec3→16 字节对齐、数组元素 16 字节 stride、bool→u32（uniform 地址空间不允许 bool），`size 9` 的 czm_sphericalHarmonicCoefficients 用在**真实**上游着色器（glTF image-based lighting）上单独验证（地形路径不引用它）：array<vec3<f32>,9> stride=16 → 144 字节；生成布局与**独立重新解析 WGSL** 的结果逐字段一致；真机像素断言：按 CPU 布局表写入已知值 → 回读逐 slot 相等，且**逐字段扰动**只改变该字段对应的 slot（证明每个 uniform 都真正生效）。边界：本门禁不生成 bind group 之外的东西，也不主张着色器发射（G-5）；sampler 数组按元素展开为独立 binding（固定长度纹理数组需 binding_array，未作为核心保证）。",
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 x64",
+    "engine": {
+      "packageName": "@cesium/engine",
+      "version": "26.3.0",
+      "lock": "upstream/engine-26.3.0.lock.json"
+    },
+    "browser": {
+      "channel": "chrome",
+      "version": "153.0.8010.36",
+      "headless": true,
+      "launchArgs": [],
+      "note": "zero launch flags; hardware WebGPU adapter"
+    },
+    "adapter": {
+      "vendor": "nvidia",
+      "architecture": "lovelace",
+      "device": "",
+      "description": ""
+    },
+    "preferredFormat": "bgra8unorm"
+  },
+  "checks": [
+    {
+      "id": "upstream-baseline-version",
+      "ok": true,
+      "detail": "installed @cesium/engine 26.3.0 (same baseline as upstream/engine-26.3.0.lock.json)",
+      "phase": "generation"
+    },
+    {
+      "id": "real-glsl-assembled-by-upstream-assembler",
+      "ok": true,
+      "detail": "all 13 variants were assembled by the upstream ShaderSource (VS sources = AtmosphereCommon+GroundAtmosphere+GlobeVS, FS = …+GlobeFS, defines=[] as in Globe.js:679-687); sizes: default-1-texture=19584/41118B, texture-units-0=19554/41065B, texture-units-2=19584/41118B, texture-units-3=19584/41118B, no-quantization=19526/41037B, ocean-waves=19584/41143B, vertex-lighting=19585/41096B, daynight-shading=19586/41097B, no-fog-no-atmosphere=19516/41027B, per-fragment-atmosphere=19581/41092B, apply-alpha=19516/41095B, geodetic-normals-exaggeration=19570/41081B, scene2d=19523/41034B",
+      "phase": "generation"
+    },
+    {
+      "id": "uniform-set-comes-from-preprocessed-glsl",
+      "ok": true,
+      "detail": "each variant's uniform set is computed after evaluating its #ifdef/#if/#else conditionals: default-1-texture=54, texture-units-0=47, texture-units-2=54, texture-units-3=54, no-quantization=49, ocean-waves=55, vertex-lighting=53, daynight-shading=51, no-fog-no-atmosphere=48, per-fragment-atmosphere=51, apply-alpha=51, geodetic-normals-exaggeration=49, scene2d=51 (declared but unreferenced uniforms are excluded and recorded: 0 in the default config)",
+      "phase": "generation"
+    },
+    {
+      "id": "no-conflicting-declarations-across-variants",
+      "ok": true,
+      "detail": "type conflicts across variants: []; array sizes vary with TEXTURE_UNITS by design (recorded per variant in sizesByVariant)",
+      "phase": "generation"
+    },
+    {
+      "id": "default-config-uniform-table",
+      "ok": true,
+      "detail": "default MVP config: 52 numeric member(s) + 2 sampler binding(s), structSize=1120 bytes, align=16; every byteOffset is a multiple of its member alignment",
+      "phase": "generation"
+    },
+    {
+      "id": "union-layout-covers-every-reachable-variant",
+      "ok": true,
+      "detail": "union over 13 variants = 61 uniform(s) → 58 struct member(s) + 5 sampler binding(s); every array is sized to the maximum over the matrix (e.g. u_dayTextureAlpha[2], u_dayTextureBrightness[2], u_dayTextureContrast[2], u_dayTextures[3], u_dayTextureTexCoordsRectangle[3], u_dayTextureTranslationAndScale[3], u_dayTextureUseWebMercatorT[3])",
+      "phase": "generation"
+    },
+    {
+      "id": "layout-matches-independent-wgsl-recomputation",
+      "ok": true,
+      "detail": "independent parse of the generated WGSL (struct members + WGSL alignment rules recomputed from scratch) agrees with the CPU table: default problems=[], union problems=[]",
+      "phase": "generation"
+    },
+    {
+      "id": "mat3-column-padding-and-vec3-alignment",
+      "ok": true,
+      "detail": "mat3 (czm_normal3D size=48 columnStride=16) — 3 columns × 16-byte padding; 11 vec3 member(s) each align=16/size=12",
+      "phase": "generation"
+    },
+    {
+      "id": "array-element-stride-16",
+      "ok": true,
+      "detail": "every array member is 16-byte strided and 16-byte aligned, as the uniform address space requires (StrideOf(array<T,N>) = 16 × k'; RequiredAlignOf(array<T,N>, uniform) = roundUp(16, AlignOf(T))): u_dayTextureAlpha[2] array<vec4<f32>, 2> stride=16@752, u_dayTextureBrightness[2] array<vec4<f32>, 2> stride=16@784, u_dayTextureContrast[2] array<vec4<f32>, 2> stride=16@816, u_dayTextureTexCoordsRectangle[3] array<vec4<f32>, 3> stride=16@848, u_dayTextureTranslationAndScale[3] array<vec4<f32>, 3> stride=16@896, u_dayTextureUseWebMercatorT[3] array<vec4<u32>, 3> stride=16@944",
+      "phase": "generation"
+    },
+    {
+      "id": "packed-arrays-widened-to-a-conforming-element",
+      "ok": true,
+      "detail": "DECLARED LAYOUT DEVIATION (the conforming one): u_dayTextureAlpha[2] GLSL float → array<vec4<f32>, 2> stride=16, u_dayTextureBrightness[2] GLSL float → array<vec4<f32>, 2> stride=16, u_dayTextureContrast[2] GLSL float → array<vec4<f32>, 2> stride=16, u_dayTextureUseWebMercatorT[3] GLSL bool → array<vec4<u32>, 3> stride=16 — WGSL derives an array's element stride from its element type and has no stride attribute, so a packed element (stride 4/8) cannot satisfy the uniform address space's 16-byte requirement; the specification's own remedy is to change the element type. The widening is this generator's choice, it is declared here, the CPU writer writes only the meaningful lane(s) of each element, and the real-device assertion (run-gpu.mjs) re-derives every slot from the same table. The alternative — the compact 4-byte layout the first G-4 run used — is only valid where the uniform_buffer_standard_layout language extension is announced, i.e. it makes correctness depend on the implementation being lenient (plan's R-1 row).",
+      "phase": "generation",
+      "conservativeLayout": true
+    },
+    {
+      "id": "spherical-harmonic-size-9-handled",
+      "ok": true,
+      "detail": "assembled the real upstream shader that references it (image-based-lighting): vec3[9] czm_sphericalHarmonicCoefficients → array<vec3<f32>, 9> stride=16 byteSize=144 (9 vec3 elements × 16-byte stride = 144 bytes)",
+      "phase": "generation"
+    },
+    {
+      "id": "samplers-excluded-from-uniform-struct",
+      "ok": true,
+      "detail": "sampler uniforms → bindings: u_dayTextures_0 (sampler2D → texture_2d<f32> @binding(1) + sampler @binding(2)), u_dayTextures_1 (sampler2D → texture_2d<f32> @binding(3) + sampler @binding(4)), u_dayTextures_2 (sampler2D → texture_2d<f32> @binding(5) + sampler @binding(6)), u_oceanNormalMap (sampler2D → texture_2d<f32> @binding(7) + sampler @binding(8)), u_waterMask (sampler2D → texture_2d<f32> @binding(9) + sampler @binding(10))",
+      "phase": "generation"
+    },
+    {
+      "id": "bool-uniform-mapped-to-u32",
+      "ok": true,
+      "detail": "GLSL bool/bvec members: bool u_dayTextureUseWebMercatorT → array<vec4<u32>, 3> (bool is not host-shareable in the WGSL uniform address space)",
+      "phase": "generation"
+    },
+    {
+      "id": "gpu-probe-produced-report",
+      "ok": true,
+      "detail": "probe finished at 2026-09-18T20:39:31.191Z; probe-level errors=0",
+      "phase": "gpu"
+    },
+    {
+      "id": "gpu-adapter-recorded",
+      "ok": true,
+      "detail": "adapter.info={\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"device\":\"\",\"description\":\"\"}, preferredFormat=bgra8unorm, device limits: {\"maxUniformBufferBindingSize\":65536,\"maxBindingsPerBindGroup\":1000,\"maxColorAttachments\":8}",
+      "phase": "gpu"
+    },
+    {
+      "id": "gpu-generated-wgsl-compiles",
+      "ok": true,
+      "detail": "shader module compilation: 0 error(s), 0 warning(s) ; pipeline validation error=null; bind group entries=11",
+      "phase": "gpu"
+    },
+    {
+      "id": "gpu-baseline-matches-cpu-layout",
+      "ok": true,
+      "detail": "CPU layout table → GPU readback: 0 mismatching component(s) out of 384  (every slot is one uniform field/element/column; a wrong byteOffset, arrayStride, columnStride or padding would show up here)",
+      "phase": "gpu"
+    },
+    {
+      "id": "gpu-control-reports-no-change",
+      "ok": true,
+      "detail": "writing the SAME byte plan twice changed 0 slot(s) (must be 0 — otherwise the comparison would report differences that are not caused by the layout)",
+      "phase": "gpu"
+    },
+    {
+      "id": "gpu-every-uniform-perturbation-hits-its-slots",
+      "ok": true,
+      "detail": "58/58 member perturbation(s) changed exactly their own slots; failures: []",
+      "phase": "gpu"
+    },
+    {
+      "id": "gpu-no-uncaught-page-errors",
+      "ok": true,
+      "detail": "0 uncaught page error(s); console errors=0",
+      "phase": "gpu"
+    },
+    {
+      "id": "gpu-negative-control-detects-shifted-layout",
+      "ok": true,
+      "detail": "negative control (member \"czm_currentFrustum\" written 4 bytes late): verdict=pass, mismatching component(s)=2, mismatching slots=[0] vs the shifted member's slots=[0] — a device assertion that cannot fail proves nothing",
+      "phase": "gpu"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "experiments/gates/out/g4-layout.json",
+      "what": "generated layouts: define matrix, per-variant referenced uniforms, default-config per-field table (byteOffset/byteSize/arrayStride/columnStride), union layout, spherical-harmonics case"
+    },
+    {
+      "path": "experiments/gates/out/g4-glsl-variants.json",
+      "what": "per-variant uniform sets extracted from the real assembled GLSL (declared vs referenced)"
+    },
+    {
+      "path": "experiments/gates/out/g4-uniform.wgsl",
+      "what": "the generated WGSL struct + bindings + the verification program compiled on the real device"
+    },
+    {
+      "path": "experiments/gates/out/g4-slots.json",
+      "what": "slot plan + CPU-expected RGBA values used by the pixel assertion"
+    },
+    {
+      "path": "experiments/gates/out/g4-gpu.json",
+      "what": "real-device assertion report (pipeline compile diagnostics, per-slot readback comparison, per-field perturbation matrix)"
+    },
+    {
+      "path": "experiments/gates/out/g4-control-shift.json",
+      "what": "negative control: a deliberately shifted byte offset MUST be detected by the same assertions (and localised to the affected field)"
+    },
+    {
+      "path": "experiments/gates/out/g4-run.log",
+      "what": "runner transcript of this execution"
+    },
+    {
+      "path": "experiments/gates/g4-uniform-layout/assemble-glsl.mjs",
+      "what": "real GLSL assembly through the upstream ShaderSource + the MVP define matrix"
+    },
+    {
+      "path": "experiments/gates/g4-uniform-layout/uniform-layout.mjs",
+      "what": "the generator under test (WGSL struct + CPU layout table + slot plan)"
+    },
+    {
+      "path": "experiments/gates/g4-uniform-layout/layout.test.mjs",
+      "what": "T019 (a): unit cross-check of layout ↔ WGSL"
+    },
+    {
+      "path": "experiments/gates/g4-uniform-layout/run-gpu.mjs",
+      "what": "T019 (b): real-device pixel assertion (identity-style writes + per-field perturbation + the shifted-offset negative control)"
+    },
+    {
+      "path": "experiments/gates/g4-uniform-layout/gpu-probe.js",
+      "what": "in-page WebGPU program: compiles the generated WGSL, writes the struct through the CPU table, reads back"
+    },
+    {
+      "path": "docs/gate-g4-conclusion.md",
+      "what": "human-readable conclusion (basis, evidence paths, verdict, consequences)"
+    }
+  ],
+  "gateCriteria": {
+    "source": "plan.md「实现前的验证门」G-4 行；tasks.md T018/T019",
+    "requirements": [
+      "从拼装后的真实 GLSL 实际引用的 uniform 名集合生成 WGSL struct 与 CPU 侧布局表",
+      "含 mat3 列填充、数组元素 16 字节对齐、vec3→16 字节对齐、size 9 的 czm_sphericalHarmonicCoefficients",
+      "对地形着色器全部 uniform 产出逐字段偏移表（byteOffset/byteSize/arrayStride）",
+      "(a) 单元交叉校验「生成布局 ↔ WGSL 结构逐字段一致」；(b) 真机断言地形全部 uniform 生效"
+    ],
+    "requiredVerdict": "pass",
+    "failureAction": "退化为「每标量一个 vec4 槽」的保守布局 → STOP 上报入口 Agent 修订 plan"
+  },
+  "measurements": {
+    "defineMatrix": [
+      {
+        "id": "default-1-texture",
+        "config": "MVP terrain default: 3D, geographic, BITS12-quantized heightmap tile, 1 texture unit, fog + ground atmosphere on, reflective ocean on",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "HAS_WATER_MASK",
+          "SHOW_REFLECTIVE_OCEAN"
+        ]
+      },
+      {
+        "id": "texture-units-0",
+        "config": "no imagery layer at all (TEXTURE_UNITS 0)",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 0",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE"
+        ]
+      },
+      {
+        "id": "texture-units-2",
+        "config": "two imagery layers",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 2",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "HAS_WATER_MASK",
+          "SHOW_REFLECTIVE_OCEAN"
+        ]
+      },
+      {
+        "id": "texture-units-3",
+        "config": "three imagery layers",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 3",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "HAS_WATER_MASK",
+          "SHOW_REFLECTIVE_OCEAN"
+        ]
+      },
+      {
+        "id": "no-quantization",
+        "config": "non-quantized (float) terrain encoding, 1 texture unit",
+        "defines": [
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE"
+        ]
+      },
+      {
+        "id": "ocean-waves",
+        "config": "ocean waves on (HAS_WATER_MASK + SHOW_OCEAN_WAVES)",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "HAS_WATER_MASK",
+          "SHOW_REFLECTIVE_OCEAN",
+          "SHOW_OCEAN_WAVES"
+        ]
+      },
+      {
+        "id": "vertex-lighting",
+        "config": "globe.enableLighting with vertex normals",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "ENABLE_VERTEX_LIGHTING"
+        ]
+      },
+      {
+        "id": "daynight-shading",
+        "config": "globe.enableLighting without vertex normals",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "ENABLE_DAYNIGHT_SHADING"
+        ]
+      },
+      {
+        "id": "no-fog-no-atmosphere",
+        "config": "fog and ground atmosphere disabled",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE"
+        ]
+      },
+      {
+        "id": "per-fragment-atmosphere",
+        "config": "per-fragment ground atmosphere",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "GROUND_ATMOSPHERE",
+          "PER_FRAGMENT_GROUND_ATMOSPHERE"
+        ]
+      },
+      {
+        "id": "apply-alpha",
+        "config": "imagery layer alpha blending",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 2",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "APPLY_ALPHA",
+          "APPLY_BRIGHTNESS",
+          "APPLY_CONTRAST"
+        ]
+      },
+      {
+        "id": "geodetic-normals-exaggeration",
+        "config": "geodetic surface normals + terrain exaggeration",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "GEODETIC_SURFACE_NORMALS",
+          "EXAGGERATION"
+        ]
+      },
+      {
+        "id": "scene2d",
+        "config": "2D / Columbus-view projection (mercator y from the layer)",
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE"
+        ]
+      }
+    ],
+    "excludedDefines": [
+      {
+        "define": "APPLY_MATERIAL",
+        "why": "MVP globe has no material (Globe.js:667-676)",
+        "source": "Globe.js:672"
+      },
+      {
+        "define": "HAS_VECTOR_LAYER",
+        "why": "vector tiles are out of scope (tasks.md Out of Scope)",
+        "source": "GlobeSurfaceShaderSet.js:396"
+      },
+      {
+        "define": "ENABLE_CLIPPING_PLANES",
+        "why": "clipping planes are out of scope",
+        "source": "GlobeSurfaceShaderSet.js:368"
+      },
+      {
+        "define": "ENABLE_CLIPPING_POLYGONS",
+        "why": "clipping polygons are out of scope",
+        "source": "GlobeSurfaceShaderSet.js:372"
+      },
+      {
+        "define": "APPLY_IMAGERY_CUTOUT",
+        "why": "MVP has no imagery layers at all",
+        "source": "GlobeSurfaceShaderSet.js:280"
+      },
+      {
+        "define": "HIGHLIGHT_FILL_TILE",
+        "why": "debug fill-tile path",
+        "source": "GlobeSurfaceShaderSet.js:384"
+      },
+      {
+        "define": "COLOR_CORRECT",
+        "why": "imagery colour correction (no imagery in MVP)",
+        "source": "GlobeSurfaceShaderSet.js:380"
+      },
+      {
+        "define": "DYNAMIC_ATMOSPHERE_LIGHTING",
+        "why": "atmosphere lighting effects are out of scope",
+        "source": "GlobeSurfaceShaderSet.js:338"
+      },
+      {
+        "define": "UNDERGROUND_COLOR",
+        "why": "underground colour is out of scope",
+        "source": "GlobeSurfaceShaderSet.js:320"
+      },
+      {
+        "define": "TRANSLUCENT",
+        "why": "translucency is out of scope for the MVP terrain slice",
+        "source": "GlobeSurfaceShaderSet.js:324"
+      }
+    ],
+    "automaticUniformCount": 93,
+    "variants": [
+      {
+        "id": "default-1-texture",
+        "referencedCount": 54,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "HAS_WATER_MASK",
+          "SHOW_REFLECTIVE_OCEAN"
+        ]
+      },
+      {
+        "id": "texture-units-0",
+        "referencedCount": 47,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 0",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE"
+        ]
+      },
+      {
+        "id": "texture-units-2",
+        "referencedCount": 54,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 2",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "HAS_WATER_MASK",
+          "SHOW_REFLECTIVE_OCEAN"
+        ]
+      },
+      {
+        "id": "texture-units-3",
+        "referencedCount": 54,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 3",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "HAS_WATER_MASK",
+          "SHOW_REFLECTIVE_OCEAN"
+        ]
+      },
+      {
+        "id": "no-quantization",
+        "referencedCount": 49,
+        "defines": [
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE"
+        ]
+      },
+      {
+        "id": "ocean-waves",
+        "referencedCount": 55,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "HAS_WATER_MASK",
+          "SHOW_REFLECTIVE_OCEAN",
+          "SHOW_OCEAN_WAVES"
+        ]
+      },
+      {
+        "id": "vertex-lighting",
+        "referencedCount": 53,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "ENABLE_VERTEX_LIGHTING"
+        ]
+      },
+      {
+        "id": "daynight-shading",
+        "referencedCount": 51,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE",
+          "ENABLE_DAYNIGHT_SHADING"
+        ]
+      },
+      {
+        "id": "no-fog-no-atmosphere",
+        "referencedCount": 48,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE"
+        ]
+      },
+      {
+        "id": "per-fragment-atmosphere",
+        "referencedCount": 51,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "GROUND_ATMOSPHERE",
+          "PER_FRAGMENT_GROUND_ATMOSPHERE"
+        ]
+      },
+      {
+        "id": "apply-alpha",
+        "referencedCount": 51,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 2",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "APPLY_ALPHA",
+          "APPLY_BRIGHTNESS",
+          "APPLY_CONTRAST"
+        ]
+      },
+      {
+        "id": "geodetic-normals-exaggeration",
+        "referencedCount": 49,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "TILE_LIMIT_RECTANGLE",
+          "GEODETIC_SURFACE_NORMALS",
+          "EXAGGERATION"
+        ]
+      },
+      {
+        "id": "scene2d",
+        "referencedCount": 51,
+        "defines": [
+          "QUANTIZATION_BITS12",
+          "TEXTURE_UNITS 1",
+          "TILE_LIMIT_RECTANGLE",
+          "FOG",
+          "GROUND_ATMOSPHERE"
+        ]
+      }
+    ],
+    "unionCount": 61,
+    "defaultConfig": {
+      "memberCount": 52,
+      "samplerCount": 2,
+      "structSize": 1120,
+      "sampleFields": "czm_modelView3D@0+64, czm_lightDirectionWC@64+12, czm_sunDirectionWC@80+12, czm_normal3D@96+48, czm_ellipsoidRadii@144+12, czm_projection@160+64"
+    },
+    "unionConfig": {
+      "memberCount": 58,
+      "samplerCount": 5,
+      "structSize": 1344,
+      "padding": [
+        {
+          "after": "czm_currentFrustum",
+          "before": "czm_ellipsoidInverseRadii",
+          "bytes": 8
+        },
+        {
+          "after": "czm_ellipsoidInverseRadii",
+          "before": "czm_ellipsoidRadii",
+          "bytes": 4
+        },
+        {
+          "after": "czm_frameNumber",
+          "before": "czm_frustumPlanes",
+          "bytes": 4
+        },
+        {
+          "after": "czm_gamma",
+          "before": "czm_inverseModelView",
+          "bytes": 12
+        },
+        {
+          "after": "czm_lightColor",
+          "before": "czm_lightDirectionEC",
+          "bytes": 4
+        },
+        {
+          "after": "czm_lightDirectionEC",
+          "before": "czm_lightDirectionWC",
+          "bytes": 4
+        },
+        {
+          "after": "czm_lightDirectionWC",
+          "before": "czm_modelView",
+          "bytes": 4
+        },
+        {
+          "after": "czm_morphTime",
+          "before": "czm_normal3D",
+          "bytes": 12
+        },
+        {
+          "after": "czm_pixelRatio",
+          "before": "czm_projection",
+          "bytes": 8
+        },
+        {
+          "after": "czm_splitPosition",
+          "before": "czm_sunDirectionWC",
+          "bytes": 8
+        },
+        {
+          "after": "czm_sunDirectionWC",
+          "before": "czm_view",
+          "bytes": 4
+        },
+        {
+          "after": "czm_viewerPositionWC",
+          "before": "czm_viewport",
+          "bytes": 4
+        },
+        {
+          "after": "u_atmosphereMieAnisotropy",
+          "before": "u_atmosphereMieCoefficient",
+          "bytes": 8
+        },
+        {
+          "after": "u_center3D",
+          "before": "u_dayTextureAlpha",
+          "bytes": 4
+        },
+        {
+          "after": "u_lambertDiffuseMultiplier",
+          "before": "u_lightingFadeDistance",
+          "bytes": 4
+        },
+        {
+          "after": "u_minimumBrightness",
+          "before": "u_minMaxHeight",
+          "bytes": 4
+        },
+        {
+          "after": "u_nightFadeDistance",
+          "before": "u_radiiAndDynamicAtmosphereColor",
+          "bytes": 8
+        },
+        {
+          "after": "u_radiiAndDynamicAtmosphereColor",
+          "before": "u_scaleAndBias",
+          "bytes": 4
+        },
+        {
+          "after": "u_vertexShadowDarkness",
+          "before": "u_verticalExaggerationAndRelativeHeight",
+          "bytes": 4
+        },
+        {
+          "after": "u_zoomedOutOceanSpecularIntensity",
+          "before": "<struct end>",
+          "bytes": 12
+        }
+      ],
+      "bindingCount": 11
+    },
+    "crossCheck": {
+      "default": [],
+      "union": [],
+      "independentStructSize": 1344
+    },
+    "sphericalHarmonics": {
+      "uniforms": [
+        {
+          "name": "czm_sphericalHarmonicCoefficients",
+          "glslType": "vec3",
+          "size": 9
+        }
+      ],
+      "layout": [
+        {
+          "name": "czm_sphericalHarmonicCoefficients",
+          "glslType": "vec3",
+          "wgslType": "array<vec3<f32>, 9>",
+          "elementWgslType": "vec3<f32>",
+          "paddedElement": false,
+          "kind": "vector",
+          "scalar": "f32",
+          "components": 3,
+          "columns": 1,
+          "length": 9,
+          "arrayStride": 16,
+          "columnStride": null,
+          "align": 16,
+          "byteOffset": 0,
+          "byteSize": 144,
+          "scalarCount": 27,
+          "scalarOffsets": [
+            0,
+            4,
+            8,
+            16,
+            20,
+            24,
+            32,
+            36,
+            40,
+            48,
+            52,
+            56,
+            64,
+            68,
+            72,
+            80,
+            84,
+            88,
+            96,
+            100,
+            104,
+            112,
+            116,
+            120,
+            128,
+            132,
+            136
+          ]
+        }
+      ]
+    },
+    "defaultFieldTable": [
+      {
+        "name": "czm_modelView3D",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 0,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "czm_lightDirectionWC",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 64,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_sunDirectionWC",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 80,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_normal3D",
+        "glslType": "mat3",
+        "wgslType": "mat3x3<f32>",
+        "byteOffset": 96,
+        "byteSize": 48,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "czm_ellipsoidRadii",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 144,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_projection",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 160,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "czm_modelView",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 224,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "czm_morphTime",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 288,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_viewerPositionWC",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 304,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_radiiAndDynamicAtmosphereColor",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 320,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_atmosphereLightIntensity",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 332,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_atmosphereRayleighScaleHeight",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 336,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_atmosphereMieScaleHeight",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 340,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_atmosphereMieAnisotropy",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 344,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_atmosphereRayleighCoefficient",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 352,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_atmosphereMieCoefficient",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 368,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_center3D",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 384,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_modifiedModelView",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 400,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "u_modifiedModelViewProjection",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 464,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "u_tileRectangle",
+        "glslType": "vec4",
+        "wgslType": "vec4<f32>",
+        "byteOffset": 528,
+        "byteSize": 16,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_southAndNorthLatitude",
+        "glslType": "vec2",
+        "wgslType": "vec2<f32>",
+        "byteOffset": 544,
+        "byteSize": 8,
+        "align": 8,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_southMercatorYAndOneOverHeight",
+        "glslType": "vec2",
+        "wgslType": "vec2<f32>",
+        "byteOffset": 552,
+        "byteSize": 8,
+        "align": 8,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_minMaxHeight",
+        "glslType": "vec2",
+        "wgslType": "vec2<f32>",
+        "byteOffset": 560,
+        "byteSize": 8,
+        "align": 8,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_scaleAndBias",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 576,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "czm_fogDensity",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 640,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_gamma",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 644,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_inverseModelView",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 656,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "czm_pixelRatio",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 720,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_currentFrustum",
+        "glslType": "vec2",
+        "wgslType": "vec2<f32>",
+        "byteOffset": 728,
+        "byteSize": 8,
+        "align": 8,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_orthographicIn3D",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 736,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_sceneMode",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 740,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_frustumPlanes",
+        "glslType": "vec4",
+        "wgslType": "vec4<f32>",
+        "byteOffset": 752,
+        "byteSize": 16,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_viewport",
+        "glslType": "vec4",
+        "wgslType": "vec4<f32>",
+        "byteOffset": 768,
+        "byteSize": 16,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_frameNumber",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 784,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_eyeHeight",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 788,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_fogVisualDensityScalar",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 792,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_lightColor",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 800,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_lightDirectionEC",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 816,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_inverseView",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 832,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "czm_ellipsoidInverseRadii",
+        "glslType": "vec3",
+        "wgslType": "vec3<f32>",
+        "byteOffset": 896,
+        "byteSize": 12,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "czm_view",
+        "glslType": "mat4",
+        "wgslType": "mat4x4<f32>",
+        "byteOffset": 912,
+        "byteSize": 64,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": 16,
+        "length": 1
+      },
+      {
+        "name": "czm_splitPosition",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 976,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_initialColor",
+        "glslType": "vec4",
+        "wgslType": "vec4<f32>",
+        "byteOffset": 992,
+        "byteSize": 16,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_dayTextureTranslationAndScale",
+        "glslType": "vec4",
+        "wgslType": "vec4<f32>",
+        "byteOffset": 1008,
+        "byteSize": 16,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_dayTextureUseWebMercatorT",
+        "glslType": "bool",
+        "wgslType": "u32",
+        "byteOffset": 1024,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_dayTextureTexCoordsRectangle",
+        "glslType": "vec4",
+        "wgslType": "vec4<f32>",
+        "byteOffset": 1040,
+        "byteSize": 16,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_waterMaskTranslationAndScale",
+        "glslType": "vec4",
+        "wgslType": "vec4<f32>",
+        "byteOffset": 1056,
+        "byteSize": 16,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_zoomedOutOceanSpecularIntensity",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 1072,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_lightingFadeDistance",
+        "glslType": "vec2",
+        "wgslType": "vec2<f32>",
+        "byteOffset": 1080,
+        "byteSize": 8,
+        "align": 8,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_cartographicLimitRectangle",
+        "glslType": "vec4",
+        "wgslType": "vec4<f32>",
+        "byteOffset": 1088,
+        "byteSize": 16,
+        "align": 16,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_nightFadeDistance",
+        "glslType": "vec2",
+        "wgslType": "vec2<f32>",
+        "byteOffset": 1104,
+        "byteSize": 8,
+        "align": 8,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      },
+      {
+        "name": "u_minimumBrightness",
+        "glslType": "float",
+        "wgslType": "f32",
+        "byteOffset": 1112,
+        "byteSize": 4,
+        "align": 4,
+        "arrayStride": null,
+        "columnStride": null,
+        "length": 1
+      }
+    ],
+    "samplers": [
+      {
+        "name": "u_dayTextures_0",
+        "glslName": "u_dayTextures",
+        "element": 0,
+        "glslType": "sampler2D",
+        "textureType": "texture_2d<f32>",
+        "textureBinding": 1,
+        "samplerBinding": 2
+      },
+      {
+        "name": "u_dayTextures_1",
+        "glslName": "u_dayTextures",
+        "element": 1,
+        "glslType": "sampler2D",
+        "textureType": "texture_2d<f32>",
+        "textureBinding": 3,
+        "samplerBinding": 4
+      },
+      {
+        "name": "u_dayTextures_2",
+        "glslName": "u_dayTextures",
+        "element": 2,
+        "glslType": "sampler2D",
+        "textureType": "texture_2d<f32>",
+        "textureBinding": 5,
+        "samplerBinding": 6
+      },
+      {
+        "name": "u_oceanNormalMap",
+        "glslName": "u_oceanNormalMap",
+        "element": 0,
+        "glslType": "sampler2D",
+        "textureType": "texture_2d<f32>",
+        "textureBinding": 7,
+        "samplerBinding": 8
+      },
+      {
+        "name": "u_waterMask",
+        "glslName": "u_waterMask",
+        "element": 0,
+        "glslType": "sampler2D",
+        "textureType": "texture_2d<f32>",
+        "textureBinding": 9,
+        "samplerBinding": 10
+      }
+    ],
+    "gpu": {
+      "inputArtifact": "experiments/gates/out/g4-gpu-input.json",
+      "structName": "TerrainUniforms",
+      "structSize": 1344,
+      "memberCount": 58,
+      "samplerBindingCount": 5,
+      "slotCount": 96,
+      "perturbationCount": 58,
+      "compilation": {
+        "messages": [],
+        "errors": 0,
+        "warnings": 0
+      },
+      "pipeline": {
+        "bindGroupEntryCount": 11,
+        "declaredBindingCount": 11,
+        "samplerBindings": 5,
+        "structSize": 1344,
+        "bufferBytes": 1360,
+        "slotCount": 96,
+        "targetFormat": "rgba8unorm",
+        "validationError": null
+      },
+      "probeErrors": [],
+      "baseline": {
+        "mismatchCount": 0,
+        "mismatches": []
+      },
+      "control": {
+        "changedSlots": [],
+        "note": "same plan written twice: the comparison MUST report zero changed slots"
+      },
+      "perturbations": [
+        {
+          "member": "czm_currentFrustum",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_ellipsoidInverseRadii",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_ellipsoidRadii",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_eyeHeight",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_fogDensity",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_fogVisualDensityScalar",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_frameNumber",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_frustumPlanes",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_gamma",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_inverseModelView",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_inverseView",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_lightColor",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_lightDirectionEC",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_lightDirectionWC",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_modelView",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_modelView3D",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_morphTime",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_normal3D",
+          "expected": 3,
+          "changed": 3,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_orthographicIn3D",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_pixelRatio",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_projection",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_sceneMode",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_splitPosition",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_sunDirectionWC",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_view",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_viewerPositionWC",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "czm_viewport",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_atmosphereLightIntensity",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_atmosphereMieAnisotropy",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_atmosphereMieCoefficient",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_atmosphereMieScaleHeight",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_atmosphereRayleighCoefficient",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_atmosphereRayleighScaleHeight",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_cartographicLimitRectangle",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_center3D",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_dayTextureAlpha",
+          "expected": 2,
+          "changed": 2,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_dayTextureBrightness",
+          "expected": 2,
+          "changed": 2,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_dayTextureContrast",
+          "expected": 2,
+          "changed": 2,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_dayTextureTexCoordsRectangle",
+          "expected": 3,
+          "changed": 3,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_dayTextureTranslationAndScale",
+          "expected": 3,
+          "changed": 3,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_dayTextureUseWebMercatorT",
+          "expected": 3,
+          "changed": 3,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_initialColor",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_lambertDiffuseMultiplier",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_lightingFadeDistance",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_minimumBrightness",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_minMaxHeight",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_modifiedModelView",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_modifiedModelViewProjection",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_nightFadeDistance",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_radiiAndDynamicAtmosphereColor",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_scaleAndBias",
+          "expected": 4,
+          "changed": 4,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_southAndNorthLatitude",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_southMercatorYAndOneOverHeight",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_tileRectangle",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_vertexShadowDarkness",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_verticalExaggerationAndRelativeHeight",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_waterMaskTranslationAndScale",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        },
+        {
+          "member": "u_zoomedOutOceanSpecularIntensity",
+          "expected": 1,
+          "changed": 1,
+          "exact": true,
+          "unidentified": [],
+          "silent": []
+        }
+      ],
+      "consoleErrors": []
+    }
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "title": "尖刺手法复用方式的偏离（更强而非更弱）",
+      "detail": "T019 (b) 要求「复用尖刺真机 harness 手法（identity 矩阵 + 已知纹素回读）断言地形全部 uniform 生效」。本门禁保留「真机 pipeline + 已知纹素回读」的手法，但把范围从「一个 identity 矩阵」扩展到**生成布局中的全部 uniform**：每个 (成员, 数组元素, 矩阵列) 各占一个像素，值由 CPU 布局表写入，并额外做**逐成员扰动矩阵**（改动某成员的值只允许改变该成员的 slot）。这比单一 identity 矩阵更强，且能逐字段定位错误。",
+      "followUp": [
+        "T044/T046（uniform 上传与通道状态机）以本门禁的布局表为输入"
+      ]
+    },
+    {
+      "id": "F-2",
+      "title": "验证程序只证明「布局与 WGSL struct 一致」，不证明着色器发射正确",
+      "detail": "本门禁的 WGSL 是由生成器为验证目的发射的（struct + 逐 slot switch），并非地形着色器的 WGSL 移植产物 —— 后者是 G-5（T022–T024）的范围。因此本门禁的结论边界是：**布局生成器与 WGSL 结构逐字段一致，且每个字段在真机上确实按该偏移被读取**。",
+      "followUp": [
+        "G-5（T022–T024）"
+      ]
+    },
+    {
+      "id": "F-3",
+      "title": "真机断言抓到过三处错误的布局假设（阴性对照 `--control=shift-offsets` 是这件事的制度化）",
+      "detail": "生成器最初按教科书写法实现 uniform 规则，真机读数推翻了其中三处：① `vec3<f32>` 必须按 16 字节对齐（而非 12）；② 数组自身只按其元素对齐（不向 16 取整）；③ 数组元素 stride = `roundUp(SizeOf(E), AlignOf(E))`（`array<f32,2>` 实测为 4 字节，而非 16）。`--control=shift-offsets` 把「偏移写错必须被检出」变成常态检查：把某个成员的标量偏移故意后移 4 字节后，基线比对必须报出不一致。",
+      "followUp": [
+        "每个目标实现上重跑本门禁（见 g4.json 的 packed-scalar-arrays-declared 风险项）"
+      ]
+    }
+  ],
+  "deviations": [
+    {
+      "id": "D-1",
+      "what": "tasks.md T018 提到「默认配置 92 个声明」，实测上游 AutomaticUniforms 声明 93 个自动 uniform。",
+      "how": "门禁以实测为准（automaticUniformCount=93，记录在 g4-layout.json 与 measurements 中）；不修改 research/tasks。"
+    },
+    {
+      "id": "D-2",
+      "what": "T018 把 `size 9` 的 czm_sphericalHarmonicCoefficients 列为必须覆盖的用例，但地形着色器（GlobeVS/GlobeFS）**不引用**它。",
+      "how": "不为凑用例而虚构 uniform：改用**真实引用它的上游着色器**（Shaders/Model/ImageBasedLightingStageFS.js，glTF image-based lighting）经同一 ShaderSource 装配后验证 size 9 → array<vec3<f32>,9>、stride 16、144 字节。"
+    },
+    {
+      "id": "D-3",
+      "what": "T018 要求对「地形着色器全部 uniform」产出逐字段偏移表；不同 TEXTURE_UNITS 下同名数组的长度不同（如 u_dayTextures[1..3]）。",
+      "how": "同时产出两份布局：默认配置的逐字段表（写入 artefact 的 measurements.defaultFieldTable）与 define 矩阵并集布局（数组长度取矩阵最大，保证任何可达变体都在表内），并把 sizesByVariant 逐条记录。"
+    },
+    {
+      "id": "D-4",
+      "what": "GLSL 的 `sampler2D x[N]` 在 WGSL 中无法作为固定长度纹理数组核心保证（需 binding_array）。",
+      "how": "生成器把 sampler 数组按元素展开为独立的 texture+sampler binding（budget: 每个 sampler 2 个 binding），并断言 sampler 不出现在 uniform struct 中。"
+    }
+  ]
+}

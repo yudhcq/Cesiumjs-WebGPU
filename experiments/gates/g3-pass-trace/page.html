@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-3 gate — upstream WebGL2 pass trace</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      #g3-container {
+        position: relative;
+        width: 480px;
+        height: 320px;
+        margin: 12px;
+        background: #000;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <p style="margin: 12px; max-width: 70ch">
+      G-3 gate page (tasks.md T020). It drives the <strong>upstream, unmodified</strong> WebGL2 globe
+      path for exactly one frame while <code>platform-trace.js</code> wraps
+      <code>WebGL2RenderingContext.prototype</code>. The trace is collected by <code>run.mjs</code>
+      through <code>window.__g3.report</code>.
+    </p>
+    <div id="g3-container"></div>
+    <!-- Cesium resolves its Assets/ and Workers/ paths relative to this base URL; the static server
+         serves the repository root, so the installed upstream package is the right base. -->
+    <script>
+      // Cesium resolves Assets/ and Workers/ relative to this base. The published ESM package ships no
+      // built Workers/**, so the gate builds module-worker bundles of the upstream worker sources into
+      // its own served directory (see build.mjs → buildWorkerBundles) and points the base there.
+      globalThis.CESIUM_BASE_URL = "/experiments/gates/out/g3-base/";
+    </script>
+    <!-- the real Rollup bundle of frame-driver.js (upstream engine + the platform tracer) -->
+    <script type="module" src="/experiments/gates/out/g3-pass-trace/bundle.js"></script>
+  </body>
+</html>

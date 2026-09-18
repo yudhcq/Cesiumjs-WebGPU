@@ -1,0 +1,1409 @@
+{
+  "label": "webgpu",
+  "backend": "webgpu",
+  "handoff": "install",
+  "browserVersion": "153.0.8010.36",
+  "pageId": "webgpu-mu7d528e",
+  "consoleMessages": [
+    {
+      "type": "warning",
+      "text": "The powerPreference option is currently ignored when calling requestAdapter() on Windows. See https://crbug.com/369219127"
+    }
+  ],
+  "pageErrors": [],
+  "requestFailures": [],
+  "report": {
+    "backend": "webgpu",
+    "handoffMode": "install",
+    "startedAt": "2026-09-18T19:40:14.653Z",
+    "bundleUrl": "/experiments/gates/out/g2-handoff/bundle.js",
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "webgpuApi": true,
+      "webgl2Api": true,
+      "devicePixelRatio": 1,
+      "crossOriginIsolated": false
+    },
+    "prefetch": {
+      "adapterInfo": {
+        "vendor": "nvidia",
+        "architecture": "lovelace",
+        "device": "",
+        "description": ""
+      },
+      "isFallbackAdapter": null,
+      "features": [
+        "depth32float-stencil8",
+        "rg11b10ufloat-renderable",
+        "bgra8unorm-storage",
+        "texture-formats-tier1",
+        "texture-compression-bc",
+        "dual-source-blending",
+        "core-features-and-limits",
+        "float32-filterable",
+        "indirect-first-instance",
+        "float32-blendable",
+        "subgroup-size-control",
+        "depth-clip-control",
+        "texture-compression-bc-sliced-3d",
+        "texture-formats-tier2",
+        "timestamp-query",
+        "shader-f16",
+        "clip-distances",
+        "primitive-index",
+        "texture-component-swizzle",
+        "subgroups"
+      ],
+      "limits": {
+        "maxTextureDimension1D": 16384,
+        "maxTextureDimension2D": 16384,
+        "maxTextureDimension3D": 2048,
+        "maxTextureArrayLayers": 2048,
+        "maxBindGroups": 4,
+        "maxBindGroupsPlusVertexBuffers": 24,
+        "maxBindingsPerBindGroup": 1000,
+        "maxDynamicUniformBuffersPerPipelineLayout": 10,
+        "maxDynamicStorageBuffersPerPipelineLayout": 8,
+        "maxSampledTexturesPerShaderStage": 48,
+        "maxSamplersPerShaderStage": 16,
+        "maxStorageBuffersPerShaderStage": 16,
+        "maxStorageTexturesPerShaderStage": 8,
+        "maxUniformBuffersPerShaderStage": 12,
+        "maxUniformBufferBindingSize": 65536,
+        "maxStorageBufferBindingSize": 2147483644,
+        "minUniformBufferOffsetAlignment": 256,
+        "minStorageBufferOffsetAlignment": 256,
+        "maxVertexBuffers": 8,
+        "maxBufferSize": 2147483648,
+        "maxVertexAttributes": 30,
+        "maxVertexBufferArrayStride": 2048,
+        "maxInterStageShaderVariables": 28,
+        "maxColorAttachments": 8,
+        "maxColorAttachmentBytesPerSample": 128,
+        "maxComputeWorkgroupStorageSize": 32768,
+        "maxComputeInvocationsPerWorkgroup": 1024,
+        "maxComputeWorkgroupSizeX": 1024,
+        "maxComputeWorkgroupSizeY": 1024,
+        "maxComputeWorkgroupSizeZ": 64,
+        "maxComputeWorkgroupsPerDimension": 65535,
+        "maxImmediateSize": 64,
+        "maxStorageBuffersInFragmentStage": 16,
+        "maxStorageTexturesInFragmentStage": 8,
+        "maxStorageBuffersInVertexStage": 16,
+        "maxStorageTexturesInVertexStage": 8
+      },
+      "deviceRequests": 1,
+      "deviceIsObject": true,
+      "deviceLostHandled": true
+    },
+    "handoff": {
+      "installTick": 1,
+      "installed": true
+    },
+    "construction": {
+      "startTick": 2,
+      "endTick": 59,
+      "threw": false,
+      "error": null,
+      "contextIsStub": true,
+      "contextConstructorName": "G2HandoffContext",
+      "deviceIdentity": true,
+      "adapterIdentity": true,
+      "contextIdentity": true,
+      "contextIsReplaced": true
+    },
+    "scene": {
+      "canvasIsGateCanvas": true,
+      "drawingBufferWidth": 300,
+      "drawingBufferHeight": 150,
+      "logarithmicDepthBuffer": true,
+      "msaaSupported": true,
+      "msaaSamples": 4,
+      "cameraNear": 0.1,
+      "cameraFar": 10000000000,
+      "contextDrawingBufferWidth": 300,
+      "contextDrawingBufferHeight": 150,
+      "contextFragmentDepth": true,
+      "contextDepthTexture": false,
+      "contextMsaa": true,
+      "contextWebgl2": true,
+      "contextId": "G2-HANDOFF-CONTEXT-STUB-v1-1"
+    },
+    "capabilities": {
+      "composition": {
+        "slice": "A",
+        "flags": {
+          "webgl2": true,
+          "msaa": true,
+          "depthTexture": false,
+          "fragmentDepth": true,
+          "instancedArrays": true,
+          "drawBuffers": true,
+          "colorBufferFloat": true,
+          "colorBufferHalfFloat": true,
+          "floatingPointTexture": true,
+          "halfFloatingPointTexture": true,
+          "stencilBuffer": true,
+          "stencilBits": 8,
+          "elementIndexUint": true,
+          "textureFilterAnisotropic": false,
+          "s3tc": false,
+          "pvrtc": false,
+          "astc": false,
+          "etc": false,
+          "etc1": false,
+          "bc7": false,
+          "supportsBasis": false,
+          "standardDerivatives": true,
+          "blendMinmax": true,
+          "textureFloatLinear": true,
+          "textureHalfFloatLinear": true,
+          "vertexArrayObject": true
+        },
+        "limits": {
+          "maximumTextureSize": 16384,
+          "maximumCubeMapSize": 16384,
+          "maximum3DTextureSize": 2048,
+          "maximumVertexTextureImageUnits": 48,
+          "maximumTextureImageUnits": 48,
+          "maximumCombinedTextureImageUnits": 48,
+          "maximumRenderbufferSize": 16384,
+          "maximumSamples": 4,
+          "maximumVertexAttributes": 30,
+          "maximumVaryingVectors": 28,
+          "maximumVertexUniformVectors": 4096,
+          "maximumFragmentUniformVectors": 4096,
+          "minimumAliasedLineWidth": 1,
+          "maximumAliasedLineWidth": 1,
+          "minimumAliasedPointSize": 1,
+          "maximumAliasedPointSize": 1,
+          "maximumViewportWidth": 16384,
+          "maximumViewportHeight": 16384,
+          "maximumTextureFilterAnisotropy": 1,
+          "maximumDrawBuffers": 8,
+          "maximumColorAttachments": 8,
+          "highpFloatSupported": true,
+          "highpIntSupported": true
+        },
+        "notes": {
+          "webgl2": "The historical meaning of this flag is \"a modern GL pipeline is available\"; WebGPU provides the equivalent semantics. The production replacement MUST carry a comment saying so (T045).",
+          "msaa": "WebGPU guarantees sampleCount 4; no adapter query is required (paired with maximumSamples = 4).",
+          "depthTexture": "TEMPORARY slice-A degradation: with depthTexture=false the View does not create GlobeDepth (View.js:46), so no depth texture/copy is required. Slice B (T098a) MUST flip this to true and re-run this gate; the flip is registered in plan Complexity Tracking and MUST NOT become permanent.",
+          "fragmentDepth": "true ⇒ Scene.js:195 sets _logDepthBuffer (Scene.defaultLogDepthBuffer) and Scene.js:723-726 sets camera near/far.",
+          "instancedArrays": "Native instancing; no extension required.",
+          "drawBuffers": "Native MRT; the actual attachment count comes from ContextLimits.maximumDrawBuffers.",
+          "colorBufferFloat": "Adopted as the *blendable* 32-bit float capability so the logic layer's float framebuffer paths (globe depth / OIT) are only taken when the device can actually blend them.",
+          "colorBufferHalfFloat": "16-bit float render targets need no optional feature in WebGPU.",
+          "floatingPointTexture": "Linear filtering of 32-bit float textures is a separate flag (textureFloatLinear ← float32-filterable).",
+          "halfFloatingPointTexture": "No optional feature required.",
+          "stencilBuffer": "stencilBits = 8 is published together with this flag.",
+          "stencilBits": "Companion value of the stencilBuffer flag.",
+          "elementIndexUint": "Native 32-bit indices.",
+          "textureFilterAnisotropic": "WebGPU has no anisotropic sampler; the logic layer already has a non-anisotropic path.",
+          "s3tc": "No compressed texture family is uploaded in the MVP; all six family flags are false so the logic layer takes its uncompressed path.",
+          "pvrtc": "See s3tc.",
+          "astc": "See s3tc.",
+          "etc": "See s3tc.",
+          "etc1": "See s3tc.",
+          "bc7": "See s3tc.",
+          "supportsBasis": "Basis/KTX2 transcoding targets compressed formats; not implemented in the MVP.",
+          "standardDerivatives": "No external consumer in §1.3; internal implementation freedom.",
+          "blendMinmax": "No external consumer; min/max blend operations exist in core WebGPU.",
+          "textureFloatLinear": "Linear filtering of 32-bit float textures; derived from the optional feature rather than assumed.",
+          "textureHalfFloatLinear": "No external consumer; 16-bit float filtering is core.",
+          "vertexArrayObject": "Semantics (a fixed vertex layout per draw) are provided by the pipeline, not by a VAO handle."
+        },
+        "unimplementedBranches": {
+          "depthTexture": "Scene/View.js:46 `if (context.depthTexture)` → GlobeDepth is NOT created; GlobeTranslucencyState.js:222 and GroundPrimitive.js:983 take their existing no-depth-texture branches. Asserted in G-2 by the consequence probe: the whole Scene construction completes with ZERO WebGL context acquisitions.",
+          "textureFilterAnisotropic": "ContextLimits.maximumTextureFilterAnisotropy = 1 ⇒ the logic layer requests anisotropy 1 (no-op) — the existing `maximumTextureFilterAnisotropy` clamp in the sampler creation path.",
+          "s3tc": "Scene.js:1771-1781 → all family probes false ⇒ the logic layer keeps its uncompressed texture path.",
+          "pvrtc": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+          "astc": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+          "etc": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+          "etc1": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+          "bc7": "Scene.js:1771-1781 → false ⇒ uncompressed path.",
+          "supportsBasis": "GltfLoader.js:586 → false ⇒ the loader keeps its non-Basis path (no transcoder is created)."
+        },
+        "sources": {
+          "webgl2": "WebGPU core: modern pipeline (integer textures, instancing, MRT, sRGB targets)",
+          "msaa": "WebGPU core guarantees 4x MSAA (sampleCount 1|4)",
+          "depthTexture": "slice A: no offscreen depth texture / depth copy implemented yet",
+          "fragmentDepth": "WGSL `@builtin(frag_depth)`",
+          "instancedArrays": "WebGPU core: instance step mode in the vertex layout",
+          "drawBuffers": "WebGPU core: multiple color attachments per render pass (maxColorAttachments)",
+          "colorBufferFloat": "adapter.features.has(\"float32-blendable\")",
+          "colorBufferHalfFloat": "WebGPU core: rgba16float is renderable and blendable",
+          "floatingPointTexture": "WebGPU core texture format table: rgba32float / r32float are sampleable",
+          "halfFloatingPointTexture": "WebGPU core texture format table: rgba16float is sampleable and filterable",
+          "stencilBuffer": "WebGPU core: depth24plus-stencil8 (8 stencil bits)",
+          "stencilBits": "depth24plus-stencil8 → 8 stencil bits",
+          "elementIndexUint": "WebGPU core: uint32 index format",
+          "textureFilterAnisotropic": "no anisotropic filtering in WebGPU core",
+          "s3tc": "compressed texture upload not implemented in the MVP",
+          "pvrtc": "compressed texture upload not implemented in the MVP",
+          "astc": "compressed texture upload not implemented in the MVP",
+          "etc": "compressed texture upload not implemented in the MVP",
+          "etc1": "compressed texture upload not implemented in the MVP",
+          "bc7": "compressed texture upload not implemented in the MVP",
+          "supportsBasis": "Basis transcoding depends on compressed texture families (all false)",
+          "standardDerivatives": "WGSL core: dpdx/dpdy/fwidth",
+          "blendMinmax": "WebGPU core blend operations include \"min\"/\"max\"",
+          "textureFloatLinear": "adapter.features.has(\"float32-filterable\")",
+          "textureHalfFloatLinear": "WebGPU core: rgba16float is filterable",
+          "vertexArrayObject": "WebGPU core: vertex layouts live in the render pipeline (no VAO object)"
+        },
+        "limitSources": {
+          "maximumTextureSize": "adapter.limits.maxTextureDimension2D",
+          "maximumCubeMapSize": "adapter.limits.maxTextureDimension2D",
+          "maximum3DTextureSize": "adapter.limits.maxTextureDimension3D",
+          "maximumVertexTextureImageUnits": "adapter.limits.maxSampledTexturesPerShaderStage",
+          "maximumTextureImageUnits": "adapter.limits.maxSampledTexturesPerShaderStage",
+          "maximumCombinedTextureImageUnits": "adapter.limits.maxSampledTexturesPerShaderStage",
+          "maximumRenderbufferSize": "adapter.limits.maxTextureDimension2D",
+          "maximumSamples": "constant 4 (WebGPU guarantees 4x MSAA)",
+          "maximumVertexAttributes": "adapter.limits.maxVertexAttributes",
+          "maximumVaryingVectors": "adapter.limits.maxInterStageShaderVariables",
+          "maximumVertexUniformVectors": "min(floor(adapter.limits.maxUniformBufferBindingSize / 16), 4096)",
+          "maximumFragmentUniformVectors": "min(floor(adapter.limits.maxUniformBufferBindingSize / 16), 4096)",
+          "minimumAliasedLineWidth": "constant 1.0 (WebGPU has no wide lines)",
+          "maximumAliasedLineWidth": "constant 1.0 (WebGPU has no wide lines)",
+          "minimumAliasedPointSize": "constant 1.0 (WebGPU point size is 1)",
+          "maximumAliasedPointSize": "constant 1.0 (WebGPU point size is 1)",
+          "maximumViewportWidth": "adapter.limits.maxTextureDimension2D",
+          "maximumViewportHeight": "adapter.limits.maxTextureDimension2D",
+          "maximumTextureFilterAnisotropy": "constant 1.0 (no anisotropic filtering)",
+          "maximumDrawBuffers": "adapter.limits.maxColorAttachments",
+          "maximumColorAttachments": "adapter.limits.maxColorAttachments",
+          "highpFloatSupported": "constant true (WGSL has no mediump/lowp in the MVP emission target)",
+          "highpIntSupported": "constant true (WGSL i32/u32 are 32-bit in the fragment stage)"
+        },
+        "falseFlags": [
+          "depthTexture",
+          "textureFilterAnisotropic",
+          "s3tc",
+          "pvrtc",
+          "astc",
+          "etc",
+          "etc1",
+          "bc7",
+          "supportsBasis"
+        ],
+        "defaults": {
+          "webgl2": true,
+          "msaa": true,
+          "depthTexture": false,
+          "fragmentDepth": true,
+          "instancedArrays": true,
+          "drawBuffers": true,
+          "colorBufferFloat": true,
+          "colorBufferHalfFloat": true,
+          "floatingPointTexture": true,
+          "halfFloatingPointTexture": true,
+          "stencilBuffer": true,
+          "stencilBits": 8,
+          "elementIndexUint": true,
+          "textureFilterAnisotropic": false,
+          "s3tc": false,
+          "pvrtc": false,
+          "astc": false,
+          "etc": false,
+          "etc1": false,
+          "bc7": false,
+          "supportsBasis": false,
+          "standardDerivatives": true,
+          "blendMinmax": true,
+          "textureFloatLinear": false,
+          "textureHalfFloatLinear": true,
+          "vertexArrayObject": true
+        }
+      },
+      "declaredDefaults": {
+        "webgl2": true,
+        "msaa": true,
+        "depthTexture": false,
+        "fragmentDepth": true,
+        "instancedArrays": true,
+        "drawBuffers": true,
+        "colorBufferFloat": true,
+        "colorBufferHalfFloat": true,
+        "floatingPointTexture": true,
+        "halfFloatingPointTexture": true,
+        "stencilBuffer": true,
+        "stencilBits": 8,
+        "elementIndexUint": true,
+        "textureFilterAnisotropic": false,
+        "s3tc": false,
+        "pvrtc": false,
+        "astc": false,
+        "etc": false,
+        "etc1": false,
+        "bc7": false,
+        "supportsBasis": false,
+        "standardDerivatives": true,
+        "blendMinmax": true,
+        "textureFloatLinear": false,
+        "textureHalfFloatLinear": true,
+        "vertexArrayObject": true
+      },
+      "stubSnapshot": {
+        "webgl2": true,
+        "msaa": true,
+        "depthTexture": false,
+        "fragmentDepth": true,
+        "instancedArrays": true,
+        "drawBuffers": true,
+        "colorBufferFloat": true,
+        "colorBufferHalfFloat": true,
+        "floatingPointTexture": true,
+        "halfFloatingPointTexture": true,
+        "stencilBuffer": true,
+        "stencilBits": 8,
+        "elementIndexUint": true,
+        "textureFilterAnisotropic": false,
+        "s3tc": false,
+        "pvrtc": false,
+        "astc": false,
+        "etc": false,
+        "etc1": false,
+        "bc7": false,
+        "supportsBasis": false,
+        "standardDerivatives": true,
+        "blendMinmax": true,
+        "textureFloatLinear": true,
+        "textureHalfFloatLinear": true,
+        "vertexArrayObject": true
+      },
+      "stubLimitsSnapshot": {
+        "maximumTextureSize": 16384,
+        "maximumCubeMapSize": 16384,
+        "maximum3DTextureSize": 2048,
+        "maximumVertexTextureImageUnits": 48,
+        "maximumTextureImageUnits": 48,
+        "maximumCombinedTextureImageUnits": 48,
+        "maximumRenderbufferSize": 16384,
+        "maximumSamples": 4,
+        "maximumVertexAttributes": 30,
+        "maximumVaryingVectors": 28,
+        "maximumVertexUniformVectors": 4096,
+        "maximumFragmentUniformVectors": 4096,
+        "minimumAliasedLineWidth": 1,
+        "maximumAliasedLineWidth": 1,
+        "minimumAliasedPointSize": 1,
+        "maximumAliasedPointSize": 1,
+        "maximumViewportWidth": 16384,
+        "maximumViewportHeight": 16384,
+        "maximumTextureFilterAnisotropy": 1,
+        "maximumDrawBuffers": 8,
+        "maximumColorAttachments": 8,
+        "highpFloatSupported": true,
+        "highpIntSupported": true
+      },
+      "publishedAtTick": 3,
+      "stubSnapshotAfter": {
+        "webgl2": true,
+        "msaa": true,
+        "depthTexture": false,
+        "fragmentDepth": true,
+        "instancedArrays": true,
+        "drawBuffers": true,
+        "colorBufferFloat": true,
+        "colorBufferHalfFloat": true,
+        "floatingPointTexture": true,
+        "halfFloatingPointTexture": true,
+        "stencilBuffer": true,
+        "stencilBits": 8,
+        "elementIndexUint": true,
+        "textureFilterAnisotropic": false,
+        "s3tc": false,
+        "pvrtc": false,
+        "astc": false,
+        "etc": false,
+        "etc1": false,
+        "bc7": false,
+        "supportsBasis": false,
+        "standardDerivatives": true,
+        "blendMinmax": true,
+        "textureFloatLinear": true,
+        "textureHalfFloatLinear": true,
+        "vertexArrayObject": true
+      }
+    },
+    "contextLimits": {
+      "instrumented": 23,
+      "writesDuringConstruction": [
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 4
+        },
+        {
+          "member": "_maximumCubeMapSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 5
+        },
+        {
+          "member": "_maximum3DTextureSize",
+          "value": 2048,
+          "phase": "construction",
+          "tick": 6
+        },
+        {
+          "member": "_maximumVertexTextureImageUnits",
+          "value": 48,
+          "phase": "construction",
+          "tick": 7
+        },
+        {
+          "member": "_maximumTextureImageUnits",
+          "value": 48,
+          "phase": "construction",
+          "tick": 8
+        },
+        {
+          "member": "_maximumCombinedTextureImageUnits",
+          "value": 48,
+          "phase": "construction",
+          "tick": 9
+        },
+        {
+          "member": "_maximumRenderbufferSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 10
+        },
+        {
+          "member": "_maximumSamples",
+          "value": 4,
+          "phase": "construction",
+          "tick": 11
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 30,
+          "phase": "construction",
+          "tick": 12
+        },
+        {
+          "member": "_maximumVaryingVectors",
+          "value": 28,
+          "phase": "construction",
+          "tick": 13
+        },
+        {
+          "member": "_maximumVertexUniformVectors",
+          "value": 4096,
+          "phase": "construction",
+          "tick": 14
+        },
+        {
+          "member": "_maximumFragmentUniformVectors",
+          "value": 4096,
+          "phase": "construction",
+          "tick": 15
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 16
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 17
+        },
+        {
+          "member": "_minimumAliasedPointSize",
+          "value": 1,
+          "phase": "construction",
+          "tick": 18
+        },
+        {
+          "member": "_maximumAliasedPointSize",
+          "value": 1,
+          "phase": "construction",
+          "tick": 19
+        },
+        {
+          "member": "_maximumViewportWidth",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 20
+        },
+        {
+          "member": "_maximumViewportHeight",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 21
+        },
+        {
+          "member": "_maximumTextureFilterAnisotropy",
+          "value": 1,
+          "phase": "construction",
+          "tick": 22
+        },
+        {
+          "member": "_maximumDrawBuffers",
+          "value": 8,
+          "phase": "construction",
+          "tick": 23
+        },
+        {
+          "member": "_maximumColorAttachments",
+          "value": 8,
+          "phase": "construction",
+          "tick": 24
+        },
+        {
+          "member": "_highpFloatSupported",
+          "value": true,
+          "phase": "construction",
+          "tick": 25
+        },
+        {
+          "member": "_highpIntSupported",
+          "value": true,
+          "phase": "construction",
+          "tick": 26
+        }
+      ],
+      "logicLayerReadsDuringConstruction": [
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 29
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 30
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 34
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 35
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 36
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 37
+        },
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 38
+        }
+      ],
+      "reads": [
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 29
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 30
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 34
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 35
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 36
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 37
+        },
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 38
+        },
+        {
+          "member": "_maximumTextureFilterAnisotropy",
+          "value": 1,
+          "phase": "after",
+          "tick": 90
+        },
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "after",
+          "tick": 92
+        },
+        {
+          "member": "_maximumSamples",
+          "value": 4,
+          "phase": "after",
+          "tick": 93
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 30,
+          "phase": "after",
+          "tick": 94
+        },
+        {
+          "member": "_maximum3DTextureSize",
+          "value": 2048,
+          "phase": "after",
+          "tick": 95
+        },
+        {
+          "member": "_maximumDrawBuffers",
+          "value": 8,
+          "phase": "after",
+          "tick": 96
+        },
+        {
+          "member": "_maximumColorAttachments",
+          "value": 8,
+          "phase": "after",
+          "tick": 97
+        },
+        {
+          "member": "_maximumTextureFilterAnisotropy",
+          "value": 1,
+          "phase": "after",
+          "tick": 98
+        },
+        {
+          "member": "_highpFloatSupported",
+          "value": true,
+          "phase": "after",
+          "tick": 99
+        },
+        {
+          "member": "_highpIntSupported",
+          "value": true,
+          "phase": "after",
+          "tick": 100
+        }
+      ],
+      "writes": [
+        {
+          "member": "_maximumTextureSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 4
+        },
+        {
+          "member": "_maximumCubeMapSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 5
+        },
+        {
+          "member": "_maximum3DTextureSize",
+          "value": 2048,
+          "phase": "construction",
+          "tick": 6
+        },
+        {
+          "member": "_maximumVertexTextureImageUnits",
+          "value": 48,
+          "phase": "construction",
+          "tick": 7
+        },
+        {
+          "member": "_maximumTextureImageUnits",
+          "value": 48,
+          "phase": "construction",
+          "tick": 8
+        },
+        {
+          "member": "_maximumCombinedTextureImageUnits",
+          "value": 48,
+          "phase": "construction",
+          "tick": 9
+        },
+        {
+          "member": "_maximumRenderbufferSize",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 10
+        },
+        {
+          "member": "_maximumSamples",
+          "value": 4,
+          "phase": "construction",
+          "tick": 11
+        },
+        {
+          "member": "_maximumVertexAttributes",
+          "value": 30,
+          "phase": "construction",
+          "tick": 12
+        },
+        {
+          "member": "_maximumVaryingVectors",
+          "value": 28,
+          "phase": "construction",
+          "tick": 13
+        },
+        {
+          "member": "_maximumVertexUniformVectors",
+          "value": 4096,
+          "phase": "construction",
+          "tick": 14
+        },
+        {
+          "member": "_maximumFragmentUniformVectors",
+          "value": 4096,
+          "phase": "construction",
+          "tick": 15
+        },
+        {
+          "member": "_minimumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 16
+        },
+        {
+          "member": "_maximumAliasedLineWidth",
+          "value": 1,
+          "phase": "construction",
+          "tick": 17
+        },
+        {
+          "member": "_minimumAliasedPointSize",
+          "value": 1,
+          "phase": "construction",
+          "tick": 18
+        },
+        {
+          "member": "_maximumAliasedPointSize",
+          "value": 1,
+          "phase": "construction",
+          "tick": 19
+        },
+        {
+          "member": "_maximumViewportWidth",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 20
+        },
+        {
+          "member": "_maximumViewportHeight",
+          "value": 16384,
+          "phase": "construction",
+          "tick": 21
+        },
+        {
+          "member": "_maximumTextureFilterAnisotropy",
+          "value": 1,
+          "phase": "construction",
+          "tick": 22
+        },
+        {
+          "member": "_maximumDrawBuffers",
+          "value": 8,
+          "phase": "construction",
+          "tick": 23
+        },
+        {
+          "member": "_maximumColorAttachments",
+          "value": 8,
+          "phase": "construction",
+          "tick": 24
+        },
+        {
+          "member": "_highpFloatSupported",
+          "value": true,
+          "phase": "construction",
+          "tick": 25
+        },
+        {
+          "member": "_highpIntSupported",
+          "value": true,
+          "phase": "construction",
+          "tick": 26
+        }
+      ]
+    },
+    "reads": {
+      "counts": {
+        "fragmentDepth": 3,
+        "drawingBufferWidth": 9,
+        "drawingBufferHeight": 9,
+        "depthTexture": 10,
+        "uniformState": 1,
+        "msaa": 3,
+        "webgl2": 1,
+        "draw": 1,
+        "clear": 1,
+        "beginFrame": 1,
+        "endFrame": 1,
+        "defaultTexture": 1,
+        "defaultCubeMap": 1,
+        "s3tc": 1,
+        "pvrtc": 1,
+        "astc": 1,
+        "etc": 1,
+        "etc1": 1,
+        "bc7": 1
+      },
+      "duringConstruction": [
+        {
+          "name": "fragmentDepth",
+          "value": true,
+          "tick": 28
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 31
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 32
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 33
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 39
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 40
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 41
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 42
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 43
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 44
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 45
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 46
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 47
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 48
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 49
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 50
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 51
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 52
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 53
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 54
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 55
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 56
+        },
+        {
+          "name": "uniformState",
+          "value": "object",
+          "tick": 57
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 58
+        }
+      ],
+      "all": [
+        {
+          "name": "fragmentDepth",
+          "value": true,
+          "tick": 28
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 31
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 32
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 33
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 39
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 40
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 41
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 42
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 43
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 44
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 45
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 46
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 47
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 48
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 49
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 50
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 51
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 52
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 53
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 54
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 55
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 56
+        },
+        {
+          "name": "uniformState",
+          "value": "object",
+          "tick": 57
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 58
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 60
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 61
+        },
+        {
+          "name": "msaa",
+          "value": true,
+          "tick": 62
+        },
+        {
+          "name": "drawingBufferWidth",
+          "value": 300,
+          "tick": 63
+        },
+        {
+          "name": "drawingBufferHeight",
+          "value": 150,
+          "tick": 64
+        },
+        {
+          "name": "fragmentDepth",
+          "value": true,
+          "tick": 65
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 66
+        },
+        {
+          "name": "msaa",
+          "value": true,
+          "tick": 67
+        },
+        {
+          "name": "webgl2",
+          "value": true,
+          "tick": 68
+        },
+        {
+          "name": "draw",
+          "value": "<not-implemented>",
+          "tick": 69
+        },
+        {
+          "name": "clear",
+          "value": "<not-implemented>",
+          "tick": 70
+        },
+        {
+          "name": "beginFrame",
+          "value": "<not-implemented>",
+          "tick": 71
+        },
+        {
+          "name": "endFrame",
+          "value": "<not-implemented>",
+          "tick": 72
+        },
+        {
+          "name": "defaultTexture",
+          "value": "<not-implemented>",
+          "tick": 73
+        },
+        {
+          "name": "defaultCubeMap",
+          "value": "<not-implemented>",
+          "tick": 74
+        },
+        {
+          "name": "fragmentDepth",
+          "value": true,
+          "tick": 76
+        },
+        {
+          "name": "depthTexture",
+          "value": false,
+          "tick": 79
+        },
+        {
+          "name": "msaa",
+          "value": true,
+          "tick": 81
+        },
+        {
+          "name": "s3tc",
+          "value": false,
+          "tick": 83
+        },
+        {
+          "name": "pvrtc",
+          "value": false,
+          "tick": 84
+        },
+        {
+          "name": "astc",
+          "value": false,
+          "tick": 85
+        },
+        {
+          "name": "etc",
+          "value": false,
+          "tick": 86
+        },
+        {
+          "name": "etc1",
+          "value": false,
+          "tick": 87
+        },
+        {
+          "name": "bc7",
+          "value": false,
+          "tick": 88
+        }
+      ],
+      "constructionWindow": {
+        "startTick": 2,
+        "endTick": 59
+      }
+    },
+    "branches": [
+      {
+        "id": "Scene.js:195 fragmentDepth → _logDepthBuffer",
+        "condition": "context.fragmentDepth",
+        "value": true,
+        "consequence": "scene.logarithmicDepthBuffer",
+        "tick": 77
+      },
+      {
+        "id": "Scene.js:723-726 _logDepthBuffer → camera near/far",
+        "condition": "scene.logarithmicDepthBuffer",
+        "value": true,
+        "consequence": "camera.frustum.near/far = 0.1/10000000000",
+        "tick": 78
+      },
+      {
+        "id": "Scene/View.js:46 depthTexture → GlobeDepth creation",
+        "condition": "context.depthTexture",
+        "value": false,
+        "consequence": "consequence observed via the WebGL-context request log (see probes.glRequestsDuringConstruction)",
+        "tick": 80
+      },
+      {
+        "id": "Scene.js:1721 msaa → Scene#msaaSupported",
+        "condition": "context.msaa",
+        "value": true,
+        "consequence": "scene.msaaSupported",
+        "tick": 82
+      },
+      {
+        "id": "Scene.js:1771-1781 compressed texture families → uncompressed path",
+        "condition": "context.s3tc|pvrtc|astc|etc|etc1|bc7",
+        "value": "false,false,false,false,false,false",
+        "consequence": "Scene#compressedTextureFormats-like probes stay false ⇒ the logic layer keeps its uncompressed texture path",
+        "tick": 89
+      },
+      {
+        "id": "research §4 ContextLimits: maximumTextureFilterAnisotropy",
+        "condition": "ContextLimits.maximumTextureFilterAnisotropy",
+        "value": 1,
+        "consequence": "sampler anisotropy request clamps to 1 (no anisotropic filtering in WebGPU)",
+        "tick": 91
+      }
+    ],
+    "loudFailures": [
+      {
+        "capability": "draw",
+        "threw": true,
+        "category": "not-implemented",
+        "name": "G2HandoffContextNotImplemented"
+      },
+      {
+        "capability": "clear",
+        "threw": true,
+        "category": "not-implemented",
+        "name": "G2HandoffContextNotImplemented"
+      },
+      {
+        "capability": "beginFrame",
+        "threw": true,
+        "category": "not-implemented",
+        "name": "G2HandoffContextNotImplemented"
+      },
+      {
+        "capability": "endFrame",
+        "threw": true,
+        "category": "not-implemented",
+        "name": "G2HandoffContextNotImplemented"
+      },
+      {
+        "capability": "defaultTexture",
+        "threw": true,
+        "category": "not-implemented",
+        "name": "G2HandoffContextNotImplemented"
+      },
+      {
+        "capability": "defaultCubeMap",
+        "threw": true,
+        "category": "not-implemented",
+        "name": "G2HandoffContextNotImplemented"
+      }
+    ],
+    "probes": {
+      "getContextPhase": "after",
+      "notImplementedAfterConstruction": [],
+      "protobufReaderProbe": {
+        "readerType": "function",
+        "createIsFunction": true,
+        "rootType": "undefined",
+        "keys": [
+          "default",
+          "build",
+          "Writer",
+          "BufferWriter",
+          "Reader",
+          "BufferReader",
+          "util",
+          "rpc",
+          "roots",
+          "configure"
+        ]
+      },
+      "doubleInstall": {
+        "threw": true,
+        "category": "device-handoff/already-installed"
+      },
+      "peekAfterConstruction": "empty",
+      "secondTake": "empty",
+      "takeStack": "Error\n    at takeHandoff (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:44146:65)\n    at new G2HandoffContext (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:44746:19)\n    at new Scene (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:231809:21)\n    at run (http://127.0.0.1:54457/experiments/gates/g2-handoff/probe.js:253:17)\n    at async http://127.0.0.1:54457/experiments/gates/g2-handoff/probe.js:419:18",
+      "deviceRequests": 1,
+      "glRequestsDuringConstruction": [],
+      "glRequestsAll": [],
+      "notImplemented": [
+        "draw",
+        "clear",
+        "beginFrame",
+        "endFrame",
+        "defaultTexture",
+        "defaultCubeMap"
+      ],
+      "contextLimitsAfterConstruction": {
+        "maximumTextureSize": 16384,
+        "maximumSamples": 4,
+        "maximumVertexAttributes": 30,
+        "maximum3DTextureSize": 2048,
+        "maximumDrawBuffers": 8,
+        "maximumColorAttachments": 8,
+        "maximumTextureFilterAnisotropy": 1,
+        "highpFloatSupported": true,
+        "highpIntSupported": true
+      },
+      "destroyed": true,
+      "contextDestroyedAfterSceneDestroy": null
+    },
+    "errors": [],
+    "contextLimitsInstrumented": 23,
+    "handoffAudit": {
+      "installedAtTick": 1,
+      "pending": false,
+      "audit": [
+        {
+          "op": "install",
+          "tick": 1,
+          "source": "g2-probe"
+        },
+        {
+          "op": "take",
+          "tick": 3,
+          "source": "G2-HANDOFF-CONTEXT-STUB-v1",
+          "stack": "Error\n    at takeHandoff (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:44146:65)\n    at new G2HandoffContext (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:44746:19)\n    at new Scene (http://127.0.0.1:54457/experiments/gates/out/g2-handoff/bundle.js:231809:21)\n    at run (http://127.0.0.1:54457/experiments/gates/g2-handoff/probe.js:253:17)\n    at async http://127.0.0.1:54457/experiments/gates/g2-handoff/probe.js:419:18"
+        }
+      ]
+    },
+    "finishedAt": "2026-09-18T19:40:15.058Z"
+  },
+  "error": null
+}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-5 gate — real-device WGSL pipeline verification</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      code { color: #9fd3ff; }
+    </style>
+  </head>
+  <body>
+    <p>
+      G-5 gate device page (tasks.md T022/T023). It compiles the WGSL emitted by
+      <code>experiments/gates/g5-shader/wgsl-emitter.mjs</code> for every variant of the
+      MVP-reachable define matrix and creates a real <code>GPURenderPipeline</code> for each
+      distinct module pair; in <code>mvp</code> mode it additionally renders the fixed terrain
+      scene and reads the frame back. The runner (<code>tools/shader-verify.mjs</code>) collects
+      the result through <code>window.__g5</code>.
+    </p>
+    <script type="module" src="./probe.js"></script>
+  </body>
+</html>

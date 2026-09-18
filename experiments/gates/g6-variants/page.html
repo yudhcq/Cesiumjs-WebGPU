@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-6 gate — runtime variant / compile-cache histogram</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      code { color: #9fd3ff; }
+    </style>
+  </head>
+  <body>
+    <p>
+      G-6 gate device page (tasks.md T025, hypothesis H-6). It drives a documented 300-frame MVP
+      session through upstream's <code>[numberOfDayTextures][flags]</code> cache semantics and then a
+      cold-cache worst case over every distinct emitted module pair, timing each
+      <code>createShaderModule</code> + <code>createRenderPipeline</code>. The runner
+      (<code>experiments/gates/g6-variants/run.mjs</code>) collects the result through
+      <code>window.__g6</code> and judges it against the **pre-registered**
+      <code>budget.json</code>.
+    </p>
+    <script type="module" src="./driver.js"></script>
+  </body>
+</html>
