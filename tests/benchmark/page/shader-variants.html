@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>bench:shader-variants — variant scale &amp; compile-cost gate (T079 / SH-6)</title>
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      code { color: #9fd3ff; }
+    </style>
+  </head>
+  <body>
+    <p>
+      SH-6 device page (tasks.md <b>T079</b>, hypothesis H-6, <code>budget.json</code> revision 3). It
+      drives the <b>production</b> emitter's output through upstream's
+      <code>[numberOfDayTextures][flags]</code> variant semantics and measures compile counts and cost:
+      a cold-cache <b>startup</b> prewarm of the 36-variant plan, a documented 300-frame
+      <b>session</b> served from that pool (0 compilations), and — <b>reference only, never a
+      criterion</b> — the cold complement of the plan. The spec
+      (<code>tests/benchmark/shader-variants.spec.mjs</code>) collects
+      <code>window.__shaderVariants</code> and judges it against the pre-registered thresholds.
+    </p>
+    <p>
+      <b>This page renders nothing and reads nothing back.</b> SH-6 is a gate on <i>compile counts and
+      compile cost</i>, not on pixels; the pixel-side gates are separate suites (SH-2/SH-5). The only
+      GPU work here is <code>createShaderModule</code> + <code>createRenderPipeline</code>, both of
+      which are counted and timed.
+    </p>
+    <script type="module">
+      /**
+       * ============================================================================================
+       * SH-6 in-page driver (tasks.md T079). Measurement definitions are the G-6 gate driver's
+       * (`experiments/gates/g6-variants/driver.js`), so the numbers stay comparable with
+       * `docs/gate-g6-conclusion.md` §0.2:
+       *
+       *   - a variant's identity is (module text × pipeline-overridable-constant values);
+       *   - a module text is parsed **once** — `createShaderModule` calls are counted against the
+       *     distinct texts they were given, so "one parse per distinct text" is counted, not asserted;
+       *   - one variant's cost `totalMs` includes the validation round trip (`popErrorScope`), because
+       *     that is what one more variant actually costs.
+       *
+       * The four phases:
+       *   1. `startup`   — cold cache, the prewarm plan (36 variant identities) before the first frame;
+       *   2. `session`   — the documented 300-frame session, started with the pool ready: the runtime
+       *                    path MUST compile nothing (the product's default behaviour, not a fallback);
+       *   3. `fullSpace` — the complement of the plan, cold: **reference only, never a criterion**
+       *                    (`variant-budget.ts` marks it `criterion: false`);
+       *   4. the judge   — the production tolerance module is imported and evaluates the numbers here
+       *                    as well; the spec re-evaluates with the same module on the Node side.
+       *
+       * One page load, one backend (constitution principle II): with `?backend=webgl2` the page is an
+       * **isolation probe** — it installs the platform counters and publishes them, and never asks for
+       * an adapter, a device or a GPU object of any kind.
+       * ============================================================================================
+       */
+      const params = new URLSearchParams(globalThis.location.search);
+      const backend = params.get("backend") ?? "webgpu";
+      const inputUrl = params.get("input");
+
+      const report = {
+        suite: "bench:shader-variants",
+        backend,
+        mode: null,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        ready: false,
+        notes: [],
+        errors: [],
+        adapter: null,
+        preferredFormat: null,
+        wgslLanguageFeatures: null,
+        deviceLimits: null,
+        instrumentation: null,
+        budget: null,
+        corpus: null,
+        layout: null,
+        startup: null,
+        session: null,
+        fullSpace: null,
+        counters: null,
+        measurement: null,
+        budgetVerdict: null,
+        renderedPixels: 0,
+        readbacks: 0,
+        webgl2: null,
+        webgpu: null,
+      };
+      globalThis.__shaderVariants = report;
+
+      const note = (message) => report.notes.push(`${new Date().toISOString()} ${message}`);
+
+      // ------------------------------------------------------------------------------------------
+      // Platform counters — the executable form of "only one backend was enabled in this run".
+      // Installed before anything else touches a GPU API, exactly like `tests/contract/page/probe.js`.
+      // ------------------------------------------------------------------------------------------
+      const webgl2Counters = { contextRequests: 0, contextRequestTypes: [], objectsCreated: 0, objectsByMethod: {}, errors: [] };
+      const webgpuCounters = { adapterRequests: 0, deviceRequests: 0, gpuObjectsCreated: 0, objectsByMethod: {}, prototypeInstrumented: false, errors: [] };
+
+      function instrumentWebgpuSide() {
+        const gpu = globalThis.navigator?.gpu;
+        if (gpu === undefined) {
+          webgpuCounters.errors.push("navigator.gpu is unavailable, so device requests cannot be counted");
+          return;
+        }
+        const originalRequestAdapter = gpu.requestAdapter?.bind(gpu);
+        if (typeof originalRequestAdapter === "function") {
+          gpu.requestAdapter = (...args) => {
+            webgpuCounters.adapterRequests += 1;
+            return originalRequestAdapter(...args);
+          };
+        }
+        // Prototype-level object counters: independent of the per-device wrappers below, so the
+        // isolated (WebGL2) run proves "0 WebGPU objects" with a counter the WebGPU run cannot bend.
+        const proto = globalThis.GPUDevice?.prototype;
+        if (proto === undefined) {
+          webgpuCounters.errors.push("GPUDevice is unavailable, so GPU object creation cannot be counted at the prototype level");
+          return;
+        }
+        for (const name of ["createShaderModule", "createRenderPipeline", "createRenderPipelineAsync", "createBuffer", "createTexture", "createBindGroup", "createPipelineLayout", "createBindGroupLayout", "createCommandEncoder"]) {
+          const original = proto[name];
+          if (typeof original !== "function") continue;
+          proto[name] = function instrumented(...args) {
+            webgpuCounters.gpuObjectsCreated += 1;
+            webgpuCounters.objectsByMethod[name] = (webgpuCounters.objectsByMethod[name] ?? 0) + 1;
+            return original.apply(this, args);
+          };
+        }
+        webgpuCounters.prototypeInstrumented = true;
+      }
+
+      function instrumentWebgl2Side() {
+        const proto = globalThis.WebGL2RenderingContext?.prototype;
+        if (proto === undefined) {
+          webgl2Counters.errors.push("WebGL2RenderingContext is unavailable, so its objects cannot be counted");
+        } else {
+          for (const name of ["createBuffer", "createTexture", "createFramebuffer", "createRenderbuffer", "createProgram", "createShader", "createVertexArray", "createSampler", "createQuery", "createTransformFeedback", "fenceSync"]) {
+            const original = proto[name];
+            if (typeof original !== "function") continue;
+            proto[name] = function instrumented(...args) {
+              webgl2Counters.objectsCreated += 1;
+              webgl2Counters.objectsByMethod[name] = (webgl2Counters.objectsByMethod[name] ?? 0) + 1;
+              return original.apply(this, args);
+            };
+          }
+        }
+        const originalGetContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function instrumented(type, ...rest) {
+          const normalised = String(type).toLowerCase();
+          if (normalised === "webgl2" || normalised === "webgl" || normalised === "experimental-webgl") {
+            webgl2Counters.contextRequests += 1;
+            webgl2Counters.contextRequestTypes.push(normalised);
+          }
+          return originalGetContext.call(this, type, ...rest);
+        };
+      }
+
+      async function fetchJson(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`fetch ${url} -> HTTP ${response.status}`);
+        return await response.json();
+      }
+
+      /** `GPUVertexBufferLayout[]` from the emitted vertex-attribute table (`varying-contract.ts`). */
+      function vertexBufferLayouts(attributes) {
+        if (attributes === undefined || attributes.length === 0) return [];
+        const arrayStride = attributes[0].arrayStride;
+        return [
+          {
+            arrayStride,
+            attributes: attributes.map((attribute) => ({ shaderLocation: attribute.location, offset: attribute.offset, format: attribute.format })),
+          },
+        ];
+      }
+
+      /**
+       * The explicit pipeline layout the product uses: the H-4 union bind layout is shared by every
+       * variant, so the backend never has to ask the driver to derive one. The uniform block is
+       * `@group(0) @binding(0)`; the texture/sampler pairs live in their own group (data-model §4.3).
+       */
+      function buildPipelineLayout(device, layout) {
+        const group0 = device.createBindGroupLayout({
+          label: "shader-variants-uniforms",
+          entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform", minBindingSize: layout.structSize } }],
+        });
+        const samplerGroups = new Map();
+        for (const sampler of layout.samplers) {
+          const entries = samplerGroups.get(sampler.groupIndex) ?? [];
+          entries.push({ binding: sampler.textureBinding, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } });
+          entries.push({ binding: sampler.samplerBinding, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } });
+          samplerGroups.set(sampler.groupIndex, entries);
+        }
+        if (samplerGroups.has(0)) throw new Error("the sampler bindings MUST NOT share group 0 with the uniform block (data-model §4.3)");
+        const bindGroupLayouts = [group0];
+        for (const groupIndex of [...samplerGroups.keys()].sort((left, right) => left - right)) {
+          bindGroupLayouts[groupIndex] = device.createBindGroupLayout({ label: `shader-variants-samplers-${groupIndex}`, entries: samplerGroups.get(groupIndex) });
+        }
+        return device.createPipelineLayout({ label: "shader-variants-union-layout", bindGroupLayouts });
+      }
+
+      /**
+       * Wrap the two device methods this gate counts, as the task requires.
+       *
+       * The counters are **measured by the wrapper**, and the phases additionally keep their own
+       * bookkeeping; the two are compared at the end (`counters.*Match`), so a wrapper that silently
+       * stopped counting cannot turn into a silent pass. If a device were not extensible the wrapper
+       * would be reported as unavailable and the spec would fail the run rather than accept bookkeeping
+       * alone.
+       */
+      function wrapDevice(device) {
+        const counts = { createShaderModule: 0, createRenderPipeline: 0, createRenderPipelineAsync: 0 };
+        const status = { createShaderModule: "unavailable", createRenderPipeline: "unavailable" };
+        for (const [name, key] of [
+          ["createShaderModule", "createShaderModule"],
+          ["createRenderPipeline", "createRenderPipeline"],
+        ]) {
+          const original = device[name];
+          if (typeof original !== "function") continue;
+          const bound = original.bind(device);
+          try {
+            Object.defineProperty(device, name, {
+              configurable: true,
+              writable: true,
+              value: (...args) => {
+                counts[key] += 1;
+                return bound(...args);
+              },
+            });
+            status[name] = "wrapped";
+          } catch (error) {
+            status[name] = `unavailable (${error?.name ?? "Error"}: ${error?.message ?? String(error)})`;
+          }
+        }
+        return { counts, status };
+      }
+
+      async function main() {
+        instrumentWebgl2Side();
+        instrumentWebgpuSide();
+
+        if (backend === "webgl2") {
+          // A WebGL2 run of this suite carries the **isolation criterion only** (contracts §2): the
+          // WebGPU path MUST have created 0 GPU objects and MUST NOT have touched a device. SH-6
+          // measures WebGPU pipeline compilation, so there is nothing to measure on this path — and
+          // nothing here may be reported as if it had been measured.
+          report.mode = "isolation";
+          report.skipped = {
+            reason:
+              "bench:shader-variants measures WebGPU createShaderModule/createRenderPipeline counts and cost; a WebGL2 run " +
+              "therefore executes no measurement and publishes the isolation counters only (one run = one backend, principle II).",
+            blindSpot: "SH-6 has no WebGL2 counterpart: the WebGL2 path's shader compilation is upstream's and is not a variant-scale claim of this increment.",
+          };
+          note("isolation mode: no adapter, no device, no GPU object was requested");
+          return;
+        }
+
+        report.mode = "shader-variants";
+        if (typeof inputUrl !== "string" || inputUrl.length === 0) throw new Error("the page requires ?input=<json> (the spec writes the module corpus and the prewarm plan there)");
+        const input = await fetchJson(inputUrl);
+        report.corpus = input.corpus ?? null;
+        report.layout = { structName: input.layout.structName, structSize: input.layout.structSize, samplers: input.layout.samplers.length, maxBindingsPerGroup: input.layout.maxBindingsPerGroup };
+
+        // The production tolerance module (transpiled next to the input by the spec): the page
+        // summarises its own samples and evaluates them with the same code the spec judges with.
+        const budget = await import(input.budgetModuleUrl);
+        report.budget = {
+          moduleUrl: input.budgetModuleUrl,
+          exports: Object.keys(budget).sort(),
+          records: budget.TOLERANCE_RECORDS.map((record) => ({ metric: record.metric, threshold: record.threshold, comparison: record.comparison, criterion: record.criterion })),
+        };
+        note(`input ${inputUrl}; budget module ${input.budgetModuleUrl} (${report.budget.records.length} registered record(s))`);
+
+        const adapter = await navigator.gpu.requestAdapter();
+        if (adapter === null) {
+          report.adapter = null;
+          throw new Error("requestAdapter() returned null — no WebGPU adapter is usable on this machine");
+        }
+        const info = adapter.info ?? {};
+        report.adapter = {
+          vendor: info.vendor ?? null,
+          architecture: info.architecture ?? null,
+          device: info.device ?? null,
+          description: info.description ?? null,
+          hasInfo: typeof info.vendor === "string" && info.vendor.length > 0,
+          isFallbackAdapter: adapter.isFallbackAdapter === true,
+        };
+        const device = await adapter.requestDevice();
+        webgpuCounters.deviceRequests += 1;
+        report.preferredFormat = navigator.gpu.getPreferredCanvasFormat();
+        report.wgslLanguageFeatures = [...(navigator.gpu.wgslLanguageFeatures ?? [])];
+        report.deviceLimits = {
+          maxBindingsPerBindGroup: device.limits.maxBindingsPerBindGroup,
+          maxUniformBufferBindingSize: device.limits.maxUniformBufferBindingSize,
+          maxSampledTexturesPerShaderStage: device.limits.maxSampledTexturesPerShaderStage,
+          maxSamplersPerShaderStage: device.limits.maxSamplersPerShaderStage,
+        };
+        device.addEventListener?.("uncapturederror", (event) => report.errors.push({ uncaptured: event.error?.message ?? String(event.error) }));
+
+        const instrumentation = wrapDevice(device);
+        report.instrumentation = { status: { ...instrumentation.status } };
+        if (instrumentation.status.createShaderModule !== "wrapped" || instrumentation.status.createRenderPipeline !== "wrapped") {
+          report.errors.push({
+            instrumentation: `the device methods could not be wrapped (createShaderModule: ${instrumentation.status.createShaderModule}; createRenderPipeline: ${instrumentation.status.createRenderPipeline}) — the counted numbers would be bookkeeping only`,
+          });
+        }
+
+        const layout = buildPipelineLayout(device, input.layout);
+        const format = report.preferredFormat;
+        const groups = new Map((input.groups ?? []).map((group) => [group.key, group]));
+
+        // Module cache: one `createShaderModule` per (text, stage). The call count and the number of
+        // distinct texts together make "parsed once per distinct text" countable.
+        const shaderModules = new Map();
+        function modulesFor(groupKey) {
+          const existing = shaderModules.get(groupKey);
+          if (existing !== undefined) return { entry: existing, parsed: false };
+          const group = groups.get(groupKey);
+          if (group === undefined) throw new Error(`module text ${groupKey} is not in the input corpus`);
+          const entry = {
+            vertexModule: device.createShaderModule({ code: group.vertexWgsl, label: `${groupKey}-vs` }),
+            fragmentModule: device.createShaderModule({ code: group.fragmentWgsl, label: `${groupKey}-fs` }),
+          };
+          shaderModules.set(groupKey, entry);
+          return { entry, parsed: true };
+        }
+
+        /**
+         * One variant: create (or reuse) its module text, then create its pipeline with its own
+         * constant values. `totalMs` includes the validation round trip (`popErrorScope`) — that is what
+         * one more variant actually costs, and the budget is judged against it (gate definition).
+         */
+        async function buildVariant(row, options = {}) {
+          const started = performance.now();
+          device.pushErrorScope("validation");
+          const { entry, parsed } = modulesFor(row.group);
+          const syncMs = performance.now() - started;
+          let error = null;
+          device.pushErrorScope("validation");
+          try {
+            const pipeline = device.createRenderPipeline({
+              label: `shader-variants-${row.id}`,
+              layout,
+              vertex: { module: entry.vertexModule, entryPoint: "vs_main", buffers: vertexBufferLayouts(groups.get(row.group)?.attributes), constants: row.overrides },
+              fragment: { module: entry.fragmentModule, entryPoint: "fs_main", targets: [{ format }], constants: row.overrides },
+              primitive: { topology: "triangle-list" },
+            });
+            // The plan's pipelines stay alive (the session reuses them); the reference-only sweep
+            // releases each pipeline right after it is timed, exactly like the gate driver did.
+            if (options.keep === true) row.__pipeline = pipeline;
+            else pipeline.destroy?.();
+          } catch (thrown) {
+            error = `${thrown?.name ?? "Error"}: ${thrown?.message ?? String(thrown)}`;
+          }
+          const pipelineSyncMs = performance.now() - started - syncMs;
+          const pipelineScopeError = await device.popErrorScope();
+          const moduleScopeError = await device.popErrorScope();
+          return {
+            id: row.id,
+            group: row.group,
+            parsedModule: parsed,
+            syncMs,
+            pipelineSyncMs,
+            totalMs: performance.now() - started,
+            ok: error === null && pipelineScopeError === null && moduleScopeError === null,
+            error: error ?? pipelineScopeError?.message ?? moduleScopeError?.message ?? null,
+          };
+        }
+
+        // ---- phase 1: startup — the prewarm plan, cold cache, before the first frame --------------
+        const startupStarted = performance.now();
+        const pool = new Map();
+        const startupOutcomes = [];
+        for (const row of input.prewarmVariants) {
+          if (pool.has(row.pipeline)) {
+            report.errors.push({ duplicateVariantPipeline: row.pipeline });
+            continue;
+          }
+          const outcome = await buildVariant(row, { keep: true });
+          pool.set(row.pipeline, outcome);
+          startupOutcomes.push(outcome);
+          if (!outcome.ok) report.errors.push({ variant: row.id, error: outcome.error });
+        }
+        const startupWallMs = performance.now() - startupStarted;
+        const startupSamples = startupOutcomes.map((outcome) => outcome.totalMs);
+        const startupSyncSamples = startupOutcomes.map((outcome) => outcome.syncMs);
+        const startupHistogram = budget.variantHistogram(startupSamples);
+        const startupModuleTexts = new Set(startupOutcomes.map((outcome) => outcome.group)).size;
+        report.startup = {
+          planId: input.prewarmPlan?.id ?? null,
+          configuration: input.prewarmPlan?.configuration ?? null,
+          declaredPlanSize: input.prewarmPlan?.declaredSize ?? null,
+          plannedVariants: startupOutcomes.length,
+          shaderProgramInstances: pool.size,
+          pipelineCompilations: startupOutcomes.length,
+          moduleCompilations: 2 * startupModuleTexts,
+          distinctModuleTexts: startupModuleTexts,
+          failures: startupOutcomes.filter((outcome) => !outcome.ok).length,
+          wallMs: startupWallMs,
+          samplesMs: startupSamples,
+          syncSamplesMs: startupSyncSamples,
+          histogram: startupHistogram,
+          syncHistogram: budget.variantHistogram(startupSyncSamples),
+        };
+        note(`startup: ${startupOutcomes.length} planned variant(s) over ${startupModuleTexts} module text(s) in ${startupWallMs.toFixed(1)} ms`);
+
+        // ---- phase 2: session — the documented 300-frame session over the prepared pool -----------
+        // This is the *product* path: the pool is ready, so every request MUST be a lookup. The
+        // compilation count is measured twice (bookkeeping + wrapper delta) because "0" is the
+        // criterion that matters most.
+        const pipelineCallsBeforeSession = instrumentation.counts.createRenderPipeline;
+        const sessionStarted = performance.now();
+        let hits = 0;
+        let misses = 0;
+        const touched = new Set();
+        const sessionCompileMs = [];
+        const sessionMisses = [];
+        for (const request of input.sessionRequests) {
+          const entry = pool.get(request.pipeline);
+          if (entry === undefined) {
+            misses += 1;
+            const row = (input.prewarmVariants ?? []).find((candidate) => candidate.pipeline === request.pipeline) ?? { id: request.variant, group: request.group, overrides: request.overrides, pipeline: request.pipeline };
+            const outcome = await buildVariant(row, { keep: true });
+            pool.set(request.pipeline, outcome);
+            sessionCompileMs.push(outcome.totalMs);
+            sessionMisses.push({ frame: request.frame, phase: request.phase, variant: request.variant, pipeline: request.pipeline, error: outcome.error });
+            if (!outcome.ok) report.errors.push({ sessionVariant: request.variant, error: outcome.error });
+          } else {
+            hits += 1;
+          }
+          touched.add(request.pipeline);
+        }
+        const sessionWallMs = performance.now() - sessionStarted;
+        const pipelineCallsDuringSession = instrumentation.counts.createRenderPipeline - pipelineCallsBeforeSession;
+        report.session = {
+          frames: input.sessionRequests.length,
+          shaderProgramInstances: touched.size,
+          poolSize: pool.size,
+          poolPreparedBeforeTheSession: true,
+          cacheHits: hits,
+          cacheMisses: misses,
+          cacheHitRatio: hits + misses === 0 ? 0 : hits / (hits + misses),
+          runtimeCompilations: sessionCompileMs.length,
+          pipelineCallsDuringSession,
+          misses: sessionMisses,
+          wallMs: sessionWallMs,
+          samplesMs: sessionCompileMs,
+          histogram: budget.variantHistogram(sessionCompileMs),
+        };
+        note(`session: ${input.sessionRequests.length} frame(s), ${hits} hit(s) / ${misses} miss(es), ${pipelineCallsDuringSession} pipeline call(s) during the session`);
+
+        // ---- phase 3: reference only — the cold complement of the plan ----------------------------
+        // NOT a criterion: the product never prepares the whole space and SC-004 yields no bound for
+        // doing so. Recorded so the "one more variant ≈ 0.1 s" cost can be compared across runs.
+        const fullSpaceStarted = performance.now();
+        const fullSpaceOutcomes = [];
+        const remaining = input.remainingVariants ?? [];
+        for (const row of remaining) {
+          const outcome = await buildVariant(row, { destroy: true });
+          fullSpaceOutcomes.push(outcome);
+          if (!outcome.ok) report.errors.push({ remainingVariant: row.id, error: outcome.error });
+          if (fullSpaceOutcomes.length % 128 === 0) {
+            note(`informational sweep ${fullSpaceOutcomes.length}/${remaining.length} (${((performance.now() - fullSpaceStarted) / 1000).toFixed(1)}s)`);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        }
+        const fullSpaceWallMs = performance.now() - fullSpaceStarted;
+        const fullSpaceSamples = fullSpaceOutcomes.map((outcome) => outcome.totalMs);
+        report.fullSpace = {
+          role: "informational",
+          criterion: false,
+          requestedVariants: remaining.length,
+          pipelineCompilations: fullSpaceOutcomes.length,
+          failures: fullSpaceOutcomes.filter((outcome) => !outcome.ok).length,
+          wallMs: fullSpaceWallMs,
+          samplesMs: fullSpaceSamples,
+          histogram: budget.variantHistogram(fullSpaceSamples),
+        };
+        note(`reference-only sweep: ${fullSpaceOutcomes.length} variant(s) in ${(fullSpaceWallMs / 1000).toFixed(1)}s`);
+
+        // Release the pool: nothing else uses these pipelines (this page renders nothing).
+        for (const outcome of pool.values()) outcome.__pipeline?.destroy?.();
+
+        // ---- the counts ---------------------------------------------------------------------------
+        const distinctModulePairs = shaderModules.size;
+        const shaderModuleCalls = instrumentation.counts.createShaderModule;
+        const pipelineCalls = instrumentation.counts.createRenderPipeline;
+        const expectedPipelineCalls = report.startup.pipelineCompilations + report.session.runtimeCompilations + report.fullSpace.pipelineCompilations;
+        report.counters = {
+          createShaderModuleCalls: shaderModuleCalls,
+          createRenderPipelineCalls: pipelineCalls,
+          distinctModulePairs,
+          distinctModuleTexts: distinctModulePairs,
+          moduleCompilations: shaderModuleCalls,
+          repeatedParses: shaderModuleCalls - 2 * distinctModulePairs,
+          expectedShaderModuleCalls: 2 * distinctModulePairs,
+          expectedPipelineCalls,
+          shaderModuleCallsMatch: shaderModuleCalls === 2 * distinctModulePairs,
+          pipelineCallsMatch: pipelineCalls === expectedPipelineCalls,
+          prototypeCounts: { ...webgpuCounters.objectsByMethod },
+          prototypeCountsMatchWrapper: (webgpuCounters.objectsByMethod.createShaderModule ?? 0) === shaderModuleCalls && (webgpuCounters.objectsByMethod.createRenderPipeline ?? 0) === pipelineCalls,
+        };
+        report.instrumentation.counts = { ...instrumentation.counts };
+
+        // ---- the judge: the production tolerance module, in the page ------------------------------
+        report.measurement = {
+          runtimeVariantCompilations: report.session.runtimeCompilations,
+          newVariantPipelineP95Ms: budget.measuredP95(report.startup.histogram),
+          startupPrewarmMs: report.startup.wallMs,
+          startupPrewarmVariants: report.startup.plannedVariants,
+          repeatedModuleParses: report.counters.repeatedParses,
+          fullSpacePrewarmVariants: report.fullSpace.requestedVariants,
+        };
+        report.budgetVerdict = budget.evaluateVariantBudget(report.measurement);
+        note(`in-page verdict ${report.budgetVerdict.verdict} (${report.budgetVerdict.failures.length} failure(s)); the spec re-evaluates with the same module`);
+      }
+
+      async function run() {
+        try {
+          await main();
+        } catch (error) {
+          report.errors.push({ name: error?.name ?? "Error", message: error?.message ?? String(error), stack: error?.stack ?? null });
+        } finally {
+          report.webgl2 = webgl2Counters;
+          report.webgpu = webgpuCounters;
+          report.finishedAt = new Date().toISOString();
+          report.ready = true;
+          globalThis.__shaderVariants = report;
+        }
+      }
+
+      /** The page does its whole job in `main()`; `run()` is only responsible for publishing. */
+      await run();
+    </script>
+  </body>
+</html>

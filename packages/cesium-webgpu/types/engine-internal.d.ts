@@ -810,3 +810,51 @@ declare module "@cesium/engine/Source/Renderer/loadCubeMap.js" {
   const loadCubeMap: (context: UpstreamOpaque, options: UpstreamOpaque) => Promise<UpstreamOpaque>;
   export default loadCubeMap;
 }
+
+/**
+ * `Source/Core/Frozen.js` — consumed by the replacement `Renderer/ShaderSource.ts`
+ * (upstream `ShaderSource.js:1,333` uses `Frozen.EMPTY_OBJECT` as the default options object).
+ */
+declare module "@cesium/engine/Source/Core/Frozen.js" {
+  const Frozen: { EMPTY_OBJECT: Readonly<Record<string, never>>; EMPTY_ARRAY: readonly never[] };
+  export default Frozen;
+}
+
+/**
+ * `Source/Core/DeveloperError.js` — consumed by the replacement `Renderer/ShaderSource.ts`
+ * (upstream `ShaderSource.js:3,128,174,342` throws it for a malformed pick qualifier, an
+ * inconsistent `#version` and a circular `czm_` dependency).
+ */
+declare module "@cesium/engine/Source/Core/DeveloperError.js" {
+  export default class DeveloperError extends Error {
+    constructor(message: string);
+  }
+}
+
+/**
+ * `Source/Shaders/Builtin/CzmBuiltins.js` — the `czm_` built-in table the shader front end inlines
+ * before evaluating conditionals (upstream `ShaderSource.js:4,417-422`; contract R4).
+ */
+declare module "@cesium/engine/Source/Shaders/Builtin/CzmBuiltins.js" {
+  const CzmBuiltins: Record<string, string>;
+  export default CzmBuiltins;
+}
+
+/**
+ * `Source/Renderer/AutomaticUniforms.js` — the automatic-uniform declarations merged into the same
+ * table (upstream `ShaderSource.js:5,423-431`). Only `getDeclaration` is consumed.
+ */
+declare module "@cesium/engine/Source/Renderer/AutomaticUniforms.js" {
+  const AutomaticUniforms: Record<string, { getDeclaration?: (name: string) => string }>;
+  export default AutomaticUniforms;
+}
+
+/**
+ * `Source/Renderer/demodernizeShader.js` — the WebGL1 path only. The replacement `ShaderSource.ts`
+ * keeps the call so the port stays faithful, and it is unreachable for the WebGL2 baseline
+ * (`context.webgl2 === true`), which is why the declaration stays this coarse.
+ */
+declare module "@cesium/engine/Source/Renderer/demodernizeShader.js" {
+  const demodernizeShader: (source: string, isFragmentShader: boolean) => string;
+  export default demodernizeShader;
+}

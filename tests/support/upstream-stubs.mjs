@@ -297,6 +297,14 @@ export function upstreamStubs(overrides = {}) {
     "@cesium/engine/Source/Core/RuntimeError.js": `export default class RuntimeError extends Error { constructor(message) { super(message); this.name = "RuntimeError"; } }\n`,
     "@cesium/engine/Source/Core/WebGLConstants.js": `export default { ZERO: 0, ONE: 1, FUNC_ADD: 32774, LESS: 513, ALWAYS: 519, BACK: 1029, KEEP: 7680, CLAMP_TO_EDGE: 33071, LINEAR: 9729 };\n`,
     "@cesium/engine/Source/Shaders/ViewportQuadVS.js": `export default "in vec4 position; void main() { gl_Position = position; }";\n`,
+    // `Renderer/ShaderSource.ts` pulls the `czm_` builtin table from these three. They are stubbed
+    // empty/identity here so that loading the replacement (directly, or transitively through
+    // `Renderer/ShaderCache.ts`) does not drag the whole upstream shader tree into a unit test.
+    // The suite that asserts GLSL byte identity overrides all three with re-exports of the installed
+    // package — see `tests/unit/shader-source-dual-emit.test.mjs` `realUpstreamExternals()`.
+    "@cesium/engine/Source/Shaders/Builtin/CzmBuiltins.js": "export default {};\n",
+    "@cesium/engine/Source/Renderer/AutomaticUniforms.js": "export default {};\n",
+    "@cesium/engine/Source/Renderer/demodernizeShader.js": "export default function demodernizeShader(source) { return source; }\n",
   };
   return { ...base, ...overrides };
 }

@@ -45,6 +45,8 @@ interface ShaderProgramLike {
 
 interface ShaderSourceLike {
   getCacheKey(): string;
+  createCombinedVertexShader(context: unknown): string;
+  createCombinedFragmentShader(context: unknown): string;
 }
 
 export interface ShaderCacheOptions {
@@ -106,13 +108,23 @@ export default class ShaderCache {
       delete this._shadersToRelease[keyword];
     } else {
       const context = this._context as { _gl?: unknown; logShaderCompilation?: boolean; debugShaders?: boolean };
+      // Upstream `ShaderCache.js:115-118`: the combined texts are assembled here (after the cache
+      // lookup, because `createCombined*Shader` is the expensive part) and handed to the program as
+      // `vertexShaderText`/`fragmentShaderText` (`ShaderCache.js:120-129`). The replacement program
+      // needs them verbatim: they are what the logic layer assembled, and the WGSL channel consumes
+      // the same text. The GLSL view (`vertexShaderSource`/`fragmentShaderSource`) is unchanged.
+      const vertexShaderText = (vertexSourceInput as ShaderSourceLike).createCombinedVertexShader(context);
+      const fragmentShaderText = (fragmentSourceInput as ShaderSourceLike).createCombinedFragmentShader(context);
+
       const shaderProgram = new (ShaderProgram as unknown as new (options: unknown) => ShaderProgramLike)({
         context,
         gl: context?._gl,
         logShaderCompilation: context?.logShaderCompilation,
         debugShaders: context?.debugShaders,
         vertexShaderSource: vertexSourceInput,
+        vertexShaderText,
         fragmentShaderSource: fragmentSourceInput,
+        fragmentShaderText,
         attributeLocations,
       });
       cachedShader = { cache: this, shaderProgram, keyword, derivedKeywords: [], count: 0 };
@@ -138,10 +150,16 @@ export default class ShaderCache {
     if (typeof vertexSourceInput === "string") vertexSourceInput = new (ShaderSource as unknown as new (options: unknown) => ShaderSourceLike)({ sources: [vertexSourceInput] });
     if (typeof fragmentSourceInput === "string") fragmentSourceInput = new (ShaderSource as unknown as new (options: unknown) => ShaderSourceLike)({ sources: [fragmentSourceInput] });
 
+    // Upstream `ShaderCache.js:208-211`: a derived program carries its own combined texts.
+    const vertexShaderText = (vertexSourceInput as ShaderSourceLike).createCombinedVertexShader(this._context);
+    const fragmentShaderText = (fragmentSourceInput as ShaderSourceLike).createCombinedFragmentShader(this._context);
+
     const derivedShaderProgram = new (ShaderProgram as unknown as new (options: unknown) => ShaderProgramLike)({
       context: this._context,
       vertexShaderSource: vertexSourceInput,
+      vertexShaderText,
       fragmentShaderSource: fragmentSourceInput,
+      fragmentShaderText,
       attributeLocations: options.attributeLocations,
     });
     const derivedCachedShader: CacheEntry = { cache: this, shaderProgram: derivedShaderProgram, keyword: derivedKeyword, derivedKeywords: [], count: 0 };

@@ -288,12 +288,17 @@ async function drawAndReadback(device, testCase, format, stageConstants = { vert
 
   let bindGroupLayout = null;
   let bindGroup = null;
+  let samplerGroupLayout = null;
+  let samplerBindGroup = null;
   if (hasUniforms) {
     uniformBuffer = device.createBuffer({ size: scene.uniformBytes, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(uniformBuffer, 0, new Uint8Array(scene.uniformBytesArray));
-    // Explicit bind group layout: the union layout table (G-4) — extra entries are permitted and let
-    // the same group layout serve every variant.
+    // Explicit bind group layouts, matching `bind-layout.ts` (data-model §4.3): the uniform block is
+    // `@group(0)` and the texture/sampler pairs live in their **own** group, so a change in the texture
+    // set does not invalidate the uniform block. Extra entries are permitted, which lets the same
+    // layouts serve every variant.
     const entries = [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }];
+    const samplerEntries = [];
     const resources = [];
     for (const sampler of samplers) {
       const texture = device.createTexture({
@@ -309,24 +314,32 @@ async function drawAndReadback(device, testCase, format, stageConstants = { vert
       }
       device.queue.writeTexture({ texture }, padded, { bytesPerRow: paddedRow }, { width: scene.imagery.width, height: scene.imagery.height });
       const samplerObject = device.createSampler({ magFilter: "linear", minFilter: "linear" });
-      entries.push({ binding: sampler.textureBinding, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } });
-      entries.push({ binding: sampler.samplerBinding, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } });
+      // `sampler.textureBinding` / `samplerBinding` are the indices of the sampler's own bind group
+      // (group 1), so they are laid out in `samplerEntries`, not in the uniform group.
+      samplerEntries.push({ binding: sampler.textureBinding, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } });
+      samplerEntries.push({ binding: sampler.samplerBinding, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } });
       resources.push({ texture, sampler: samplerObject, samplerEntry: sampler });
     }
     bindGroupLayout = device.createBindGroupLayout({ entries });
-    const bindGroupEntries = [{ binding: 0, resource: { buffer: uniformBuffer } }];
+    // Group 0 carries the uniform block only; the texture/sampler pairs are group 1 (data-model §4.3).
+    const uniformGroupEntries = [{ binding: 0, resource: { buffer: uniformBuffer } }];
+    const samplerGroupEntries = [];
     for (const resource of resources) {
-      bindGroupEntries.push({ binding: resource.samplerEntry.textureBinding, resource: resource.texture.createView() });
-      bindGroupEntries.push({ binding: resource.samplerEntry.samplerBinding, resource: resource.sampler });
+      samplerGroupEntries.push({ binding: resource.samplerEntry.textureBinding, resource: resource.texture.createView() });
+      samplerGroupEntries.push({ binding: resource.samplerEntry.samplerBinding, resource: resource.sampler });
     }
-    bindGroup = device.createBindGroup({ layout: bindGroupLayout, entries: bindGroupEntries });
+    bindGroup = device.createBindGroup({ layout: bindGroupLayout, entries: uniformGroupEntries });
+    if (samplerEntries.length > 0) {
+      samplerGroupLayout = device.createBindGroupLayout({ entries: samplerEntries });
+      samplerBindGroup = device.createBindGroup({ layout: samplerGroupLayout, entries: samplerGroupEntries });
+    }
   }
 
   device.pushErrorScope("validation");
   const vertexModule = device.createShaderModule({ code: testCase.vertexWgsl });
   const fragmentModule = device.createShaderModule({ code: testCase.fragmentWgsl });
   const pipeline = device.createRenderPipeline({
-    layout: bindGroupLayout === null ? "auto" : device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+    layout: bindGroupLayout === null ? "auto" : device.createPipelineLayout({ bindGroupLayouts: samplerGroupLayout === null ? [bindGroupLayout] : [bindGroupLayout, samplerGroupLayout] }),
     vertex: { module: vertexModule, entryPoint: "vs_main", buffers: testCase.attributes.length === 0 ? [] : [vertexBufferLayout(testCase.attributes)], ...(stageConstants.vertex === null ? {} : { constants: stageConstants.vertex }) },
     // The variant's pipeline-overridable constants (G-6/T025). The module's own defaults are the
     // "nothing enabled" state, so omitting them would render the golden configuration with zero
@@ -349,6 +362,7 @@ async function drawAndReadback(device, testCase, format, stageConstants = { vert
   const pass = encoder.beginRenderPass({ colorAttachments: [{ view: target.createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: "clear", storeOp: "store" }] });
   pass.setPipeline(pipeline);
   if (bindGroup !== null) pass.setBindGroup(0, bindGroup);
+  if (samplerBindGroup !== null) pass.setBindGroup(1, samplerBindGroup);
   if (vertexBuffer !== null) {
     pass.setVertexBuffer(0, vertexBuffer);
     pass.setIndexBuffer(indexBuffer, "uint32");

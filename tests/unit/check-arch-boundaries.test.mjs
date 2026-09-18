@@ -153,3 +153,44 @@ test("A9 runs against the pinned upstream probe in this repository", (t) => {
   const report = JSON.parse(fs.readFileSync(out, "utf8"));
   assert.ok(report.results[0].summary.probes >= 1, "the upstream GLSL probe MUST still be present");
 });
+
+/**
+ * A10's subject changed in W4: it now reads the interface structs (`<X>Out` / `<X>In`) instead of
+ * slicing the file from its entry point, because a complete WGSL module declares its structs *before*
+ * the entry point and a `@fragment` return type carries an output location that is not a varying.
+ * The rule therefore needs both a positive and a negative case here, or the change would be
+ * unverifiable.
+ */
+const A10_VERTEX = {
+  "packages/cesium-webgpu/backend-webgpu/webgpu/wgsl/x-vs.wgsl": "struct XOut {\n  @builtin(position) position : vec4<f32>,\n  @location(0) v_a : vec3<f32>,\n}\n\n@vertex\nfn vs_main() -> XOut {\n  var out: XOut;\n  out.v_a = vec3<f32>(0.0);\n  return out;\n}\n",
+  "packages/cesium-webgpu/backend-webgpu/webgpu/wgsl/x-fs.wgsl": "struct XIn {\n  @location(0) v_a : vec3<f32>,\n}\n\n@fragment\nfn fs_main(input: XIn) -> @location(0) vec4<f32> {\n  return vec4<f32>(0.0);\n}\n",
+};
+
+test("A10: a paired module pair is clean, and the fragment's own output location is not mistaken for an input", (t) => {
+  const root = makeFixture(A10_VERTEX);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const { code, stdout } = runScanner(["--root", root, "--rules", "A10"]);
+  assert.equal(code, 0, `a matching pair MUST pass; got ${code}\n${stdout}`);
+  assert.match(stdout, /\[A10\] no-match/);
+});
+
+test("A10: a fragment input without a vertex output is a violation", (t) => {
+  const root = makeFixture({
+    ...A10_VERTEX,
+    "packages/cesium-webgpu/backend-webgpu/webgpu/wgsl/x-fs.wgsl": "struct XIn {\n  @location(7) v_extra : vec3<f32>,\n}\n\n@fragment\nfn fs_main(input: XIn) -> @location(0) vec4<f32> {\n  return vec4<f32>(0.0);\n}\n",
+  });
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const { code, stdout } = runScanner(["--root", root, "--rules", "A10"]);
+  assert.equal(code, 1, `an unpaired fragment input MUST be a violation; got ${code}\n${stdout}`);
+  assert.match(stdout, /\[A10\] match/);
+  const report = readReport(root);
+  assert.ok(report.results[0].violations.some((v) => /location\(s\) 7/.test(v.detail)), JSON.stringify(report.results[0].violations));
+});
+
+test("A10: a vertex shader without its fragment partner is a violation", (t) => {
+  const root = makeFixture({ "packages/cesium-webgpu/backend-webgpu/webgpu/wgsl/x-vs.wgsl": A10_VERTEX["packages/cesium-webgpu/backend-webgpu/webgpu/wgsl/x-vs.wgsl"] });
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const { code, stdout } = runScanner(["--root", root, "--rules", "A10"]);
+  assert.equal(code, 1, stdout);
+  assert.match(stdout, /paired fragment shader/);
+});

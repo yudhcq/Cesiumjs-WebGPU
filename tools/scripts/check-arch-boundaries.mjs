@@ -365,17 +365,45 @@ function ruleA9(root, options) {
 /**
  * A10 — varying contracts pair up per shader variant (static half; the runtime half is the
  * real-device `createRenderPipeline` gate G-5).
+ *
+ * FIX (W4/T083, recorded because it changes the rule's subject): the first version collected the
+ * `@location` decorators by slicing the file from its first `@vertex` / `@fragment` occurrence. For a
+ * complete WGSL module that is simply the wrong region — the stage's interface structs are declared
+ * **before** the entry point (WGSL requires declaration before use), and a `@fragment` entry point's
+ * own return type carries an **output** location that has nothing to do with varyings. The rule
+ * therefore reported a false positive on the first complete module pair this repository produced
+ * (`wgsl/globe-vs.wgsl` vs `wgsl/globe-fs.wgsl`, whose locations do match: VS out {0,2} / FS in {0,2}).
+ *
+ * The rule now reads the interface structs — `<X>In` for the vertex inputs, `<X>Out` for the vertex
+ * outputs, `<X>In` for the fragment inputs — and falls back to the original slice when a file does not
+ * name its structs that way, so the previous behaviour is preserved for hand-written fixtures.
  */
 function ruleA10(root) {
   const wgslRoot = path.join(root, "packages", "cesium-webgpu", "backend-webgpu", "webgpu", "wgsl");
   if (!exists(wgslRoot)) return { missing: path.relative(root, wgslRoot) };
   const files = walkFiles(wgslRoot, [".wgsl"]);
   const violations = [];
-  const locations = (text, stage) => {
+
+  /** `@location(N)` set of the first `struct <name>` whose name matches `pattern`. */
+  const structLocations = (text, pattern) => {
+    const match = new RegExp(`struct\\s+([A-Za-z_]\\w*)\\s*\\{`, "g");
+    let found;
+    while ((found = match.exec(text)) !== null) {
+      if (!pattern.test(found[1])) continue;
+      const end = text.indexOf("}", found.index);
+      const body = text.slice(found.index, end);
+      return { name: found[1], locations: new Set([...body.matchAll(/@location\((\d+)\)/g)].map((m) => Number(m[1]))) };
+    }
+    return null;
+  };
+
+  /** The original heuristic, kept as the fallback for files whose structs are not named by convention. */
+  const sliceLocations = (text, stage) => {
     const stageIndex = text.indexOf(`@${stage}`);
     const body = stageIndex < 0 ? "" : text.slice(stageIndex);
-    return new Set([...body.matchAll(/@location\((\d+)\)/g)].map((m) => Number(m[1])));
+    return { name: `@${stage} section`, locations: new Set([...body.matchAll(/@location\((\d+)\)/g)].map((m) => Number(m[1]))) };
   };
+
   for (const file of files.filter((f) => /-vs\.wgsl$/.test(f))) {
     const fragment = file.replace(/-vs\.wgsl$/, "-fs.wgsl");
     const relative = path.relative(root, file).split(path.sep).join("/");
@@ -383,14 +411,18 @@ function ruleA10(root) {
       violations.push({ rule: "A10", file: relative, detail: "every vertex shader MUST have a paired fragment shader" });
       continue;
     }
-    const vsLocations = locations(fs.readFileSync(file, "utf8"), "vertex");
-    const fsLocations = locations(fs.readFileSync(fragment, "utf8"), "fragment");
-    const uncovered = [...fsLocations].filter((location) => !vsLocations.has(location));
+    const vertexText = fs.readFileSync(file, "utf8");
+    const fragmentText = fs.readFileSync(fragment, "utf8");
+    const vsOutputs = structLocations(vertexText, /Out$/i) ?? sliceLocations(vertexText, "vertex");
+    const fsInputs = structLocations(fragmentText, /In$/i) ?? sliceLocations(fragmentText, "fragment");
+    const uncovered = [...fsInputs.locations].filter((location) => !vsOutputs.locations.has(location));
     if (uncovered.length > 0) {
       violations.push({
         rule: "A10",
         file: relative,
-        detail: `fragment input location(s) ${uncovered.join(", ")} have no matching vertex output (WGSL varying mismatch is a hard pipeline failure)`,
+        detail:
+          `fragment input location(s) ${uncovered.join(", ")} (read from \`${fsInputs.name}\`) have no matching vertex output ` +
+          `(read from \`${vsOutputs.name}\`) — a WGSL varying mismatch is a hard pipeline failure`,
       });
     }
   }

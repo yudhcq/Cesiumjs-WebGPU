@@ -38,6 +38,7 @@ node tools/scripts/check-gate.mjs --gate g6                               # 判�
 |---|---|---|
 | (a) | `TEXTURE_UNITS` 与 `PER_FRAGMENT_GROUND_ATMOSPHERE` 从**模块文本**搬到 **WGSL pipeline-overridable constant**（两个 `override` 在两个 stage 都声明；`createRenderPipeline` 的 `constants` 按 stage 传入，因为 WebGPU 的 `constants` 是 per-stage 且键必须在**该 stage 的模块**里声明） | `g5-shader/wgsl-emitter.mjs`、`wgsl/terrain-{vs,fs-main,fs-lib}.wgsl`、`g5-shader/mirror-generators.mjs` |
 | (b) | **只发射入口点可达的声明**（保守死声明消除）：整份 `czm_` prelude 原本被内联进两个 stage，实测把模块对 48 kB → **13 kB**（黄金配置） | `g5-shader/wgsl-prune.mjs` |
+| | ⚠️ **体积口径澄清（W4 落地后补记）**：13 kB 是**淘汰路径的瘦身实验结果**，**不是发货体积**。该实验证明"模块大小不是耗时主因"（48→13 kB 耗时 107.4→104.0 ms），故瘦身**未被采纳**。W4 生产发射器的模块对文本为 **33 101 B**（门禁原型 32 672 B，+1.3%，差额来自 T074 的深度重映射助手）。读者请勿把 13 kB 当作产品模块体积。 | W4 生产实测（`artifacts/shader-variants.json`，可再生） |
 | (c) | **可达子集预热（产品默认行为）**：应用在首帧前按 `prewarm-policy.mjs` 的**纯函数计划**（该配置下 36 个变体身份 = 影像层数 1–3 × 地面大气 3 × 雾 2 × 光照 2）建好管线池，运行期只查表 | `g6-variants/prewarm-policy.mjs`、`g6-variants/driver.js`、`g6-variants/run.mjs` |
 
 配套：varying 配对改取**每顶点见证变体**（per-fragment 是它的真子集，否则 per-vertex/per-fragment 的 `VSOut`/`FSIn` 不同、模块文本仍会分叉）；

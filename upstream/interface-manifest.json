@@ -1,10 +1,26 @@
 {
   "baselineVersion": "26.3.0",
   "cesiumVersion": "1.145.0",
-  "generatedAt": "2026-09-18T22:24:42.548Z",
+  "generatedAt": "2026-09-18T23:08:07.284Z",
   "generator": "tools/gen-interface-manifest.mjs",
   "method": "Static scan of the installed upstream sources. `exportedSymbols` = the module's exposed member surface (prototype methods, Object.defineProperties accessors, instance fields, static members, named exports). `consumedMembers` = members of that surface reached from logic-layer files (Source/** outside Source/Renderer/**) through the receiver identifiers declared in the generator (RECEIVER_HINTS + the default-exported class name). `consumedBy` lists those logic-layer files. `digest` folds module, surface, consumed members and consumers.",
   "entries": [
+    {
+      "module": "Renderer/AutomaticUniforms.js",
+      "exportedSymbols": [
+        "AutomaticUniform",
+        "_datatype",
+        "_size",
+        "getValue"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "AutomaticUniforms",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-d365ae1db7945a4c8de7c685cd2388868630bc926d1711703ed348cf88cb5843"
+    },
     {
       "module": "Renderer/Buffer.js",
       "exportedSymbols": [
@@ -2763,6 +2779,19 @@
       "digest": "sha256-b9ca19df875cd5f31f583fc059f57fba5762f1179a724fa16c9e74d9344a8519"
     },
     {
+      "module": "Renderer/demodernizeShader.js",
+      "exportedSymbols": [
+        "demodernizeShader"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "demodernizeShader",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-a3eeb947c8da67252481093cf8ba5621b0974efce920a97eaa1be02edc5e10a1"
+    },
+    {
       "module": "Renderer/loadCubeMap.js",
       "exportedSymbols": [
         "loadCubeMap"
@@ -2777,6 +2806,6 @@
       "digest": "sha256-62ab1e8a6fb0af7a154f1851cda96fe18a6500cd063f2b578ac6ec4ad0188efd"
     }
   ],
-  "digest": "sha256-3f3fe677230dda6e2475b648e66011ab3c31fc68335ecd8ad974e7cafb626cbf",
+  "digest": "sha256-b11843e8a3435734234ff8cf3bbcaea97c5b1fe7bc4da5e12e228dc779258b05",
   "notes": "Upgrade drill input (contract §6 step 2): a version bump regenerates this file and the diff is the adaptation list. `--check` fails when the committed baseline no longer matches the installed package."
 }

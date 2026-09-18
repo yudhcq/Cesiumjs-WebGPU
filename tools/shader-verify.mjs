@@ -33,10 +33,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 import { createStaticServer } from "./scripts/serve.mjs";
-import { buildGateModel, buildUnionLayout, OUT_DIR, REPO_ROOT } from "../experiments/gates/g5-shader/model.mjs";
-import { emitTerrainWgsl, overrideKey } from "../experiments/gates/g5-shader/wgsl-emitter.mjs";
-import { deriveVaryingPairs, deriveVaryingPairsFromWgsl, attributeLayoutFromDerivation } from "../experiments/gates/g5-shader/varying-pairing.mjs";
-import { assembleGlslForVariant, enumerateReachableVariants } from "../experiments/gates/g5-shader/define-matrix.mjs";
+import { assembleGlslForVariant, baseSources, buildProductionModel, enumerateMarginals, loadProduction, unionOfVariants, automaticUniformNames, OUT_DIR, REPO_ROOT } from "./shader-model.mjs";
 import { buildScene } from "../experiments/gates/shared/terrain-scene.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -69,7 +66,7 @@ const sha256 = (text) => `sha256-${createHash("sha256").update(text).digest("hex
 const repoRelative = (absolute) => path.relative(REPO_ROOT, absolute).split(path.sep).join("/");
 
 export function parseArgv(argv) {
-  const options = { family: "globe", variants: "mvp", report: null, quiet: false, headed: false, channel: undefined, timeoutMs: 1800000, modelOnly: false };
+  const options = { family: "globe", variants: "mvp", report: null, quiet: false, headed: false, channel: undefined, timeoutMs: 1800000, modelOnly: false, checkLeafMap: false };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     const eq = token.indexOf("=");
@@ -78,31 +75,100 @@ export function parseArgv(argv) {
     if (key === "--quiet") options.quiet = true;
     else if (key === "--headed") options.headed = true;
     else if (key === "--model-only") options.modelOnly = true;
+    else if (key === "--check-leaf-map") options.checkLeafMap = true;
     else if (key === "--family") options.family = value ?? argv[++index];
     else if (key === "--variants") options.variants = value ?? argv[++index];
-    else if (key === "--report") options.report = path.resolve(value ?? argv[++index]);
+    // T078 writes its report with `--emit-report`; the G-5 runner used `--report`. Both are accepted
+    // so the task text and the gate runner can each name the same thing.
+    else if (key === "--report" || key === "--emit-report") options.report = path.resolve(value ?? argv[++index]);
     else if (key === "--channel") options.channel = value ?? argv[++index];
     else if (key === "--timeout") options.timeoutMs = Number(value ?? argv[++index]);
     else throw new Error(`unknown argument "${token}"`);
   }
   if (options.family !== "globe") throw new Error(`unknown --family "${options.family}" (only "globe" is implemented; other families MUST fail loudly rather than pass silently)`);
-  if (!["mvp", "all-reachable"].includes(options.variants)) throw new Error(`unknown --variants "${options.variants}"`);
+  if (!options.checkLeafMap && !["mvp", "all-reachable"].includes(options.variants)) throw new Error(`unknown --variants "${options.variants}"`);
   return options;
 }
 
+/**
+ * T070 / SH-3 leaf-map check (`node tools/shader-verify.mjs --check-leaf-map`).
+ *
+ * Delegates to `tools/shader-leaf-map.mjs --check` so there is exactly one implementation of the R7
+ * drift rule, and folds the reference module pair's freshness into the same verdict.
+ */
+async function runLeafMapCheck({ quiet = false } = {}) {
+  const log = (line) => {
+    if (!quiet) process.stdout.write(`[shader-verify] ${line}\n`);
+  };
+  const { spawnSync } = await import("node:child_process");
+  const checks = [];
+  const run = (label, args) => {
+    const result = spawnSync(process.execPath, args, { cwd: REPO_ROOT, encoding: "utf8" });
+    const ok = result.status === 0;
+    checks.push({ id: label, ok, detail: (result.stdout ?? "").trim().split("\n").pop() ?? "", stderr: ok ? undefined : (result.stderr ?? "").trim().split("\n").slice(0, 4).join(" | ") });
+    log(`${label}: ${ok ? "ok" : "FAIL"} — ${checks[checks.length - 1].detail}${ok ? "" : ` (${checks[checks.length - 1].stderr})`}`);
+    return ok;
+  };
+  run("leaf-map", [path.join(REPO_ROOT, "tools", "shader-leaf-map.mjs"), "--check"]);
+  run("reference-modules", [path.join(REPO_ROOT, "tools", "scripts", "gen-reference-modules.mjs"), "--check"]);
+  const verdict = checks.every((entry) => entry.ok) ? "pass" : "fail";
+  const artifact = {
+    gate: "g5",
+    task: "T070",
+    tool: "tools/shader-verify.mjs --check-leaf-map",
+    family: "globe",
+    variants: "leaf-map",
+    verdict,
+    recordedAt: new Date().toISOString(),
+    notes:
+      "SH-3: every upstream shader leaf the acceptance path uses MUST be present in `shader-leaf-map.json` with a matching text hash (R7 drift detection) and MUST be marked verifiedOnRealGpu; the frozen reference module pair MUST still be what the emitter produces.",
+    checks,
+  };
+  fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
+  fs.writeFileSync(path.join(ARTIFACT_DIR, "globe-leaf-map.json"), `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+  for (const entry of checks) process.stdout.write(`  [${entry.ok ? "ok" : "FAIL"}] ${entry.id}: ${entry.detail}\n`);
+  return { code: verdict === "pass" ? 0 : 1, artifact, checks, store: null };
+}
+
+/** The production modules and base sources, loaded once per run. */
+let runtime = null;
+
+async function ensureRuntime() {
+  if (runtime === null) {
+    const production = await loadProduction();
+    const base = await baseSources();
+    const automaticUniforms = await automaticUniformNames();
+    runtime = { production, base, automaticUniforms };
+  }
+  return runtime;
+}
+
 /** Select one enumerated variant by its dimension values. */
-export function selectVariant(selection) {
+export function selectVariant(selection, variants = null) {
   const wanted = Object.entries(selection).map(([id, value]) => `${id}=${value}`).join("|");
-  const variant = enumerateReachableVariants().find((candidate) => candidate.id === wanted);
+  const list = variants ?? runtime.production.variants.enumerateReachableVariants();
+  const variant = list.find((candidate) => candidate.id === wanted);
   if (variant === undefined) throw new Error(`g5: no enumerated variant matches ${wanted}`);
   return variant;
+}
+
+/**
+ * The union bind layout for `--variants=mvp`: the marginal subset is fast, and the harness
+ * **asserts** (in the `all-reachable` mode) that its union equals the full cross product's.
+ */
+async function buildUnionLayout() {
+  const { production, base, automaticUniforms } = await ensureRuntime();
+  const variants = enumerateMarginals(production.variants.enumerateReachableVariants());
+  const inputs = await unionOfVariants({ variants, production, base, automaticUniforms });
+  return production.bindLayout.layoutUniforms(inputs, { structName: "TerrainUniforms" });
 }
 
 /**
  * Walk the whole define matrix once: emit, hash, and write one representative module pair per
  * distinct hash group into chunked JSON files the probe fetches.
  */
-export function buildAndWriteModules({ quiet = false } = {}) {
+export async function buildAndWriteModules({ quiet = false } = {}) {
+  await ensureRuntime();
   const log = (line) => {
     if (!quiet) process.stdout.write(`[shader-verify] ${line}\n`);
   };
@@ -117,15 +183,18 @@ export function buildAndWriteModules({ quiet = false } = {}) {
   fs.rmSync(MODULE_DIR, { recursive: true, force: true });
   fs.mkdirSync(MODULE_DIR, { recursive: true });
 
-  const model = buildGateModel({
+  const model = await buildProductionModel({
+    production: runtime.production,
+    base: runtime.base,
+    marginal: false,
     onEmission: (entry, emission) => {
       if (!emission.ok) {
         rejected += 1;
-        rows.push({ id: entry.variant.id, rejected: true, unsupported: emission.unsupported.map((item) => item.define) });
+        rows.push({ id: entry.variant.id, rejected: true, unsupported: emission.diagnostics.map((item) => item.message) });
         return;
       }
-      const vertexHash = sha256(emission.vertexWgsl);
-      const fragmentHash = sha256(emission.fragmentWgsl);
+      const vertexHash = sha256(emission.vertexModule);
+      const fragmentHash = sha256(emission.fragmentModule);
       const key = `${vertexHash}_${fragmentHash}`;
       let index = groupIndex.get(key);
       if (index === undefined) {
@@ -139,11 +208,11 @@ export function buildAndWriteModules({ quiet = false } = {}) {
           memberCount: 0,
           attributes: entry.emission.structure.vertexBufferLayout,
           varyingPairs: entry.emission.structure.paired,
-          varyingSource: entry.derivation.source ?? null,
-          vertexWgsl: emission.vertexWgsl,
-          fragmentWgsl: emission.fragmentWgsl,
-          vertexBytes: emission.vertexWgsl.length,
-          fragmentBytes: emission.fragmentWgsl.length,
+          varyingSource: entry.contract.source ?? null,
+          vertexWgsl: emission.vertexModule,
+          fragmentWgsl: emission.fragmentModule,
+          vertexBytes: emission.vertexModule.length,
+          fragmentBytes: emission.fragmentModule.length,
         });
         pending.push(index);
       }
@@ -152,7 +221,7 @@ export function buildAndWriteModules({ quiet = false } = {}) {
       // (G-6/T025): two define sets that emit the same text still need different pipelines when their
       // `override` values differ. Both counts are published so a reader can see the decomposition.
       const overrides = entry.emission.structure.overrides;
-      const pipelineKey = `${key}#${overrideKey(overrides)}`;
+      const pipelineKey = `${key}#${runtime.production.emitter.overrideKey(overrides)}`;
       if (!pipelineKeys.has(pipelineKey)) pipelineKeys.set(pipelineKey, { moduleKey: key, overrides });
       rows.push({ id: entry.variant.id, group: key, pipeline: pipelineKey, overrides, paired: entry.emission.structure.paired, rejected: false });
 
@@ -209,11 +278,12 @@ export function buildAndWriteModules({ quiet = false } = {}) {
       structName: model.layout.structName,
       structSize: model.layout.structSize,
       wgslStruct: model.layout.wgslStruct,
-      memberCount: model.layout.members.length,
+      wgslBindings: model.layout.wgslBindings,
+      memberCount: model.layout.uniformBlock.fields.length,
       samplers: model.layout.samplers,
       // The full member records are kept: `--variants=mvp` writes the uniform buffer strictly through
       // this table, so it needs `length` / `components` / `columns` — not just the byte offsets.
-      members: model.layout.members.map((member) => ({ ...member, scalarOffsets: undefined })),
+      members: model.layout.uniformBlock.fields.map((member) => ({ ...member, scalarOffsets: undefined })),
     },
     unionUniforms: model.unionUniforms,
     groups: groups.map((group) => ({
@@ -385,36 +455,60 @@ export async function runShaderVerify(argv = process.argv.slice(2)) {
   const checks = [];
   const check = (id, ok, detail, extra = {}) => ({ id, ok: ok === true, detail, ...extra });
 
+  // T070 / SH-3: the leaf map check does not touch a device at all, so it short-circuits everything.
+  if (options.checkLeafMap) return runLeafMapCheck({ quiet: options.quiet });
+
   if (options.variants === "mvp") {
+    const { production, base } = await ensureRuntime();
+    const { deriveVaryingContract, attributeLayoutFromContract, varyingContractFromWgsl } = production.varyingContract;
     // ---- the layout comes from the marginal union (fast, and asserted equal to the full union by
-    //      the gate runner); in `all-reachable` mode the full cross product rebuilds the same layout.
+    //      `--variants=all-reachable`); the full cross product rebuilds the same layout there.
     let layout;
-    let layoutSource;
+    const layoutSource = "marginal union (enumerateMarginals) over the production bind-layout generator; `--variants=all-reachable` rebuilds the same layout from the full cross product and asserts it is identical";
+    // Always rebuilt from the production modules: a stored model file can only ever be *evidence*, and
+    // reading the layout out of it would let a stale artefact silently feed the emitter (the first
+    // production run did exactly that and the device reported `unresolved value 'czm'`).
+    layout = await buildUnionLayout();
     const storePath = path.join(OUT_DIR, "g5-model.json");
     if (fs.existsSync(storePath)) {
       const store = JSON.parse(fs.readFileSync(storePath, "utf8"));
-      layout = { structName: store.layout.structName, structSize: store.layout.structSize, wgslStruct: store.layout.wgslStruct, samplers: store.layout.samplers, members: store.layout.members };
-      layoutSource = `${repoRelative(storePath)} (full cross-product union)`;
-    } else {
-      layout = buildUnionLayout();
-      layoutSource = "marginal union (enumerateMarginals); the gate runner asserts it equals the full cross-product union";
+      const stored = store.layout;
+      if (stored?.wgslStruct !== undefined) {
+        checks.push(
+          check(
+            "union-layout-matches-recorded-model",
+            stored.wgslStruct === layout.wgslStruct && stored.structSize === layout.structSize,
+            `${repoRelative(storePath)} records a ${stored.structSize}-byte struct; the production generator produced ${layout.structSize} bytes` +
+              (stored.wgslStruct === layout.wgslStruct ? " with identical field layout" : " with a DIFFERENT field layout"),
+          ),
+        );
+      }
     }
 
     const cases = [];
     for (const mvpCase of MVP_CASES) {
       const variant = selectVariant(mvpCase.selection);
-      const glsl = assembleGlslForVariant(variant);
-      const derivation = deriveVaryingPairs({ vertexSource: glsl.vertexSource, fragmentSource: glsl.fragmentSource, defines: variant.defines });
-      const emission = emitTerrainWgsl({ variant, glsl, derivation, layout });
-      if (!emission.ok) throw new Error(`g5: the MVP case "${mvpCase.id}" was not emitted: ${JSON.stringify(emission.unsupported)}`);
-      const urls = writeVariantModules(mvpCase.id, emission.vertexWgsl, emission.fragmentWgsl);
+      const glsl = assembleGlslForVariant(variant, { ShaderSourceClass: production.ShaderSource, base, fragments: production.fragments, destinationOf: production.variants.destinationOf });
+      const derivation = deriveVaryingContract({ vertexSource: glsl.vertexSource, fragmentSource: glsl.fragmentSource, defines: variant.defines, variantKey: variant.id, attributeLocations: null });
+      const emission = production.emitter.emitTerrainWgsl({
+        variantKey: variant.id,
+        vertexGlsl: glsl.vertexSource,
+        fragmentGlsl: glsl.fragmentSource,
+        defines: variant.defines,
+        textureUnits: production.fragments.textureUnitsFromDefines(variant.defines),
+        flags: production.fragments.applyFlagsFromDefines(variant.defines),
+        layout,
+        sceneMode: variant.sceneMode,
+      });
+      if (!emission.ok) throw new Error(`g5: the MVP case "${mvpCase.id}" was not emitted: ${JSON.stringify(emission.diagnostics)}`);
+      const urls = writeVariantModules(mvpCase.id, emission.vertexModule, emission.fragmentModule);
       const scene = buildScene({ quantized: mvpCase.quantized });
-      const fromWgsl = deriveVaryingPairsFromWgsl(emission.vertexWgsl, emission.fragmentWgsl);
+      const fromWgsl = varyingContractFromWgsl(emission.vertexModule, emission.fragmentModule);
       // Constant-colour fragment stage carrying the case's own `FSIn`: it isolates the vertex stage
       // (geometry coverage) from the textured fragment stage.
-      const fragmentStructStart = emission.fragmentWgsl.indexOf("struct FSIn {");
-      const fragmentStructEnd = emission.fragmentWgsl.indexOf("}", fragmentStructStart);
-      const constantFragmentWgsl = `${emission.fragmentWgsl.slice(fragmentStructStart, fragmentStructEnd + 1)}\n\n@fragment\nfn fs_main(input: FSIn) -> @location(0) vec4<f32> { return vec4<f32>(0.25, 0.5, 0.75, 1.0); }\n`;
+      const fragmentStructStart = emission.fragmentModule.indexOf("struct FSIn {");
+      const fragmentStructEnd = emission.fragmentModule.indexOf("}", fragmentStructStart);
+      const constantFragmentWgsl = `${emission.fragmentModule.slice(fragmentStructStart, fragmentStructEnd + 1)}\n\n@fragment\nfn fs_main(input: FSIn) -> @location(0) vec4<f32> { return vec4<f32>(0.25, 0.5, 0.75, 1.0); }\n`;
       cases.push({
         ...mvpCase,
         ...urls,
@@ -424,10 +518,10 @@ export async function runShaderVerify(argv = process.argv.slice(2)) {
         // (G-6/T025): without them the module's defaults apply (`numberOfDayTextures = 0`), which would
         // silently render the golden configuration with no imagery at all.
         constants: emission.structure.overrides,
-        attributes: attributeLayoutFromDerivation(derivation),
-        paired: derivation.paired.map((entry) => entry.name),
+        attributes: attributeLayoutFromContract(derivation),
+        paired: derivation.varyingSet.map((entry) => entry.name),
         fromWgsl,
-        layout: { structName: layout.structName, structSize: layout.structSize, members: layout.members.map((member) => ({ name: member.name, byteOffset: member.byteOffset, byteSize: member.byteSize, arrayStride: member.arrayStride, length: member.length, glslType: member.glslType })) },
+        layout: { structName: layout.structName, structSize: layout.structSize, members: layout.uniformBlock.fields.map((member) => ({ name: member.name, byteOffset: member.byteOffset, byteSize: member.byteSize, arrayStride: member.arrayStride, length: member.length, glslType: member.glslType })) },
         samplers: layout.samplers,
         scene: serialiseScene(scene, layout),
       });
@@ -518,17 +612,19 @@ export async function runShaderVerify(argv = process.argv.slice(2)) {
       verdict,
       recordedAt: new Date().toISOString(),
       notes:
-        `T022 real-device verification of the **golden MVP configuration** (${MVP_CASES.length} case(s)) rendered with the WGSL emitted by ` +
-        `experiments/gates/g5-shader/wgsl-emitter.mjs for the same defines + sources upstream assembles into GLSL. ` +
+        `T022/T078 real-device verification of the **golden MVP configuration** (${MVP_CASES.length} case(s)) rendered with the WGSL emitted by ` +
+        `packages/cesium-webgpu/backend-webgpu/webgpu/wgsl-emitter.ts for the same defines + sources upstream assembles into GLSL ` +
+        `(the production emission channel; the G-5 gate prototypes were the pre-W4 reference). ` +
         `The fixed terrain scene (experiments/gates/shared/terrain-scene.mjs: 16x16 WGS84 patch, ${MVP_CASES[0].selection.textureUnits} texture unit, ` +
-        `deterministic imagery) is written strictly through the H-4 CPU layout table and read back. ` +
+        `deterministic imagery) is written strictly through the bind-layout CPU table and read back. ` +
         `Checks: pipeline creation with 0 validation errors and a full-frame non-black readback.`,
       environment: { node: process.version, platform: `${process.platform} ${process.arch}`, browser: { channel: options.channel ?? process.env.GATE_BROWSER_CHANNEL ?? "chrome", version: run.browserVersion, headless: options.headed !== true, launchArgs: [] }, adapter: collected?.adapter ?? null, preferredFormat: collected?.preferredFormat ?? null, deviceLimits: collected?.device?.limits ?? null },
       checks,
       evidence: [
         { path: "artifacts/shader-verify/globe-mvp.json", what: "this artefact" },
-        { path: "experiments/gates/out/g5-model.json", what: "the enumerated define space, the H-4 union layout and the module-pair groups" },
-        { path: "experiments/gates/g5-shader/wgsl-emitter.mjs", what: "the WGSL emission seam" },
+        { path: "experiments/gates/out/g5-model.json", what: "the enumerated define space, the union bind layout and the module-pair groups" },
+        { path: "packages/cesium-webgpu/backend-webgpu/webgpu/wgsl-emitter.ts", what: "the production WGSL emission channel" },
+        { path: "packages/cesium-webgpu/backend-webgpu/webgpu/shader-leaf-map.json", what: "the leaf hash → WGSL file map (SH-3)" },
         { path: "experiments/gates/shared/terrain-scene.mjs", what: "the fixed terrain scene used for the readback" },
       ],
       measurements: { cases: (collected?.mvp?.cases ?? []).map((testCase) => ({ id: testCase.id, compile: { ok: testCase.compile.ok, pipelineError: testCase.compile.pipelineError, vertexErrors: testCase.compile.vertex.messages.filter((m) => m.type === "error").length, fragmentErrors: testCase.compile.fragment.messages.filter((m) => m.type === "error").length }, draw: testCase.draw === null ? null : { ...testCase.draw, rgbaBase64: undefined } })) },
@@ -543,7 +639,7 @@ export async function runShaderVerify(argv = process.argv.slice(2)) {
   }
 
   // ---- all-reachable: one pipeline per distinct module pair ------------------------------------
-  const store = buildAndWriteModules({ quiet: options.quiet });
+  const store = await buildAndWriteModules({ quiet: options.quiet });
   const index = JSON.parse(fs.readFileSync(path.join(MODULE_DIR, "index.json"), "utf8"));
   const input = {
     mode: "sweep",
@@ -553,12 +649,33 @@ export async function runShaderVerify(argv = process.argv.slice(2)) {
     negativeControl: null,
   };
   const representative = store.groups[0];
-  const negativeVariant = selectVariant(MVP_CASES[0].selection);
-  const negativeGlsl = assembleGlslForVariant(negativeVariant);
-  const negativeDerivation = deriveVaryingPairs({ vertexSource: negativeGlsl.vertexSource, fragmentSource: negativeGlsl.fragmentSource, defines: negativeVariant.defines });
-  const negativeEmission = emitTerrainWgsl({ variant: negativeVariant, glsl: negativeGlsl, derivation: negativeDerivation, layout: { structName: store.layout.structName, structSize: store.layout.structSize, wgslStruct: store.layout.wgslStruct, samplers: store.layout.samplers, members: store.layout.members } });
-  const negativeUrls = writeVariantModules("negative-control", negativeEmission.vertexWgsl, negativeEmission.fragmentWgsl);
-  input.negativeControl = { ...negativeUrls, varying: negativeDerivation.paired[0].name, attributes: attributeLayoutFromDerivation(negativeDerivation), constants: negativeEmission.structure.overrides };
+  {
+    const { production, base } = await ensureRuntime();
+    const { deriveVaryingContract, attributeLayoutFromContract } = production.varyingContract;
+    const negativeVariant = selectVariant(MVP_CASES[0].selection);
+    const negativeGlsl = assembleGlslForVariant(negativeVariant, { ShaderSourceClass: production.ShaderSource, base, fragments: production.fragments, destinationOf: production.variants.destinationOf });
+    const negativeDerivation = deriveVaryingContract({ vertexSource: negativeGlsl.vertexSource, fragmentSource: negativeGlsl.fragmentSource, defines: negativeVariant.defines, variantKey: negativeVariant.id, attributeLocations: null });
+    const negativeEmission = production.emitter.emitTerrainWgsl({
+      variantKey: negativeVariant.id,
+      vertexGlsl: negativeGlsl.vertexSource,
+      fragmentGlsl: negativeGlsl.fragmentSource,
+      defines: negativeVariant.defines,
+      textureUnits: production.fragments.textureUnitsFromDefines(negativeVariant.defines),
+      flags: production.fragments.applyFlagsFromDefines(negativeVariant.defines),
+      layout: {
+        structName: store.layout.structName,
+        structSize: store.layout.structSize,
+        wgslStruct: store.layout.wgslStruct,
+        wgslBindings: store.layout.wgslBindings,
+        samplers: store.layout.samplers,
+        uniformBlock: { uniformNames: store.unionUniforms.map((entry) => entry.name), fields: store.layout.members, blockSize: store.layout.structSize, wgslStruct: store.layout.wgslStruct },
+        bindingPlan: { groups: [], textureCount: store.layout.samplers.length, samplerCount: store.layout.samplers.length },
+        members: store.layout.members,
+      },
+    });
+    const negativeUrls = writeVariantModules("negative-control", negativeEmission.vertexModule, negativeEmission.fragmentModule);
+    input.negativeControl = { ...negativeUrls, varying: negativeDerivation.varyingSet[0].name, attributes: attributeLayoutFromContract(negativeDerivation), constants: negativeEmission.structure.overrides };
+  }
 
   // The probe needs every chunk: publish them as a list it walks.
   input.chunks = index.chunkFiles.map((name) => `/${repoRelative(path.join(MODULE_DIR, name))}`);

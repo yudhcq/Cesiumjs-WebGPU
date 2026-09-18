@@ -38,8 +38,6 @@ const manifest = readJson(`${BACKEND}/manifest.json`);
 
 /** Constructor-style replacements that are STILL placeholders: `new Module()` MUST fail loudly. */
 const CLASS_MODULES = [
-  "ShaderProgram",
-  "ShaderSource",
   "SharedContext",
   "Texture3D",
   "CubeMap",
@@ -49,27 +47,17 @@ const CLASS_MODULES = [
 ];
 
 /** Factory-style replacements: calling the default export MUST fail loudly. */
-const FUNCTION_MODULES = ["createUniform", "createUniformArray", "loadCubeMap"];
+const FUNCTION_MODULES = ["loadCubeMap"];
 
 /** Static factory entry points the upstream logic layer calls without constructing. */
-const STATIC_ENTRIES = [
-  ["ShaderProgram", "fromCache"],
-];
+const STATIC_ENTRIES = [];
 
-/** Every `webgpu/**` module that is STILL a placeholder, with the entry point it MUST refuse. */
-const WEBGPU_ENTRIES = [
-  ["bind-layout.ts", "buildBindLayout", [""]],
-  ["bind-layout.ts", "emitWgslStruct", [{}]],
-  ["shader-emit.ts", "emitShader", [{}]],
-  ["shader-emit.ts", "assertVaryingsPair", [{}, {}]],
-  ["glsl-preprocess.ts", "evaluateConditionals", ["", {}]],
-  ["glsl-preprocess.ts", "inlineCzmBuiltins", [""]],
-  ["glsl-preprocess.ts", "textureUnitsDefine", [1]],
-  ["wgsl-prelude/index.ts", "preludeFor", [[]]],
-  ["wgsl-prelude/index.ts", "renderPrelude", [[]]],
-  ["wgsl/index.ts", "loadShaderLibrary", []],
-  ["wgsl/index.ts", "readWgslModule", ["GlobeVS"]],
-];
+/**
+ * Every `webgpu/**` module that is STILL a placeholder, with the entry point it MUST refuse.
+ * W4 (tasks T066–T077) delivered all of them; the list is kept (empty) so a future placeholder has a
+ * place to be registered and the "no silent skeleton" discipline stays explicit.
+ */
+const WEBGPU_ENTRIES = [];
 
 /** Modules W2 implemented: they MUST be loadable and MUST NOT be placeholders any more. */
 const W2_IMPLEMENTED_MODULES = [
@@ -106,6 +94,30 @@ const W3_IMPLEMENTED_MODULES = [
   "Renderer/Renderbuffer.ts",
   "Renderer/MultisampleFramebuffer.ts",
   "Renderer/FramebufferManager.ts",
+];
+
+/**
+ * Modules W4 implemented (T066–T077): the shader compilation front end. They MUST be loadable and MUST
+ * NOT be the T037 placeholder any more; their behaviour is asserted by their own unit suites.
+ */
+const W4_IMPLEMENTED_MODULES = [
+  "webgpu/glsl-preprocess.ts",
+  "webgpu/varying-contract.ts",
+  "webgpu/wgsl-prune.ts",
+  "webgpu/generated-fragments.ts",
+  "webgpu/wgsl-emitter.ts",
+  "webgpu/terrain-variants.ts",
+  "webgpu/bind-layout.ts",
+  "webgpu/shader-emit.ts",
+  "webgpu/wgsl-prelude/index.ts",
+  "webgpu/wgsl/index.ts",
+  "webgpu/wgsl/leaves.ts",
+  "webgpu/wgsl/generated-library.ts",
+  "webgpu/wgsl-prelude/catalog.ts",
+  "Renderer/ShaderSource.ts",
+  "Renderer/ShaderProgram.ts",
+  "Renderer/createUniform.ts",
+  "Renderer/createUniformArray.ts",
 ];
 
 /** A thrown error that is a diagnosable `not-implemented` diagnostic. */
@@ -179,10 +191,10 @@ test("static factory entry points fail loudly instead of returning empty resourc
 });
 
 test("ShaderProgram keeps the _attributeLocations read surface (contract §5 R2 / rule A9)", async () => {
-  const module_ = await loadTypeScriptModule(repoPath(`${BACKEND}/Renderer/ShaderProgram.ts`));
+  const module_ = await loadTypeScriptModule(repoPath(`${BACKEND}/Renderer/ShaderProgram.ts`), { externals: upstreamStubs() });
   // Declared as a field even though the skeleton cannot populate it yet: the invariant the logic
   // layer depends on MUST stay visible in the replacement.
-  assert.match(module_.default.prototype.constructor.toString() + Object.getOwnPropertyNames(Object.getPrototypeOf(module_.default)), /.*/);
+  assert.equal(typeof module_.default, "function", "the replacement MUST export the upstream default constructor");
   const source = fs.readFileSync(repoPath(`${BACKEND}/Renderer/ShaderProgram.ts`), "utf8");
   assert.match(source, /_attributeLocations/, "the replacement MUST carry the attribute-location read surface");
   assert.doesNotMatch(source, /(?:^|[^.\w])vertexShaderSource\s*=(?!=)/, "the replacement MUST NOT overwrite the GLSL view");
@@ -220,6 +232,59 @@ test("the webgpu module set is complete (10 modules of T037 plus the W2 addition
   for (const file of W3_IMPLEMENTED_MODULES) {
     assert.ok(fs.existsSync(repoPath(`${BACKEND}/${file}`)), `${file} MUST exist (implemented in W3)`);
   }
+  for (const file of W4_IMPLEMENTED_MODULES) {
+    assert.ok(fs.existsSync(repoPath(`${BACKEND}/${file}`)), `${file} MUST exist (implemented in W4)`);
+  }
+});
+
+test("the W4 shader front end is implemented, not stubbed (a placeholder regression fails here)", async () => {
+  // Each of these has its own suite for behaviour; this test only pins that they are no longer the
+  // T037 placeholder — a regression would otherwise hide behind the narrowed WEBGPU_ENTRIES list above.
+  const preprocess = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/glsl-preprocess.ts`));
+  assert.equal(preprocess.preprocess("#ifdef FOG\nyes\n#endif", ["FOG"]).activeText.trim(), "yes", "glsl-preprocess MUST evaluate conditionals");
+  assert.ok(preprocess.inlineCzmBuiltins("float x = czm_pi;", (name) => (name === "czm_pi" ? "const float czm_pi = 3.14;" : undefined)).includes("czm_pi"));
+
+  const emitter = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/wgsl-emitter.ts`));
+  assert.equal(emitter.emitTerrainWgsl({ variantKey: "x", vertexGlsl: "", fragmentGlsl: "", defines: ["APPLY_MATERIAL"], textureUnits: 0, flags: 0, layout: null }).ok, false, "an unsupported define MUST be refused with diagnostics, never emitted");
+
+  const bindLayout = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/bind-layout.ts`));
+  const layout = bindLayout.layoutUniforms([{ name: "u_x", glslType: "vec3" }], { structName: "T" });
+  assert.equal(layout.structSize, 16, "a vec3 member occupies 12 bytes but is 16-aligned (uniform address space)");
+  assert.match(layout.wgslStruct, /struct T \{/);
+
+  const purge = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/wgsl-prune.ts`));
+  assert.deepEqual(purge.pruneWgsl("fn used() {}\nfn unused() {}\n@vertex\nfn vs_main() { used(); }", { roots: ["vs_main"] }).dropped, ["unused"]);
+
+  const fragments = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/generated-fragments.ts`));
+  assert.match(fragments.emitComputeDayColorWgsl({ maxTextureUnits: 1, access: (name, index) => `u.${name}[${index}]` }), /fn computeDayColor/);
+
+  const varying = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/varying-contract.ts`));
+  assert.equal(typeof varying.deriveVaryingContract, "function");
+  assert.equal(varying.assertVaryingContract("@fragment\nfn fs_main(input: FSIn) -> @location(0) vec4<f32> { return vec4<f32>(0.0); }", "struct FSIn {\n  @location(7) v_extra : vec3<f32>,\n}").ok, false, "the E1 trap (a fragment input without a vertex output) MUST be reported as a failure");
+
+  const variants = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/terrain-variants.ts`));
+  assert.equal(variants.enumerateReachableVariants().length, 768, "the MVP-reachable cross product MUST enumerate 768 combinations");
+  assert.equal(variants.prewarmPlan().size, 36, "the prewarm plan MUST be the 36-variant configuration-derived subset (G-6 rev3)");
+
+  const wgsl = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/wgsl/index.ts`));
+  assert.ok(wgsl.WGSL_LEAVES.prelude.length > 1000, "the runtime leaf library MUST be inlined for the browser bundle");
+  assert.ok(wgsl.WGSL_LEAVES.vertex.includes("vs_main"), "the runtime vertex leaf MUST be the terrain vertex stage");
+  assert.throws(() => wgsl.readWgslModule("not-a-leaf-name"), /not in|missing|not found/, "an unmapped leaf MUST be refused, never silently resolved");
+
+  const prelude = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/wgsl-prelude/index.ts`));
+  assert.ok(prelude.PRELUDE_CATALOG.length > 50, "the czm_ prelude catalog MUST be populated");
+
+  const shaderEmit = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/shader-emit.ts`));
+  assert.equal(shaderEmit.assertEmitTarget(undefined), "glsl");
+  assert.throws(() => shaderEmit.assertEmitTarget("nope"), /unknown emit target/);
+
+  // `Renderer/ShaderSource.ts` needs the real upstream `CzmBuiltins`/`AutomaticUniforms` modules
+  // (the stub map does not carry them), so its behaviour is asserted by
+  // `tests/unit/shader-source-dual-emit.test.mjs`, which supplies them. Here we only pin that the
+  // placeholder banner is gone.
+  const shaderSourceText = fs.readFileSync(repoPath(`${BACKEND}/Renderer/ShaderSource.ts`), "utf8");
+  assert.doesNotMatch(shaderSourceText, /PHASE 3 \(W1\) SKELETON|throwNotImplemented/, "the ShaderSource replacement MUST NOT be the W1 placeholder any more");
+  assert.match(shaderSourceText, /combineShader/, "the replacement MUST carry the upstream assembly algorithm");
 });
 
 test("the W3 resource modules are implemented, not stubbed (a placeholder regression fails here)", async () => {
