@@ -64,6 +64,13 @@ npm pack cesium@1.145.0          # → cesium-1.145.0.tgz（Source/Cesium.d.ts �
 | `Scene.pixelRatio` | `Scene.js:1734`(`@private`) | 需自行用 `drawingBufferWidth/Height ÷ canvas.clientWidth/Height` 推导 |
 | `Scene.frameState` | `Scene.js:1168`(`@private`) | 无法读取帧状态对象 |
 | `Context`（`Renderer/Context.js`） | `Renderer/Context.js:36`(`@private`) | 无法直接操作上游 GL 上下文 |
+| **`DrawCommand`**（`Renderer/DrawCommand.js`） | 类级 `@private`（ref-doc 不收录；`@cesium/engine` 包入口仍可 import —— "能被 import"不等于"公开"） | **无法**读取/反推本帧绘制命令；G-2 的旧退路 V2 因此被删除（§4.3） |
+| **`FrameState`**（`Renderer/FrameState.js`） | 类级 `@private`（同上） | **无法**读取 `frameState.commandList`；任何"扫描命令列表"的方案均为违规 |
+
+> **注（本轮新增）**：`DrawCommand` 与 `FrameState` 是**不带下划线前缀**的 `@private` 类。原 A4 规则（只匹配
+> `from "cesium"` 之后的 `\._[a-zA-Z]`）**抓不到** `import { DrawCommand } from "cesium"` 这种命名导入，
+> 因此 A4 已强化为「对 `from "cesium"` / `from "@cesium/*"` 的**所有命名导入**与**命名空间成员访问**逐一比对
+> `public-api-allowlist.ts` 白名单，白名单外一律违规」（见 `data-model.md` §9 与 `tasks.md` T015/T024/T025）。
 
 **结论（决定架构）**：上游没有任何公开的"渲染委托"扩展点；**WebGPU 几何必须由本项目自建**，
 唯一合法的地形数据注入点是"子类化 `TerrainProvider` 并返回公开的 `HeightmapTerrainData` /
@@ -160,7 +167,7 @@ MVP **不得**据此宣称性能收益（符合 spec Assumptions「性能期望�
 | `scene.preRender` | 公开，但**本帧帧状态尚未更新**（`updateFrameState`/`camera.update` 在 `render()` 内、`preRender` 之后执行）→ 只能拿到上一帧矩阵，会导致相机与地形错位一帧 |
 | monkey-patch `Scene.prototype.render` | 技术上可行但**改变上游运行时行为**、与原则 I 精神冲突，且上游升级极易失效 → 否决 |
 | 自建 `requestAnimationFrame` 循环 | 与上游帧不同步（双重渲染、相机滞后、基准不可比）→ 否决 |
-| 自实现 `Primitive` 并放入 `scene.primitives`（`Primitive.prototype.update(frameState)` 作为钩子） | 可行且 `frameState` 有用，但 `_primitives.update` 发生在 `_globe.render` **之前**（`Scene.js:3933` vs `3951`），拿不到本帧地形命令；作为**备选观察手段 V2** 保留（见 §4.3） |
+| 自实现 `Primitive` 并放入 `scene.primitives`（`Primitive.prototype.update(frameState)` 作为钩子） | **已否决**：钩子本身公开，但其唯一价值是读取 `frameState.commandList`（`FrameState` 为 `@private`，§1.2）并按 `DrawCommand.owner` 反推瓦片 —— 属原则 I 禁止的非公开依赖。曾作为"备选观察手段 V2"保留，**本轮已删除**（见 §4.3 与 §8 的 H-2） |
 
 **请求式渲染**：`requestRenderMode` 下除 `scene.requestRender()`（公开）外，上游在 `!globe.tilesLoaded`
 时自动置 `_renderRequested = true`（`Scene.js:4592`），因此加载期间循环自保持；MVP 默认
@@ -210,17 +217,25 @@ GlobeSurfaceTile.js:996-1027 (transform)
    因此 resident 集合的"叶子"即上游的绘制截断）；否则绘制父瓦片（对应上游在子瓦片加载期间的父级回退绘制）；
 4. **静止态等价**：`globe.tilesLoaded === true` 时，resident 集合即上游的理想截断 → 验证用例在此时采集（FR-012 要求固定条件）。
 
-**验证方法（G-2）**：固定相机 + `tilesLoaded` 后，比较两条路径的几何统计（三角形数、绘制批次数、
-覆盖瓦片数与经纬度范围）与像素统计；若差异超出声明区间，则改用**备选 V2**：
-在 `scene.primitives` 中加入一个只做观察的自实现 `Primitive`，在 `update(frameState)` 中扫描
-`frameState.commandList`（该列表在 `_globe.render` **之前**生成，需要下一帧读取），
-并按 `DrawCommand` 的公开字段（`owner`/`boundingVolume`/`modelMatrix`/`pass`）反推瓦片；
-采用 V2 前必须先核实 `DrawCommand.owner` 的实际语义（`Renderer/DrawCommand.js`）。
+**验证方法（G-2，**仅用公开 API**）**：固定相机 + `globe.tilesLoaded === true` 后，比较
+(a) 本层规则集合（`computeDrawSet`）与 (b) 上游可观察信号：(1) `globe.tileLoadProgressEvent` 的请求/加载计数序列、
+(2) `Scene.globe.tilesLoaded`、(3) `Scene.postRender` 帧计数、(4) 经**平台 API 包装**（`WebGL2RenderingContext.prototype.drawElements/drawArrays`，§5.3）
+得到的本帧绘制批次数与顶点数、(5) 像素统计（`nonBackgroundRatio`、`uniqueColorCount`、帧间像素稳定性）；
+两侧统计必须落在**声明的等价区间**内。**若差异超出声明区间 → 判定为不等价 → 回到 `plan.md` 修订**，
+给出仅用公开 API 的新方案（不得改判据范围来"凑通过"）。
+
+**退路 V2 已删除（本轮变更）**：原退路为「在 `scene.primitives` 中加入自实现 `Primitive`，在 `update(frameState)` 中扫描
+`frameState.commandList`，按 `DrawCommand` 的公开字段反推瓦片」。该退路依赖 `FrameState` / `DrawCommand` —— 二者均为上游
+**`@private`**（§1.2），违反 constitution 原则 I（NON-NEGOTIABLE），且原 A4 扫描规则无法捕获不带下划线的命名导入。
+**因此 V2 从本项目的退路清单中移除**；`DrawCommand`/`FrameState` 已列入 §1.2 黑名单与 `public-api-allowlist.ts` 数组，
+A4 亦已强化为"逐一比对白名单"。删除的代价是 G-2 的交叉验证手段变弱（无法直接读上游绘制集合），
+由**统计区间断言**（几何 ±10% / 覆盖率 ±5%，T061）与该门禁"不等价即回到 plan 修订"的语义补偿（登记于 `plan.md` Complexity Tracking 第 5 行）。
 
 **被否决的替代**：
 - 直接使用上游 `CesiumTerrainProvider`：其返回的 `QuantizedMeshTerrainData` 几何无法通过公开 API 取出
   （`createMesh`/`TerrainMesh`/`TerrainEncoding` 均 `@private`）→ 新路径将没有几何来源；
 - 调用 `@private` 的 `createMesh` 或访问 `globe._surface`：违反 constitution 原则 I（NON-NEGOTIABLE）；
+- 扫描 `frameState.commandList` / 依赖 `DrawCommand.owner`（原退路 V2）：同为 `@private` 依赖，**本轮显式删除**；
 - 自研空间索引/LOD：违反 spec Assumptions。
 
 ---
@@ -329,7 +344,7 @@ CI MUST 在无任何凭据前提下可运行。
 **署名/许可的核实状态**：
 - **AWS Open Data Terrain Tiles：已核实**。数据集主页（[registry.opendata.aws/terrain-tiles](https://registry.opendata.aws/terrain-tiles/)，
   2026-09-18 读取）的 `License` 字段指向 [joerd attribution.md](https://github.com/tilezen/joerd/blob/master/docs/attribution.md)，
-  该文件给出了逐来源的必需署名清单与许可证说明（EU-DEM/Copernicus、奥地利 DGM CC BY 3.0 AT、
+   [joerd attribution.md](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) 给出了逐来源的必需署名清单与许可证说明（EU-DEM/Copernicus、奥地利 DGM CC BY 3.0 AT、
   Kartverket CC BY 4.0、USGS 3DEP/SRTM/GMTED2010 公有领域、NOAA ETOPO1 等）；
   同时瓦片自带 `x-amz-meta-x-imagery-sources` 头（实测值 `eudem/eudem_dem_5deg_n45e010.tif`）可追溯具体来源文件。
   页面明确："No AWS account required"。→ **可直接用于本项目，条件是附带上述署名**。
@@ -429,7 +444,7 @@ WebGL2 与 WebGPU 使用不同的光栅化器、不同的着色器编译器（AN
 | # | 假设 | 验证方法 | 失败时的退路 |
 |---|---|---|---|
 | **H-1** | 双画布分层 + `Globe.baseColor = Color.TRANSPARENT` + canvas `alpha: true` 能让上游地形不可见而保留全部调度 | 最小闭环实验（渲染 1 个瓦片并截图，≤0.5 工作日） | 改用 `Globe.translucency`（`frontFaceAlpha = 0`）或允许 canvas A 正常绘制但由 canvas B 不透明覆盖（并在基准中标注额外开销） |
-| **H-2** | "resident ∩ 视锥 ∩ 父子截断"规则与上游真实绘制截断在固定相机下等价 | G-2：`tilesLoaded` 后比较两路径几何与像素统计 | 改用备选 V2（自实现 `Primitive.update` 观察 `commandList`，先核实 `DrawCommand.owner` 语义） |
+| **H-2** | "resident ∩ 视锥 ∩ 父子截断"规则与上游真实绘制截断在固定相机下等价 | G-2：`tilesLoaded` 后**只用公开 API**比较——自建规则集合 vs `globe.tileLoadProgressEvent`/`tilesLoaded`/`Scene.postRender` 帧计数 + 平台 API 包装得到的几何统计 + 像素统计区间 | **备选 V2 已删除**（`frameState.commandList`/`DrawCommand.owner` 为 `@private`，违反原则 I）。判定不等价时 **MUST 回到 `plan.md` 修订**并给出仅用公开 API 的新方案；交叉验证能力变弱由统计区间断言补偿（见 §4.3 与 plan.md Complexity Tracking 第 5 行） |
 | **H-3** | 自建规则网格 + 裙边几何与上游基于同一高程场的网格在视觉上等价（接缝无裂缝、无 z-fighting） | 多瓦片拼接用例的像素与深度统计断言；接缝处专项用例 | 调整裙边高度/边界顶点生成规则；必要时改用与上游相同的裙边高度公式（由 `getLevelMaximumGeometricError` 推导，公开 API） |
 | **H-4** | 通过公开 `interpolateHeight` 逐点采样重建高程场不可行（用于回击"为何要自建几何"的质疑） | 实测单瓦片 65×65 采样的耗时与精度（量化数据） | 若实测可接受（预期不可接受：三角查找为线性扫描量级），可作为 quantized-mesh 数据源的补充手段 |
 | **H-5** | 存在免登录、CORS 可用的公开地形数据源 | **已核实（2026-09-18）**：AWS Open Data Terrarium `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` → 200 + `Access-Control-Allow-Origin: *`（z0–15，XYZ 约定，见 §6.1/§6.2 实测）；Re:Earth `https://terrain.reearth.land/cesium-mesh/ellipsoid/layer.json` 与 `/12/2048/2047.terrain` → 200 + CORS `*`（但覆盖质量可疑） | 已在 §6.1/§6.2 完成；继续以本地固定数据集为 CI 数据源 | 若 AWS 源失效：本地固定数据集仍保证 CI 与验收可运行；在线演示源降级为"数据不可用"的可观察状态（T-11） |
@@ -451,6 +466,7 @@ WebGL2 与 WebGPU 使用不同的光栅化器、不同的着色器编译器（AN
 | monkey-patch `Scene.prototype.render` | 改变上游运行时行为，违反原则 I 的精神，升级即碎 |
 | 直接使用上游 `CesiumTerrainProvider` | 其几何（`createMesh`/`TerrainMesh`/`TerrainEncoding`）为 `@private`，新路径取不到顶点 |
 | 调用 `@private` 的 `createMesh` / 访问 `globe._surface` | 直接违反 constitution 原则 I（NON-NEGOTIABLE） |
+| 自实现 `Primitive` 扫描 `frameState.commandList` 并按 `DrawCommand.owner` 反推瓦片（原退路 V2） | `FrameState`/`DrawCommand` 均为上游 `@private`（§1.2）；违反原则 I，且原 A4 规则无法捕获无下划线前缀的命名导入 → **本轮显式删除该退路** |
 | 自研空间索引与 LOD 选择 | 违反 spec Assumptions「不在本增量重新设计地形数据格式或空间索引」，且失去与兜底路径的 LOD 等价性 |
 | 使用 `ArcGISTiledElevationTerrainProvider` | 该类构造函数标注 `@private`（已核实 `Core/ArcGISTiledElevationTerrainProvider.js:43`） |
 | 使用任何需要令牌的地形服务 | spec 明确后置到后续增量（FR-004 / 依赖段） |

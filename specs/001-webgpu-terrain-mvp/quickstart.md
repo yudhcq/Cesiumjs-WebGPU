@@ -148,12 +148,17 @@ LIBGL_ALWAYS_SOFTWARE=1 CI=1 xvfb-run -a npm run test:visual -- --path=webgl2
 ② CPU 适配器被 Chromium 标注为"未完全测试/不保证符合规范"，CI 的符合性证据是弱证据；
 ③ 亚像素边缘覆盖差异会随光栅化器变化，阈值调参可能掩盖真实回归。
 
-### 5.4 真实 GPU 对照（可选，非阻断）
+### 5.4 真实 GPU 对照（可选，非阻断；**需预算批准，默认不执行**）
 ```bash
-npm run verify:real-gpu            # 在本机或云 GPU 上跑同一套视觉与基准用例
+# 在真实 GPU 环境（GPU larger runner / 自托管 / 现货云 GPU）上执行与 CI 同一套用例：
+npm run test:visual -- --path=webgpu
+npm run bench -- --path=webgpu --out=bench-real-gpu.json
+npm run bench -- --path=webgl2 --out=bench-real-gpu-webgl2.json
 ```
 **期望**：产出带真实 `adapterInfo` 的基准记录；与 CI 的软件光栅化记录**分别归档**，用于评估降级偏差。
 （云 GPU 的计费口径与成本见 [mvp-estimate.md](./mvp-estimate.md) §3。）
+**⛔ 门禁**：真实 GPU 需付费 runner 或自托管 GPU → **MUST 先由入口 Agent 上报用户批准预算后方可执行；默认不执行**
+（对应 `tasks.md` T078）。未获批准时只使用**相对**性能结论（同环境前后对比），绝对性能标记为**未采集**。
 
 ## 6. 变更检查表（每个变更请求必须满足）
 

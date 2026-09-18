@@ -22,7 +22,7 @@ export type {
 } from "./api/types.js";
 ```
 
-**MUST NOT**（由 `tests/unit/architecture-boundary.test.ts` 断言）：
+**MUST NOT**（由 `tests/unit/architecture-boundary.test.mjs` 断言）：
 - 主入口的 `.d.ts` 中出现 `GPUBuffer|GPUDevice|GPUAdapter|GPUCanvasContext|WebGL2RenderingContext|WebGLRenderingContext` 等后端符号；
 - 主入口导出任何 `src/backends/**` 的类型；
 - 要求集成方 import `cesium` 的任何具体渲染器类型（`Viewer`/`CesiumWidget`/`Scene` 只在**可选逃生舱**
@@ -118,6 +118,12 @@ export interface FrameCapture {
   readonly stats: FrameStatistics;  // 见 data-model.md §6
   readonly path: RenderPathId;      // 仅用于证据标注；集成方不得据此分支
 }
+
+/** 最小事件源接口（本契约自持定义，避免引用后端/上游类型）。 */
+export interface EventSource<T> {
+  addEventListener(listener: (event: T) => void): void;
+  removeEventListener(listener: (event: T) => void): void;
+}
 ```
 
 **规范性要求**
@@ -152,3 +158,30 @@ export function probeRenderPath(options?: ProbeOptions): Promise<CapabilityProbe
 
 集成方**唯一允许**书写路径字面量的位置是"把它作为配置值传给库"；库自身也不得让该字面量扩散为行为分支以外的语义
 （`src/api/**` 内允许读取 `preference` 与 `path`，但渲染调用点必须经 `RenderBackend` 抽象接口）。
+
+## 6. Escape Hatches（测试专用出口，`./escape-hatch` 子路径）
+
+`./escape-hatch` 是**唯一**允许暴露上游对象与后端对象的出口。它存在的唯一原因是：
+部分验收判据（上游对象状态、设备丢失注入、缓冲尺寸）**无法**由主入口的公开 handle API 断言，
+而这些断言又必须以自动化方式落地（constitution 原则 III）。
+
+```ts
+// packages/cesium-webgpu/src/escape-hatch.ts —— 经 package.json "exports": { "./escape-hatch": ... } 暴露
+export { Viewer, CesiumWidget, Scene } from "cesium";        // 上游公开类，仅供测试读取/注入
+export type EscapeHatchDiagnostics = {
+  readonly scene: Scene;                                     // 例：断言 globe.show / baseColor / drawingBufferWidth
+  readonly device: GPUDevice | undefined;                    // 例：device.destroy() 触发 GPUDevice.lost
+};
+export function getEscapeHatch(handle: TerrainSceneHandle): EscapeHatchDiagnostics;
+```
+
+**规范性要求**
+
+| 编号 | 要求 | 追溯 |
+|---|---|---|
+| E-1 | `./escape-hatch` 的 `.d.ts` MUST 带显著标注「**引用即退出同构保证**（references exit the isomorphism guarantee）」——使用它即意味着放弃 `handle` 的同构契约 | FR-007 |
+| E-2 | 主入口（`"."`）**MUST NOT** re-export `./escape-hatch` 的任何符号；由 A1（`dist/index.d.ts` 无后端符号）与本条共同保证 | FR-007 / 原则 II |
+| E-3 | 使用场景**仅限** `tests/**` 与 `packages/verify-harness/**`；生产代码（`packages/cesium-webgpu/src/**`、`apps/demo/src/**`）引用即违规 | 原则 II |
+| E-4 | **A5 的作用域是 `apps/demo/src/**`**（禁止演示页引用 `cesium`）；**测试经 `./escape-hatch` 访问上游对象不属 A5 违规** | FR-007 |
+| E-5 | 公开 handle API 足以断言的内容**MUST** 优先用公开断言（如帧尺寸用 `captureFrame().width/height`、路径用 `handle.path`、覆盖率用 `captureFrame().stats`），`./escape-hatch` 只用于**其余无法替代**的三类场景：上游对象状态（T053(b)）、设备丢失注入（T054(a)）、上游缓冲尺寸（T042(b) 的兜底核对） | FR-010 / 原则 III |
+| E-6 | 该子路径 MUST NOT 进入发布产物的类型面：只有 `dist/escape-hatch.d.ts` 暴露后端符号（如 `GPUDevice`），`dist/index.d.ts` 中不得出现任何后端符号（A1 断言不变） | 原则 II |

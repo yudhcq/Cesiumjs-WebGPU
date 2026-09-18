@@ -424,10 +424,12 @@ export interface MvpEstimate {
     readonly includesCiCompute: boolean;
     readonly includesCloudGpu: boolean;
     readonly executionEnvironment: string;  // 执行方式与并行度假设（→ spec Assumptions）
+    readonly selfHostedHardware: string;    // 本机/自托管硬件（电力与折旧）是否计入的显式说明
   };
   readonly workflows: readonly {
     readonly id: string; readonly name: string;
     readonly timeDays: { min: number; max: number };
+    readonly agentTurns: { min: number; max: number };   // 每工作流的 Agent 回合数区间
     readonly tokens: { inputM: { min: number; max: number }; outputM: { min: number; max: number } };
     readonly modelCost: { cny: { min: number; max: number }; usd: { min: number; max: number } };
     readonly computeCost: { cny: { min: number; max: number }; usd: { min: number; max: number } };
@@ -435,15 +437,32 @@ export interface MvpEstimate {
   }[];
   readonly totals: {
     readonly timeDays: { min: number; max: number };
+    readonly calendarWeeks?: { min: number; max: number };
+    readonly agentTurns: { min: number; max: number };
     readonly tokens: { inputM: { min: number; max: number }; outputM: { min: number; max: number } };
     readonly cost: { cny: { min: number; max: number }; usd: { min: number; max: number } };
   };
+  readonly scenarios?: readonly { id: string; name: string; description: string; cost: { cny: { min: number; max: number }; usd: { min: number; max: number } } }[];
+  readonly planningValue?: { cny: { min: number; max: number }; usd: { min: number; max: number } };
   readonly confirmedItems: readonly string[];   // → FR-029
   readonly unconfirmedItems: readonly { item: string; impactDirection: "up" | "down" | "both"; impactMagnitude: string; note: string }[];
   readonly exclusions: readonly string[];       // 例：凭据类地形服务（已后置，MUST NOT 计入，→ FR-029）
   readonly revisionPolicy: string;              // 触发修订的条件（→ spec Assumptions「估算结论的时效」）
+  readonly baselineGapNote?: string;            // 无历史基线时区间偏宽的原因（如实说明）
+  readonly actualsBackfill?: {                  // 首个增量交付后回填（FR-028）；未交付时为 null
+    readonly recordedAt: string;
+    readonly timeDays: number;
+    readonly tokens: { inputM: number; outputM: number };
+    readonly cost: { cny: { min: number; max: number }; usd: { min: number; max: number } };
+    readonly deviationNote: string;
+  } | null;
 }
 ```
+
+> 本接口以 [`contracts/mvp-estimate.schema.json`](./contracts/mvp-estimate.schema.json) 为**唯一权威**（该 schema 的
+> `required` / `additionalProperties: false` 决定字段必填性）；上面已补齐此前缺失的 `meteringBasis.selfHostedHardware`、
+> `workflows[].agentTurns`、`totals.agentTurns`（+ `calendarWeeks`）与 `scenarios` / `planningValue` /
+> `baselineGapNote` / `actualsBackfill`（后四项在 JSON 中均存在）。两者不一致时**以 schema 为准**回写本接口。
 
 **机器可校验断言**（对应 SC-007，作为 CI 的文档契约测试）：
 1. `meteringBasis.includesHumanCost === false` 且 `statement` 含"人工成本不计入"字样；
@@ -453,8 +472,17 @@ export interface MvpEstimate {
    CI 与基准基建 / 开源交付与文档（`→ FR-026`）；
 5. 每个 `priceSources` 条目必须有 `source`（URL）与 `consultedAt`（`→ FR-027`：单价来源必须写明）；
 6. `unconfirmedItems` 非空时，每项必须给出 `impactDirection` 与 `impactMagnitude`（`→ FR-029`）；
-7. 每个工作流的 `modelCost` 必须能由 `tokens` × `priceSources` 复算（允许 ≤ 1% 舍入误差）——
-   保证"结论数字可追溯"，避免出现无来源的金额。
+7. 每个工作流的 `modelCost` 必须能由 `tokens` × `priceSources` 按其声明的计价模型复算，
+   判据为**绝对误差 ≤ ¥0.01 或相对误差 ≤ 2%**（记录值按 2 位小数舍入后比较）——保证"结论数字可追溯"，
+   避免出现无来源的金额；复算模型常量（min 端：命中率 0.92 + 空闲时段 + 100% flash；
+   max 端：命中率 0.75 + 高峰时段 + 80% flash + 20% v4-pro）固化在
+   `tests/unit/fixtures/mvp-estimate-recompute-model.json`，来源 `mvp-estimate.md` §3.1；
+8. `exclusions` MUST 至少含 1 条同时具备"凭据/令牌"与"不计入"语义的条目
+   （即 FR-029 第三子句「凭据类地形服务 MUST NOT 计入本增量消耗」的 CI 断言，而非仅靠流程门禁）。
+
+> 断言 7 的阈值说明：按 `mvp-estimate.md` §3.1 的记录模型本机实测复算，`min` 端 W5/W6 的偏差为 1.52%
+> （复算 ¥0.2538 vs 记录 ¥0.25，源于 2 位小数舍入），**旧的"≤1%"阈值会导致该 CI 门禁必然失败**；
+> 改为「绝对误差 ≤ ¥0.01 或相对误差 ≤ 2%」后，2 位小数舍入的记录值可合法通过，且不影响对"无来源金额"的阻断力。
 
 ---
 
@@ -467,9 +495,14 @@ export interface MvpEstimate {
 | A1 上层 API 不引用后端类型 | `src/api/**` 的 import 图不得包含 `src/backends/**`；`api` 的 `.d.ts` 文本不得匹配 `/GPU[A-Z]|WebGL2RenderingContext|navigator\.gpu/` | 构建失败 |
 | A2 后端之间互不引用 | `src/backends/webgl2/**` 与 `src/backends/webgpu/**` 的 import 图交集为空 | 构建失败 |
 | A3 上游耦合收敛于 adapter 层 | 仅 `src/adapters/cesium/**` 允许 `from "cesium"`；其他目录出现即失败 | 构建失败 |
-| A4 不使用非公开 API | 对 `src/**` 静态扫描：禁止 `from "cesium"` 后访问 `\._[a-zA-Z]`；禁止 import 上游 `Source/**` 深路径（只允许包入口 `cesium`） | 构建失败 |
-| A5 演示应用无路径分支 | 演示应用 `apps/demo/src/**` 只 import 包入口；不得出现 `"webgpu"`/`"webgl2"` 字面量作为行为分支（只允许作为配置值传入） | 构建失败 |
+| A4 不使用非公开 API（**强化**） | 对 `src/**` 静态扫描：① 禁止 import 上游 `Source/**` 深路径（只允许包入口 `cesium`）；② 对 `from "cesium"` / `from "@cesium/*"` 的**所有命名导入**（`import { X } from "cesium"`、`import { X as Y }`）与**命名空间成员访问**（`Cesium.X`、`ns.X`）**逐一比对** `packages/cesium-webgpu/src/adapters/cesium/public-api-allowlist.ts` 的**白名单**——白名单外的任何符号一律判为违规，**包括不带下划线前缀的 `@private` 类（如 `DrawCommand`、`FrameState`）** | 构建失败 |
+| A5 演示应用无路径分支（**作用域仅限 `apps/demo/src/**`**） | `apps/demo/src/**` 只 import 包入口；不得出现 `"webgpu"`/`"webgl2"` 字面量作为行为分支（只允许作为配置值传入）。**测试代码（`tests/**`、`packages/verify-harness/**`）经 `./escape-hatch` 子路径访问上游对象不属 A5 违规**——A5 的判定范围不含测试目录 | 构建失败 |
 
 A4 的依据：本阶段已核实 `TerrainData.createMesh` / `TerrainMesh` / `TerrainEncoding` /
-`GlobeSurfaceTileProvider` / `QuadtreePrimitive` / `Scene.context` / `Scene.pixelRatio` 均为上游 `@private`
+`GlobeSurfaceTileProvider` / `QuadtreePrimitive` / `Scene.context` / `Scene.pixelRatio` / `Scene.frameState` /
+**`DrawCommand` / `FrameState`（无下划线前缀的 `@private` 类）** 均为上游 `@private`
 （详见 research.md §1 证据表），因此这些符号在代码中**出现即视为违规**。
+**强化理由**：`DrawCommand`/`FrameState` 这类"能被 import 但不是公开 API"的符号**不带下划线前缀**，
+原规则只匹配 `\._[a-zA-Z]` 会漏判；改为"逐一比对白名单"后，任何白名单外符号（无论有无下划线）都会被阻断。
+**测试访问上游对象的唯一合法出口**是 `./escape-hatch` 子路径（`contracts/render-path-api.md` §6）：
+该出口仅测试使用、引用即退出同构保证、**MUST NOT 被主入口 re-export**，且仅供观察/断言，不参与生产代码路径。

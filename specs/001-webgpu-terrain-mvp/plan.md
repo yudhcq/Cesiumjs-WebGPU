@@ -102,8 +102,8 @@
 
 | 要求 | 本方案如何满足 | 证据/验证 |
 |---|---|---|
-| 不 patch / 不 fork / 不 vendor | 仅有的上游交互是：`import ... from "cesium"`（公开包入口）+ 子类化公开类 `TerrainProvider`；仓库不包含任何上游源码拷贝；CI 断言无 `patch-package`/`postinstall` 补丁、无 `vendor/` 目录 | CI 步骤 [8] 许可证与依赖检查 + 仓库结构断言 |
-| 禁止非公开（私有/下划线）内部 API | 本阶段已逐条核实并将黑名单写入代码扫描规则：`TerrainData.createMesh`、`TerrainMesh`、`TerrainEncoding`、`GlobeSurfaceTileProvider`、`GlobeSurfaceTile`、`QuadtreePrimitive`、`QuadtreeTile`、`Scene.context`、`Scene.pixelRatio`、`Scene.frameState`、`Context` 均为 `@private` → **禁止出现**（research.md §1） | 断言 **A4**：静态扫描 `\._[a-zA-Z]` 与深路径 import |
+| 不 patch / 不 fork / 不 vendor | 仅有的上游交互是：`import ... from "cesium"`（公开包入口）+ 子类化公开类 `TerrainProvider`；仓库不包含任何上游源码拷贝；CI 断言无 `patch-package`/`postinstall` 补丁、无 `vendor/` 目录 | CI 步骤 [6] 许可证与依赖检查 + 仓库结构断言 |
+| 禁止非公开（私有/下划线）内部 API | 本阶段已逐条核实并将黑名单写入代码扫描规则：`TerrainData.createMesh`、`TerrainMesh`、`TerrainEncoding`、`GlobeSurfaceTileProvider`、`GlobeSurfaceTile`、`QuadtreePrimitive`、`QuadtreeTile`、`Scene.context`、`Scene.pixelRatio`、`Scene.frameState`、`Context` **以及不带下划线前缀的 `@private` 类 `DrawCommand`/`FrameState`** 均为 `@private` → **禁止出现**（research.md §1） | 断言 **A4**（`from "cesium"` / `from "@cesium/*"` 的**所有命名导入**与**命名空间成员访问**逐一比对 `public-api-allowlist.ts` 白名单，白名单外一律违规）+ 深路径 import 扫描 |
 | 耦合面收敛到 adapter 层 | 只有 `packages/cesium-webgpu/src/adapters/cesium/**` 允许 `from "cesium"`；上层 API、后端实现、验证脚手架均不直接 import 上游 | 断言 **A3**（import 图） |
 | 基线版本以 peer dependency 引入 | `peerDependencies: { "cesium": ">=1.145.0 <2.0.0" }`；devDependency 固定 `1.145.0` 用于本地开发 | `package.json` + CI 矩阵 |
 | 上游升级只改 adapter | 所有上游版本细节（构造参数、事件顺序、公开属性）封装在 `adapters/cesium/**`，升级只需改该目录；其它目录出现 `from "cesium"` 即构建失败 | 断言 A3 + 升级演练（quickstart §6） |
@@ -125,16 +125,16 @@
 |---|---|---|
 | 每项渲染特性附自动化验证 | 每个地形特性（多瓦片拼接、接缝、视锥裁剪、深度、设备丢失恢复、回退）在 `tests/visual` 与 `tests/contract` 中有对应用例；仅肉眼确认不得标记完成 | 用例清单与 tasks.md 一一对应 |
 | 像素对比 + 显式容差 / 数值帧统计 | 参考帧像素对比（`ToleranceProfile`，含 `source` 字段）+ `FrameStatistics`（非背景覆盖率、唯一色数、亮度分布、直方图） | contracts/verification-and-benchmark.md §3/§4 |
-| 固定相机/时间/种子/视口/像素比 | `VerificationDataset` 固化并写入证据文件；断言 `scene.drawingBufferWidth/Height` 与快照一致 | 契约测试前置断言 |
+| 固定相机/时间/种子/视口/像素比 | `VerificationDataset` 固化并写入 `artifacts/<commit>/visual/<caseId>/<path>/evidence.json`；断言 `captureFrame().width/height` 与快照一致 | 契约测试前置断言 |
 | 容差可追溯，禁止宽松判据 | 容差写入 `tolerances/tol-v1.json`，每项带 `source`（推导 + 批准记录）；以"人为注入缺陷必须失败"的对照实验标定 | US3-IS 用例 + 容差标定实验 |
-| 双后端覆盖 | 同一测试体参数化跑 `webgl2` 与 `webgpu`，任一失败即提交失败 | CI 步骤 [5][6] |
+| 双后端覆盖 | 同一测试体参数化跑 `webgl2` 与 `webgpu`，任一失败即提交失败 | CI 步骤 [5] |
 | 几何缺陷数值化断言 | 覆盖率突变、深度不连续像素比例、异常顶点计数（NaN/超范围）由断言捕获 | data-model.md §6 规则 |
 
 ### 原则 IV — 性能以数据驱动
 
 | 要求 | 本方案如何满足 | 证据/验证 |
 |---|---|---|
-| 优化必须由基准支撑，无基线不合入 | 基线先于任何优化提交；CI 门槛判定与历史序列强制 | CI 步骤 [7] + FR-019 |
+| 优化必须由基准支撑，无基线不合入 | 基线先于任何优化提交；CI 门槛判定与历史序列强制 | CI 步骤 [5]（bench）+ FR-019 |
 | 记录 p50/p95、显存、draw call，口径版本化 | `FrameStatsSummary`/`BenchmarkRecord` 固化口径；口径变更需记录理由 | data-model.md §4/§7 |
 | 基准可复现（固定场景/预热/采样/环境标注） | 固定数据集 + 固定相机 + 预热 120 帧 + 采样 600 帧 + 环境指纹 | contracts §5 |
 | 回归门槛量化，阈值变更记录理由 | 10%/15%/10% 初值 + `thresholds.source` 必填 | data-model.md §7 |
@@ -144,11 +144,11 @@
 
 | 要求 | 本方案如何满足 | 证据/验证 |
 |---|---|---|
-| 每次提交完成构建+测试+基准 | 单工作流串行门禁（步骤 [1]–[8]），任一失败阻断合入 | `.github/workflows/ci.yml` |
+| 每次提交完成构建+测试+基准 | 单工作流串行门禁（步骤 [1]–[6]，`contract → visual → bench` 在步骤 [5] 内按序执行），任一失败阻断合入 | `.github/workflows/ci.yml` |
 | 主干始终可构建可运行可回退 | 无长期分支；每个变更请求合入前必须全绿；回退 = revert 单个变更 | 分支策略 + PR 检查 |
 | CI 产物为唯一判定依据 | 视觉差异图、基准数据、测试报告、构建日志全部作为 artifact 上传；本地通过不作为依据 | FR-022 + CONTRIBUTING |
 | 降级运行必须显式记录盲区 + 本地复现步骤 | CI 采用 **Xvfb（headed）+ Mesa lavapipe** 运行 WebGPU、**ANGLE/SwiftShader** 运行 WebGL2（已核实可用，见 research.md §7）；`docs/ci-degradation.md` 记录标志、10 条盲区清单与本地复现命令；基准记录 `degraded`/`degradationNotes`/`adapterType`/`browserFlags` 必填 | research.md §7 + quickstart §5 |
-| 依赖与许可证检查入 CI | 步骤 [8]：依赖树与许可证清单校验（含 `cesium` Apache-2.0 与数据集署名） | FR-024 |
+| 依赖与许可证检查入 CI | 步骤 [6]：依赖树与许可证清单校验（含 `cesium` Apache-2.0 与数据集署名） | FR-024 |
 
 ### 附加技术约束
 
@@ -156,8 +156,8 @@ TypeScript `strict` + Rollup + ESM（含 `.d.ts`）✔（构建配置）；Node 
 开源交付含 LICENSE/CONTRIBUTING/可复现构建说明 ✔（W5）；持续集成模式无长期分支 ✔。
 
 **Phase 1 设计后复查结论**：设计产物（data-model / contracts / quickstart）未引入新的原则违规。
-两项**需要论证的复杂度**已登记在 Complexity Tracking（自定义 TerrainProvider、保留上游不可见绘制）。
-`Scene.postRender` 钩子、`Globe.baseColor`、画布 `alpha` 均为公开 API，复查通过。
+三项**需要论证的复杂度**已登记在 Complexity Tracking（自定义 TerrainProvider、保留上游不可见绘制、删除退路 V2）。
+`Scene.postRender` 钩子、`Globe.baseColor`、画布 `alpha` 均为公开 API，G-2 的等价性判定亦已收敛为**只用公开 API**，复查通过。
 
 ---
 
@@ -200,12 +200,14 @@ cesium-webgpu/                       # 仓库根
 │   ├── cesium-webgpu/               # 主交付包（外部模块）
 │   │   ├── package.json             # peerDependencies: cesium；exports: "." 与 "./escape-hatch"
 │   │   ├── src/
-│   │   │   ├── index.ts             # 唯一公开入口（不导出任何后端类型）
+│   │   │   ├── index.ts             # 唯一公开入口（不导出任何后端类型；MUST NOT re-export ./escape-hatch）
+│   │   │   ├── escape-hatch.ts      # 可选逃生舱子路径（测试专用：导出上游 Viewer/CesiumWidget/Scene 与后端句柄；
+│   │   │   │                        #   引用即退出同构保证，见 contracts/render-path-api.md §6）
 │   │   │   ├── api/                 # 同构上层 API（FR-007）
 │   │   │   │   ├── createTerrainScene.ts
 │   │   │   │   ├── probeRenderPath.ts
 │   │   │   │   ├── types.ts
-│   │   │   │   ├── datasets.ts
+│   │   │   │   ├── datasets.ts      # listDatasets / getDatasetManifest（契约 §1）
 │   │   │   │   └── errors.ts
 │   │   │   ├── core/                # 后端无关抽象（不得 import 上游）
 │   │   │   │   ├── backend.ts       # RenderBackend 接口（资源/管线/命令/帧生命周期）
@@ -214,8 +216,7 @@ cesium-webgpu/                       # 仓库根
 │   │   │   │   ├── frame-stats.ts   # p50/p95、drawCalls、字节统计
 │   │   │   │   └── geometry.ts      # 高程场 → 顶点/索引/裙边（两条路径共用的唯一几何生产者）
 │   │   │   ├── terrain/
-│   │   │   │   ├── heightmap.ts         # .hgt 读写 + 高程解码（structure → 米）
-│   │   │   │   ├── terrarium.ts         # 公开栅格高程源解码（PNG → 高程场；浏览器与 Node 共用）
+│   │   │   │   ├── heightmap.ts         # .hgt 读写 + 高程解码（含 Terrarium 解码，structure → 米）
 │   │   │   │   ├── source.ts            # TerrainSource 抽象（local-fixed / public）
 │   │   │   ├── backends/
 │   │   │   │   ├── webgl2/backend.ts    # 兜底后端：委托上游渲染 + 空实现资源层
@@ -227,15 +228,14 @@ cesium-webgpu/                       # 仓库根
 │   │   │   │       └── shaders/*.wgsl   # 地形顶点/片元、深度修正
 │   │   │   ├── adapters/cesium/         # 唯一允许 import "cesium" 的目录
 │   │   │   │   ├── widget.ts            # CesiumWidget 构造 + 双画布 DOM 分层
-│   │   │   │   ├── render-hook.ts       # Scene.postRender 订阅、requestRender 维持
+│   │   │   │   ├── render-hook.ts       # Scene.postRender 订阅、requestRender 维持、baseColor 透明（globe.show 保持 true）
 │   │   │   │   ├── camera.ts            # viewMatrix/projectionMatrix + GL→WebGPU 深度修正
 │   │   │   │   ├── terrain-provider.ts  # TerrainProvider 子类（公开扩展点）
-│   │   │   │   ├── globe-surface.ts     # baseColor 透明 + globe.show 保持 + 瓦片事件
-│   │   │   │   └── public-api-allowlist.ts # 运行期断言：只使用白名单符号
+│   │   │   │   └── public-api-allowlist.ts # 运行期断言：只使用白名单符号（黑名单含 DrawCommand/FrameState）
 │   │   │   └── diagnostics/             # 路径状态提示、日志、错误分类
 │   │   └── fixtures/<datasetId>/        # 固定地形数据集（≤20 MiB，含 manifest/layer.json/.terrain）
 │   └── verify-harness/                  # private 包：采集/对比/基准/插桩
-│       ├── src/{capture,stats,compare,harness,bench,instrumentation}.ts
+│       ├── src/{capture,stats,compare,harness,bench,instrumentation,cross-path,regression}.ts
 │       ├── reference-frames/<datasetId>/
 │       └── tolerances/tol-v1.json
 ├── apps/
@@ -245,15 +245,17 @@ cesium-webgpu/                       # 仓库根
 ├── tests/
 │   ├── unit/                        # node:test：探测决策/解码/状态机/截断规则/架构边界 A1–A5/评估文档契约
 │   ├── contract/                    # Playwright：双路径参数化加载、交互、回退、设备丢失
-│   ├── visual/                      # Playwright：像素对比 + 差异图 + 统计断言
-│   └── bench/                       # Playwright：基准采集 + 门槛判定
+│   ├── visual/                      # Playwright：像素对比 + 差异图 + 统计断言 + 跨路径等价 + 容差标定
+│   └── bench/                       # Playwright：基准采集 + 门槛判定（脚本经 verify-harness 复用）
 ├── tools/
 │   ├── build-terrain-fixture.mjs    # 一次性生成固定数据集（--from-public / --from-local / --verify-only）
 │   ├── license-check.mjs
-│   └── rollup-plugin-wgsl.mjs
+│   ├── rollup-plugin-wgsl.mjs
+│   └── scripts/                     # 零依赖 Node 自检与编排（check-forbidden/check-yaml-assertions/…）
+│       ├── run.mjs, serve.mjs, ci-local.mjs, ci-flags.mjs, check-forbidden.mjs, upgrade-check.mjs
 └── .github/workflows/
-    ├── ci.yml                       # 构建 → 单测 → 契约 → 视觉 → 基准 → 许可证（门禁顺序）
-    └── nightly-real-gpu.yml         # 可选：真实 GPU 对照（云 GPU runner 或自托管）
+    ├── ci.yml                       # [1] build → [2] lint+typecheck → [3] unit → [4] fixture → [5] contract→visual→bench → [6] license（门禁顺序）
+    └── nightly-real-gpu.yml         # 可选：真实 GPU 对照（**默认不执行**：须先获批预算，见 tasks.md T078）
 ```
 
 **Structure Decision**：采用"单仓库多包（npm workspaces）"：
@@ -313,14 +315,15 @@ cesium-webgpu/                       # 仓库根
 
 ## Complexity Tracking
 
-> 本方案有 4 项需要显式论证的复杂度/取舍（无原则违规，但均需记录被否决的更简方案）。
+> 本方案有 5 项需要显式论证的复杂度/取舍（无原则违规，但均需记录被否决的更简方案）。
 
 | # | 复杂度 / 取舍 | 为何需要 | 被否决的更简方案及否决原因 |
 |---|---|---|---|
 | 1 | **自定义 `TerrainProvider` + 自建高程数据源适配与几何构建**（而非直接使用上游 `CesiumTerrainProvider`） | 上游网格构建链 `TerrainData.createMesh` / `TerrainMesh` / `TerrainEncoding` 全部 `@private`（research.md §1 已核实），WebGPU 端**无法**从上游的 terrain data 对象取得顶点坐标；若直接用上游 provider，新路径将没有任何几何来源 | ① 通过 `@private` API 读取上游网格 → 违反原则 I（NON-NEGOTIABLE），直接否决；② 用公开 `interpolateHeight` 逐点采样重建高程场 → 每个采样点需在三角形集合中查找，量级不可接受且仍无法还原顶点拓扑（H-4 给出实测方法）；③ 自研空间索引/LOD → 违反 spec Assumptions「不在本增量重新设计空间索引」。**同时**：该复杂度被严格限制在 `terrain/` 目录（字节获取、解码与几何构建），上游仍承担调度、LOD、可用性、请求预算与内存管理，符合 Assumptions 的收敛解释 |
 | 2 | **双画布分层 + 保留上游一次"不可见"地形绘制** | 一个 canvas 只能有一种上下文类型；`globe.show = false` 会**同时关闭瓦片调度**（`Globe.update/render/endFrame` 在 `!show` 时直接 return，已核实，research.md §2），因此不能靠它抑制绘制；上游没有公开的"关闭地形绘制但保留调度"开关 | ① `globe.show=false` + 自研调度 → 失去与兜底路径的 LOD 等价性，违反 Assumptions；② 逐帧回读上游画布再合成 → 需要 `Scene.context`（`@private`）且每帧全画面拷贝，代价与延迟都不可接受。**代价处理**：该次不可见绘制的开销由基准显式度量（用 `globe.show=false` 的诊断运行做差分归因），并在基准报告中标注；MVP 不得据此宣称性能收益（符合 spec「性能期望」）；后续增量可向上游提公开渲染委托扩展点 |
 | 3 | **`GpuResourceRegistry` 自建显存计量 + 用平台 API 包装统计 WebGL2 绘制批次** | 浏览器不暴露真实 VRAM；两路径必须同口径可比（原则 IV） | ① 只报 FPS → 无尾部与批次信息；② 只在新路径计量 → 无法与兜底路径对比。包装的是 `WebGL2RenderingContext` 平台方法，**不是**上游内部实现，不违反原则 I；该指标被明确声明为"经图形 API 分配的资源字节数"代理指标 |
-| 4 | **评估结论作为版本化交付物 + CI 文档契约测试** | FR-026 ~ FR-029 的硬性要求（用户明确要求的交付价值） | 仅写一份 Markdown 而不机器校验 → 无法保证"口径显式声明"与"单价可追溯"长期不被破坏（SC-007 要求可核对）。已通过 JSON Schema + 7 条断言把要求变成 CI 可判定项 |
+| 4 | **评估结论作为版本化交付物 + CI 文档契约测试** | FR-026 ~ FR-029 的硬性要求（用户明确要求的交付价值） | 仅写一份 Markdown 而不机器校验 → 无法保证"口径显式声明"与"单价可追溯"长期不被破坏（SC-007 要求可核对）。已通过 JSON Schema + 8 条断言把要求变成 CI 可判定项 |
+| 5 | **删除 G-2 的退路 V2（`frameState.commandList` 观察器）** —— 为守住原则 I（NON-NEGOTIABLE）而放弃该退路 | `FrameState.commandList` 与 `DrawCommand.owner` 均为上游 `@private`（research.md §1.2），V2 一旦被选为既定退路，原则 I 的保护会在实现期静默失效，且原 A4 规则（只查 `\._[a-zA-Z]`）**抓不到不带下划线的命名导入**；因此 G-2 的等价性判定改为**只用公开 API**（自建 `tile-registry` 绘制集合 + `globe.tileLoadProgressEvent`/`globe.tilesLoaded` + `Scene.postRender` 帧计数 + `FrameStatistics` 区间），并要求 A4 对**所有命名导入与命名空间成员访问**逐一比对白名单 | 更简方案（保留 V2 并只做"诊断用、不进交付包"的限定）被否决：诊断代码仍需 import 上游 `@private` 类型或依赖其字段语义，属原则 I 的实质违反，且 plan 无法用 CI 手段阻断其被误用。**代价**：G-2 失去了"直接读上游绘制集合"这一交叉验证手段，交叉验证能力变弱 → 由**统计区间断言**（几何 ±10% / 覆盖率 ±5%，T061）与"不等价即回到本计划修订"的门禁语义补偿；该代价已写入 `tasks.md` Phase 1 与 `research.md` §8（H-2） |
 
 **无原则违规**，因此 Constitution Check 的 ERROR 门禁未触发；上表为透明化记录的取舍。
 
@@ -334,12 +337,12 @@ cesium-webgpu/                       # 仓库根
 | 门 | 待验证内容 | 关闭方式 | 失败的退路 |
 |---|---|---|---|
 | G-1 | 双画布分层 + 上游不可见绘制 + 自定义 provider 的最小闭环可工作 | 渲染 1 个瓦片并截图（≤0.5 工作日） | 改用"保留上游地形绘制 + WebGPU 画布改到上层并设不透明背景"并在基准中标注额外开销 |
-| G-2 | 绘制集合截断规则（resident ∩ frustum ∩ 父子替换）与上游真实绘制集合在固定相机下等价 | 固定相机 + `tilesLoaded` 后对比两路径几何统计与像素差异 | 改用备选方案 V2：以自实现 `Primitive` 的 `update(frameState)` 观察 `commandList`（需先验证 `DrawCommand.owner` 语义，见 H-2） |
+| G-2 | 绘制集合截断规则（resident ∩ frustum ∩ 父子替换）与上游真实绘制集合在固定相机下等价 | 固定相机 + `tilesLoaded` 后，**只用公开 API** 对比：自建 registry 的绘制集合 vs 上游公开信号（`globe.tileLoadProgressEvent`/`tilesLoaded`/`Scene.postRender` 帧计数 + 平台 API 包装得到的几何统计）+ 像素统计区间 | **删除备选 V2**（`frameState.commandList`/`DrawCommand.owner` 属 `@private`，违反原则 I）。判定不等价时 **MUST 回到本计划修订**，给出仅用公开 API 的新方案；该删除使 G-2 的交叉验证手段变弱，由**统计区间断言**补偿（见 Complexity Tracking 第 5 行） |
 | G-3 | CI 中 lavapipe 下的参考帧**跨运行稳定**（重复采集两次的差异在容差内），且两路径作业合计 ≤ 20 分钟 | 在托管 runner 跑两次采集并比对（组合可用性已由 research.md §7 核实） | 视觉回归在 CI 降级为"数值统计断言 + 本机真实 GPU 像素对比"（盲区按 FR-023 记录）；20 分钟超时则缩减采样帧数并在 PR 说明 |
 
 ## Phase 0 / Phase 1 产物与下一步
 
-- **Phase 0（研究）**：[research.md](./research.md) — 已核实证据表、7 项技术决策、待验证假设 H-1…H-8、被否决方案汇总。
+- **Phase 0（研究）**：[research.md](./research.md) — 已核实证据表、8 项技术决策、待验证假设 H-1…H-9 + H-5b、被否决方案汇总。
 - **Phase 1（设计）**：[data-model.md](./data-model.md)、`contracts/`（4 份）、[quickstart.md](./quickstart.md)、
   [mvp-estimate.md](./mvp-estimate.md) / [mvp-estimate.v1.json](./mvp-estimate.v1.json)。
 - **下一步**：`/speckit-tasks` 生成依赖序任务清单（按 G-1 → G-2 → W1 → W2 → W3 → W4 → W5 → W6 排序，

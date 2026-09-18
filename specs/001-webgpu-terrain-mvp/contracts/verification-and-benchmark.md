@@ -52,7 +52,7 @@ for (const preference of paths) {
 | 随机性 | 固定种子；渲染路径中不得使用 `Math.random()`（静态扫描断言） |
 | 数据集 | 固定 `local-fixed` 数据集；校验 `manifest.checksum`（防静默替换） |
 | 等待条件 | `handle.whenTilesLoaded({timeoutMs})` 返回 `loaded=true` 后才采集；超时即判定失败并保留现场截图 |
-| 非确定性来源 | 记录并量化（如首次采样丢弃帧数、GPU 计时抖动）；写入证据文件的 `notes` |
+| 非确定性来源 | 记录并量化（如首次采样丢弃帧数、GPU 计时抖动）；写入 `BenchmarkRecord.notes` |
 | 容差来源 | 每个 `ToleranceProfile` 必须带 `source`（推导说明 + 批准链接）；阈值写在 `tolerances/tol-v1.json` 并可追溯 |
 | 抗锯齿边缘 | 按 `ignoreEdgePixels` 收缩后比较（对应 spec「不含抗锯齿边缘的区域内」的等价性定义） |
 
@@ -126,11 +126,15 @@ export interface BenchCase {
 ```text
 [1] install + build          （Rollup 构建主包与演示页；生成 .d.ts）
 [2] lint + typecheck         （tsc --noEmit，strict）
-[3] unit                     （Node：能力探测决策、几何解码、状态机、架构边界断言 A1–A5）
+[3] unit                     （Node：能力探测决策、几何解码、状态机、架构边界断言 A1–A5；评估文档契约测试在
+                              T076 落地后并入本步 —— 落地前本步不得引用 tests/unit/mvp-estimate-contract.test.mjs）
 [4] fixture integrity        （数据集 checksum 与清单校验，离线）
-[5] contract + visual + bench（**两个并行 job**：webgl2 与 webgpu 各一个，均 headed + Xvfb，见 §7）
+[5] contract + visual + bench（**两个并行 job**：webgl2 与 webgpu 各一个，均 headed + Xvfb，见 §7；
+                              **每个 job 内的顺序固定为 `contract → visual → bench`**）
 [6] license & dependency check（FR-024）
 ```
+- 每个 job 的前置：`sudo apt-get install -y mesa-vulkan-drivers xvfb libvulkan1`、
+  `npx playwright install --with-deps chromium`（Playwright 版本由仓库锁定）、`npm ci && npm run build`。
 - 任一环节失败 → 阻断合入（FR-021）。判定依据只能是 CI 产物（FR-022）；本地通过不作为依据。
 - 主干始终可构建、可运行、可回退（FR-025）：每个变更请求必须可在合并前回退（revert 即恢复）。
 - 从提交到结论总耗时目标 ≤ 20 分钟（SC-005）。**风险与对策**：软件光栅化较慢，且 Free 计划并发上限为 20 个作业；
