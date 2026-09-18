@@ -1,0 +1,240 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>shader-spike harness</title></head>
+<body>
+<canvas id="c" width="64" height="64"></canvas>
+<script type="module">
+// Spike S7 — Path B/C in a real browser on a real GPU.
+// Results are published on window.__RESULT / window.__DONE for the CDP driver.
+const R = { steps: [] };
+const step = (name, ok, detail) => {
+  R.steps.push({ name, ok, detail });
+  console.log(`[step] ${name} ${ok ? "OK" : "FAIL"} ${typeof detail === "string" ? detail : JSON.stringify(detail)}`);
+};
+const fmtErrs = (errs) => errs.map((e) => `${e.type}: ${e.message}`).join("\n");
+
+async function getShader(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`fetch ${path} -> ${r.status}`);
+  return await r.text();
+}
+
+try {
+  // ---------- 0. adapter / device ------------------------------------------
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  if (!adapter) throw new Error("no WebGPU adapter");
+  const info = adapter.info ?? (adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : {});
+  R.adapter = {
+    vendor: info.vendor, architecture: info.architecture, device: info.device,
+    description: info.description, features: [...adapter.features].length,
+    maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
+    maxUniformBufferBindingSize: adapter.limits.maxUniformBufferBindingSize,
+    maxBindGroups: adapter.limits.maxBindGroups,
+    maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage,
+  };
+  step("adapter", true, R.adapter);
+
+  const device = await adapter.requestDevice();
+  const uncaptured = [];
+  device.onuncapturederror = (e) => uncaptured.push(String(e.error.message ?? e.error));
+  R.uncaptured = uncaptured;
+
+  // ---------- 1. compile the hand-ported WGSL ------------------------------
+  const vsSrc = await getShader("/spike/port/globe-vs.wgsl");
+  const fsSrc = await getShader("/spike/port/globe-fs.wgsl");
+  const vsModule = device.createShaderModule({ code: vsSrc, label: "globe-vs.wgsl" });
+  const fsModule = device.createShaderModule({ code: fsSrc, label: "globe-fs.wgsl" });
+  const vsInfo = await vsModule.getCompilationInfo();
+  const fsInfo = await fsModule.getCompilationInfo();
+  R.wgslCompilation = {
+    vs: { messages: vsInfo.messages.map((m) => ({ type: m.type, line: m.lineNum, msg: m.message })) },
+    fs: { messages: fsInfo.messages.map((m) => ({ type: m.type, line: m.lineNum, msg: m.message })) },
+  };
+  const vsErr = vsInfo.messages.filter((m) => m.type === "error");
+  const fsErr = fsInfo.messages.filter((m) => m.type === "error");
+  step("compile globe-vs.wgsl", vsErr.length === 0, `${vsInfo.messages.length} messages`);
+  step("compile globe-fs.wgsl", fsErr.length === 0, `${fsInfo.messages.length} messages`);
+  if (vsErr.length || fsErr.length) throw new Error("WGSL compile errors: " + fmtErrs([...vsErr, ...fsErr]));
+
+  // ---------- 2. uniform packing (hand-computed std140 layout) -------------
+  const VS_UBO_BYTES = 480, FS_UBO_BYTES = 48;
+  const vsUbo = new ArrayBuffer(VS_UBO_BYTES);
+  const v = new DataView(vsUbo);
+  const F = new Float32Array(vsUbo);
+  const setMat4 = (off, m) => { for (let i = 0; i < 16; i++) F[off / 4 + i] = m[i]; };
+  const I = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  v.setFloat32(0, -1.0, true); v.setFloat32(4, 1.0, true);              // south/north latitude
+  v.setFloat32(8, 0.0, true); v.setFloat32(12, 1.0, true);              // southMercatorY, 1/height
+  [0, 0, 1, 1].forEach((x, i) => v.setFloat32(16 + i * 4, x, true));    // u_tileRectangle
+  [0, 0, 0].forEach((x, i) => v.setFloat32(32 + i * 4, x, true));       // u_center3D
+  [0, 0, 1].forEach((x, i) => v.setFloat32(48 + i * 4, x, true));       // czm_lightDirectionWC
+  [0, 0, 1].forEach((x, i) => v.setFloat32(64 + i * 4, x, true));       // czm_sunDirectionWC
+  setMat4(80, I);     // u_modifiedModelView
+  setMat4(144, I);    // u_modifiedModelViewProjection -> identity: terrain xy in clip space
+  setMat4(208, I);    // czm_modelView3D
+  setMat4(272, I);    // czm_projection
+  setMat4(336, I);    // czm_modelView
+  [1,0,0, 0,1,0, 0,0,1].forEach((x, i) => { const col = Math.floor(i / 3), row = i % 3; v.setFloat32(400 + col * 16 + row * 4, x, true); });
+  [0, 0, 2].forEach((x, i) => v.setFloat32(448 + i * 4, x, true));      // czm_viewerPositionWC
+  v.setFloat32(460, 0.0, true);                                        // czm_morphTime
+  [6378137, 6378137, 6356752.3142451793].forEach((x, i) => v.setFloat32(464 + i * 4, x, true));
+
+  const fsUbo = new ArrayBuffer(FS_UBO_BYTES);
+  const fv = new DataView(fsUbo);
+  [0.2, 0.2, 0.2, 1.0].forEach((x, i) => fv.setFloat32(i * 4, x, true));       // u_initialColor
+  [0, 0, 1, 1].forEach((x, i) => fv.setFloat32(16 + i * 4, x, true));           // tex coords rect
+  [0, 0, 1, 1].forEach((x, i) => fv.setFloat32(32 + i * 4, x, true));           // translation/scale
+
+  // ---------- 3. geometry: 2 triangles, real Cesium terrain layout --------
+  // attributes: position3DAndHeight (loc 0, vec4 = x,y,z,height),
+  //             textureCoordAndEncodedNormals (loc 1, vec4 = s,t,webMercatorT,encodedNormal)
+  const verts = [
+    [-1, -1, 0, 10, 0, 0, 0, 0], [1, -1, 0, 10, 1, 0, 1, 0], [-1, 1, 0, 10, 0, 1, 0, 0],
+    [-1, 1, 0, 10, 0, 1, 0, 0], [1, -1, 0, 10, 1, 0, 1, 0], [1, 1, 0, 10, 1, 1, 1, 0],
+  ];
+  const vbuf = device.createBuffer({ size: verts.length * 32, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+  device.queue.writeBuffer(vbuf, 0, new Float32Array(verts.flat()));
+  const vsUb = device.createBuffer({ size: VS_UBO_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  device.queue.writeBuffer(vsUb, 0, vsUbo);
+  const fsUb = device.createBuffer({ size: FS_UBO_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  device.queue.writeBuffer(fsUb, 0, fsUbo);
+
+  // 2x2 imagery: red, green, blue, white
+  const tex = device.createTexture({ size: [2, 2], format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  const px = new Uint8Array([255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255]);
+  device.queue.writeTexture({ texture: tex }, px, { bytesPerRow: 8 }, [2, 2]);
+  const samp = device.createSampler({ magFilter: "nearest", minFilter: "nearest" });
+
+  // ---------- 4. real render pipeline + draw + readback -------------------
+  const pipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: {
+      module: vsModule, entryPoint: "main",
+      buffers: [{
+        arrayStride: 32,
+        attributes: [
+          { shaderLocation: 0, offset: 0, format: "float32x4" },
+          { shaderLocation: 1, offset: 16, format: "float32x4" },
+        ],
+      }],
+    },
+    fragment: { module: fsModule, entryPoint: "main", targets: [{ format: "rgba8unorm" }] },
+    primitive: { topology: "triangle-list" },
+  });
+  step("createRenderPipeline", true, "pipeline created");
+
+  const bindGroup0 = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: { buffer: vsUb } }],
+  });
+  const bindGroup1 = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(1),
+    entries: [
+      { binding: 0, resource: { buffer: fsUb } },
+      { binding: 1, resource: tex.createView() },
+      { binding: 2, resource: samp },
+    ],
+  });
+  step("bindGroups", true, "group0=VS UBO, group1=FS UBO+texture+sampler");
+
+  const W = 64, H = 64;
+  const target = device.createTexture({ size: [W, H], format: "rgba8unorm", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  const readback = device.createBuffer({ size: W * H * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  const enc = device.createCommandEncoder();
+  const pass = enc.beginRenderPass({ colorAttachments: [{ view: target.createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: "clear", storeOp: "store" }] });
+  pass.setPipeline(pipeline);
+  pass.setBindGroup(0, bindGroup0);
+  pass.setBindGroup(1, bindGroup1);
+  pass.setVertexBuffer(0, vbuf);
+  pass.draw(6);
+  pass.end();
+  enc.copyTextureToBuffer({ texture: target }, { buffer: readback, bytesPerRow: W * 4 }, [W, H]);
+  device.queue.submit([enc.finish()]);
+  await readback.mapAsync(GPUMapMode.READ);
+  const out = new Uint8Array(readback.getMappedRange().slice(0));
+  readback.unmap();
+  const quad = (x, y) => { const o = (y * W + x) * 4; return [out[o], out[o + 1], out[o + 2], out[o + 3]]; };
+  R.readback = {
+    topLeft: quad(4, 4), topRight: quad(W - 5, 4), bottomLeft: quad(4, H - 5), bottomRight: quad(W - 5, H - 5),
+    center: quad(32, 32),
+    nonBlackPixels: (() => { let n = 0; for (let i = 0; i < W * H; i++) if (out[i * 4] + out[i * 4 + 1] + out[i * 4 + 2] > 12) n++; return n; })(),
+    totalPixels: W * H,
+  };
+  const rb = R.readback;
+  step("draw+readback", rb.nonBlackPixels > W * H * 0.9, rb);
+
+  // ---------- 5. E1: varyings that GL prunes but WebGPU rejects -----------
+  const fsExtra = fsSrc.replace(
+    "struct FSIn {",
+    "struct FSIn {\n    @location(7) v_unusedByVS: vec3<f32>,",
+  );
+  const fsExtraModule = device.createShaderModule({ code: fsExtra, label: "fs-extra-varying" });
+  const e1 = await fsExtraModule.getCompilationInfo();
+  let e1PipelineError = null;
+  device.pushErrorScope("validation");
+  try {
+    device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: vsModule, entryPoint: "main", buffers: [{ arrayStride: 32, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x4" }, { shaderLocation: 1, offset: 16, format: "float32x4" }] }] },
+      fragment: { module: fsExtraModule, entryPoint: "main", targets: [{ format: "rgba8unorm" }] },
+      primitive: { topology: "triangle-list" },
+    });
+  } catch (e) { e1PipelineError = String(e.message); }
+  const e1Scope = await device.popErrorScope();
+  R.E1_missingVarying = { fsCompileMessages: e1.messages.map((m) => `${m.type} line ${m.lineNum}: ${m.message}`), pipelineError: e1PipelineError, validationError: e1Scope ? e1Scope.message : null };
+  step("E1 missing varying rejected", !!(e1PipelineError || e1Scope), R.E1_missingVarying);
+
+  // ---------- 6. C1: runtime GLSL->SPIR-V with glslang wasm in the page ----
+  const c1 = { attempts: [] };
+  try {
+    const t0 = performance.now();
+    const mod = await import("/tool/@webgpu/glslang/dist/web-devel-onefile/glslang.js");
+    const glslang = await mod.default();
+    c1.wasmLoadMs = +(performance.now() - t0).toFixed(1);
+    step("glslang wasm module load (browser)", true, { ms: c1.wasmLoadMs });
+
+    for (const [label, url, stage] of [
+      ["cesium minimal-3d.vert (raw ES 300)", "/spike/glsl/minimal-3d.vert.glsl", "vertex"],
+      ["cesium default-3d.vert (repaired, ES 310 + UBO)", "/pp/default-3d.vert.repaired.vert.glsl", "vertex"],
+    ]) {
+      const src = await getShader(url);
+      const t = performance.now();
+      try {
+        const spv = glslang.compileGLSL(src, stage);
+        c1.attempts.push({ label, ok: true, spvBytes: spv.length, ms: +(performance.now() - t).toFixed(1) });
+      } catch (e) {
+        c1.attempts.push({ label, ok: false, error: String(e.message ?? e), ms: +(performance.now() - t).toFixed(1) });
+      }
+    }
+  } catch (e) {
+    c1.fatal = String(e.message ?? e);
+  }
+  R.C1_runtimeGlslang = c1;
+  step("C1 runtime glslang", !c1.fatal, c1);
+
+  // ---------- 7. A2: does the naga-generated WGSL compile on real WebGPU? ---
+  const a2 = [];
+  for (const f of ["minimal-3d.vert.wgsl", "default-3d.vert.wgsl", "kitchen-sink.vert.wgsl"]) {
+    try {
+      const code = await getShader(`/spike/wgsl/${f}`);
+      device.pushErrorScope("validation");
+      const m = device.createShaderModule({ code, label: f });
+      const ci = await m.getCompilationInfo();
+      const err = await device.popErrorScope();
+      const msgs = ci.messages.map((x) => `${x.type} ${x.lineNum}: ${x.message}`);
+      a2.push({ file: f, bytes: code.length, ok: !err && !ci.messages.some((x) => x.type === "error"), messages: msgs.slice(0, 6), errorScope: err ? err.message : null });
+    } catch (e) { a2.push({ file: f, ok: false, fatal: String(e.message ?? e) }); }
+  }
+  R.A2_nagaWgslOnGpu = a2;
+  step("A2 naga WGSL accepted by device", a2.every((x) => x.ok), a2.map((x) => `${x.file}: ${x.ok}`));
+
+  R.uncapturedErrors = uncaptured.slice();
+} catch (e) {
+  R.fatal = String(e && e.stack ? e.stack : e);
+  console.error("[fatal]", R.fatal);
+}
+window.__RESULT = R;
+window.__DONE = true;
+</script>
+</body>
+</html>

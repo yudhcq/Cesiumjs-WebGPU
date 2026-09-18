@@ -1,187 +1,104 @@
-# Contract: 同构上层 API（Isomorphic Render Path API）
+# Contract: 上层 API 与渲染路径二选一（Render Path API）
 
-**Feature**: `001-webgpu-terrain-mvp` | **Status**: 设计基线 v1 | **Spec**: [../spec.md](../spec.md)
+**Feature**: `001-webgpu-terrain-mvp` | **Status**: 设计基线 v2 | **Spec**: [../spec.md](../spec.md) | **Data model**: [../data-model.md](../data-model.md)
+**Constitution**: v2.0.0 原则 II（二选一，不同时运行，NON-NEGOTIABLE）
 
-本契约定义**集成方唯一可见的接口**。核心不变量：**集成方代码中不出现渲染路径条件分支，也不引用任何具体后端类型**
-（FR-007 / constitution 原则 II）。两条路径（WebGPU 新路径、WebGL2 兜底路径）在同一接口下必须可互换。
+本契约定义**集成方唯一可见的接口**及其不变量。核心不变量：**集成方代码中不出现渲染路径条件分支，
+也不引用任何具体后端类型**（FR-007）；**同一会话内只有一条后端路径在绘制**，回退是**整体切换**（销毁重建），
+禁止任何形式的图层叠加、透明/半透明遮挡、逐帧合成或"使某一次绘制不可见"（FR-006）。
+
+> **架构前提（本版）**：两条"路径"不再是我们自建的绘制链，而是**同一套上游逻辑层 + 两种渲染后端实现**：
+> WebGPU 后端（受控 fork/补丁层，见 [fork-patch-layer.md](./fork-patch-layer.md)）与上游原版 WebGL2 后端。
+> 上层 API 因此更薄：它负责**探测 → 选择 → 构造 →（必要时）整体切换**，以及状态可观察性。
 
 ---
 
-## 1. 入口
+## 1. 包入口（唯一公开面）
 
 ```ts
-// packages/cesium-webgpu/src/index.ts —— 唯一公开入口（package.json "exports": { ".": ... }）
-export { createTerrainScene } from "./api/createTerrainScene.js";
-export { probeRenderPath } from "./api/probeRenderPath.js";
-export { RenderPathUnavailableError, RenderPathInitError } from "./api/errors.js";
-export { listDatasets, getDatasetManifest } from "./api/datasets.js";
-export type {
-  CreateTerrainSceneOptions, TerrainSceneHandle, PathInfo, RenderPathPreference,
-  PathUnavailableReason, CapabilityProbeResult, FrameStats, FrameStatsSummary,
-  FrameCapture, FrameStatistics, CameraSnapshot, RenderPathEventMap,
-} from "./api/types.js";
-```
+// packages/cesium-webgpu/src/index.ts —— 唯一入口；MUST NOT 导出任何 GPU/WebGL/后端类型
+export type BackendKind = "webgpu" | "webgl2";
 
-**MUST NOT**（由 `tests/unit/architecture-boundary.test.mjs` 断言）：
-- 主入口的 `.d.ts` 中出现 `GPUBuffer|GPUDevice|GPUAdapter|GPUCanvasContext|WebGL2RenderingContext|WebGLRenderingContext` 等后端符号；
-- 主入口导出任何 `src/backends/**` 的类型；
-- 要求集成方 import `cesium` 的任何具体渲染器类型（`Viewer`/`CesiumWidget`/`Scene` 只在**可选逃生舱**
-  `./escape-hatch` 子路径导出，且必须在文档中标注"引用即退出同构保证"）。
-
-## 2. 创建场景
-
-```ts
-export type RenderPathPreference = "auto" | "webgpu" | "webgl2";
-
-export interface CreateTerrainSceneOptions {
-  /** 承载画布的容器元素。库自行创建并管理画布分层，集成方不得依赖画布数量/顺序。 */
-  readonly container: HTMLElement;
-  /** 路径偏好。默认 "auto"：先探测新路径，失败/超时/能力不足自动回退兜底路径。 */
-  readonly preference?: RenderPathPreference;
-  /** 固定地形数据集（CI 与验证默认使用 local-fixed）。 */
-  readonly terrain:
-    | { kind: "local-fixed"; datasetId: string }
-    | { kind: "public"; datasetId: string };
-  /** 固定相机（验证与基准必需；交互由场景内建控制器接管）。 */
-  readonly camera: CameraSnapshot;
-  /** 固定场景时间（验证必需，ISO-8601）。 */
-  readonly sceneTime?: string;
-  readonly rendering?: {
-    /** 设备像素比。固定值以保证跨运行、跨路径可比（FR-012）。默认 1。 */
-    readonly pixelRatio?: number;
-    readonly msaaSamples?: 1 | 2 | 4;
-    readonly requestRenderMode?: boolean;
-  };
-  readonly probe?: {
-    /** 能力探测上限（毫秒）。MUST NOT 超过 2000（FR-005）。默认 2000。 */
-    readonly timeoutMs?: number;
-  };
-  readonly diagnostics?: {
-    readonly onPathChange?: (info: PathInfo, reason?: PathUnavailableReason) => void;
-    readonly onError?: (error: TerrainSceneError) => void;
-    readonly logLevel?: "silent" | "error" | "warn" | "info" | "debug";
-  };
+export interface TerrainSceneOptions {
+  container: HTMLElement;
+  datasetId: string;                      // 固定数据集（离线可复现）
+  preference?: BackendKind | "auto";      // 默认 "auto"；仅作配置，调用方 MUST NOT 据此分支
+  camera?: { longitude: number; latitude: number; height: number; heading?: number; pitch?: number; roll?: number };
+  viewport?: { width: number; height: number; devicePixelRatio: number };
+  onStatus?: (status: RenderPathStatus) => void;   // 可观察状态（FR-009）
 }
 
-export function createTerrainScene(
-  options: CreateTerrainSceneOptions,
-): Promise<TerrainSceneHandle>;
-```
-
-**规范性要求**
-
-| 编号 | 要求 | 追溯 |
-|---|---|---|
-| C-1 | `createTerrainScene` MUST 在探测失败、探测超时（≤2s）、能力下限不满足或设备丢失不可恢复时**成功返回**可用句柄，绝不 reject | FR-005 / FR-006 / FR-009 |
-| C-2 | `preference: "webgl2"` 时 MUST NOT 执行任何新路径探测（不得触碰 `navigator.gpu`） | FR-005 / FR-007 |
-| C-3 | `preference: "webgpu"` 且新路径不可用时 MUST 仍渲染地形，并通过 `handle.path.reason` 与 `diagnostics.onPathChange` 给出原因类别 | FR-006 / FR-009 |
-| C-4 | 两条路径下 `handle` 的方法集、事件集与返回类型 MUST 完全一致（同构） | FR-007 / FR-008 |
-| C-5 | 同一 `options`（含固定相机、时间、视口、像素比、数据集）在两条路径下 MUST 产生声明的视觉等价结果 | FR-008 |
-| C-6 | 任何未捕获异常 MUST NOT 逃逸到 `window.onerror`；一律经 `diagnostics.onError` 上报 | FR-005 / FR-009 |
-
-## 3. 句柄
-
-```ts
-export interface TerrainSceneHandle {
-  /** 当前路径信息（只读；路径选择变化经 events.pathChange 通知）。 */
-  readonly path: PathInfo;
-  /** 首帧包含地形的画面就绪。 */
-  readonly ready: Promise<void>;
-  /** 瓦片加载进度（0..1）与是否就绪；超时返回 timedOut 而不抛错。 */
-  whenTilesLoaded(options?: { timeoutMs?: number }): Promise<TileLoadStatus>;
-  /** 采集当前帧像素与统计（验证用；两路径同签名、同返回结构）。 */
-  captureFrame(): Promise<FrameCapture>;
-  /** 帧统计；resetStats() 后重新累积。 */
-  stats(): FrameStatsSummary;
+export interface TerrainSceneHandle {     // 两条路径下**行为一致**，不含任何后端专属成员
+  readonly ready: Promise<void>;          // 场景与地形就绪；MUST NOT reject（异常走 diagnostics）
+  whenTilesLoaded(options?: { timeoutMs?: number }): Promise<{ loaded: boolean; pendingTiles: number }>;
+  captureFrame(): Promise<FrameCapture>;  // RGBA8、左上原点、无预乘
+  stats(): FrameStatistics;               // 非背景覆盖率、颜色/深度统计、draw call、三角形数、瓦片数、帧时间
   resetStats(): void;
-  /** 设定固定相机（验证用例使用）。 */
-  setView(view: CameraSnapshot): void;
-  /** 管线/GPU 资源/事件监听的完整释放；释放后调用任何方法 MUST 抛 RenderPathStateError。 */
-  dispose(): void;
-  readonly events: {
-    readonly pathChange: EventSource<{ info: PathInfo; reason?: PathUnavailableReason }>;
-    readonly error: EventSource<TerrainSceneError>;
-    readonly tilesProgress: EventSource<{ remaining: number; total: number }>;
-  };
+  setView(camera: TerrainSceneOptions["camera"]): void;
+  requestRender(): void;
+  dispose(): void;                        // 销毁当前后端与其全部资源
+  readonly diagnostics: { onError(cb: (e: DiagnosticError) => void): () => void };
 }
 
-export interface TileLoadStatus {
-  readonly loaded: boolean;
-  readonly timedOut: boolean;
-  readonly remainingRequests: number;
-  readonly elapsedMs: number;
-}
-
-export interface FrameCapture {
-  readonly width: number; readonly height: number;
-  readonly pixels: Uint8Array;      // RGBA8，行主序，左上原点（两路径一致，统一在采集层翻转）
-  readonly stats: FrameStatistics;  // 见 data-model.md §6
-  readonly path: RenderPathId;      // 仅用于证据标注；集成方不得据此分支
-}
-
-/** 最小事件源接口（本契约自持定义，避免引用后端/上游类型）。 */
-export interface EventSource<T> {
-  addEventListener(listener: (event: T) => void): void;
-  removeEventListener(listener: (event: T) => void): void;
-}
+export function createTerrainScene(options: TerrainSceneOptions): TerrainSceneHandle;
 ```
 
-**规范性要求**
+**规则**：
 
-| 编号 | 要求 | 追溯 |
-|---|---|---|
-| C-7 | `captureFrame()` 在两条路径下 MUST 返回同样布局与色彩空间的像素（RGBA8、sRGB、左上原点、无预乘），使验证代码无需分支 | FR-010 / FR-011 |
-| C-8 | `dispose()` MUST 释放 GPU 资源、移除 DOM、解绑事件；MUST NOT 影响同页其他 Cesium 实例 | FR-025 |
-| C-9 | `setView()` MUST 使两条路径产生一致的相机姿态（同一 `CameraSnapshot` → 同一 `viewMatrix`） | FR-008 |
-| C-10 | 设备丢失后 MUST 经 `events.pathChange` 或 `events.error` 给出可观察提示，且 `ready` 语义在该次会话内保持成立 | FR-003 / FR-009 |
+- 入口 MUST NOT 导出 `Context` / `Buffer` / `Texture` / `ShaderProgram` / `GPUBuffer` / `WebGL2RenderingContext` 等后端符号
+  （构建后对 `dist/index.d.ts` 断言 `/GPU[A-Z]|WebGL|backend-webgpu/` 无命中）。
+- `preference` 只是配置：包内部读取它完成选择；**调用方代码中的分支检测由架构测试禁止**（见 §5）。
+- 场景构造 MUST 使用 MVP 场景配置：`baseLayer:false`、`skyBox:false`、`skyAtmosphere:false`、无后处理
+  （保证零 `ComputeCommand` 派发；见 research §1.6）。
 
-## 4. 能力探测（独立可用，便于单测）
+## 2. 路径选择（初始化阶段一次性）
 
-```ts
-export interface ProbeOptions {
-  readonly timeoutMs?: number;      // 默认 2000，硬上限 2000（超限即夹取并告警）
-  readonly floor?: Partial<CapabilityFloor>; // 覆盖默认能力下限（仅测试使用）
-}
-export function probeRenderPath(options?: ProbeOptions): Promise<CapabilityProbeResult>;
-```
-- 探测函数 MUST 是纯函数式的：不得创建 DOM、不得修改全局状态、超时后 MUST 释放已获取的 device。
-- 单元测试（Node + 伪 `navigator.gpu`）覆盖：无 `navigator.gpu`、`requestAdapter→null`、
-  `requestDevice→reject`、limits 低于下限、超时（含"迟到 resolve"场景）。
-
-## 5. 配置驱动的路径选择（构建期与运行期）
-
-| 场景 | 配置方式 | 期望行为 |
-|---|---|---|
-| 默认（集成方无感知） | `preference: "auto"` | 支持时走新路径，否则同一句柄走兜底路径 |
-| 强制对比/排障 | `preference: "webgpu"` / `"webgl2"` | 完全走指定路径；不可用时按 C-3 回退并提示 |
-| 构建期裁剪 | 打包常量 `__RENDER_PATH_DEFAULT__`（Rollup `replace`） | 只保留选定路径的默认值；集成方代码不变 |
-
-集成方**唯一允许**书写路径字面量的位置是"把它作为配置值传给库"；库自身也不得让该字面量扩散为行为分支以外的语义
-（`src/api/**` 内允许读取 `preference` 与 `path`，但渲染调用点必须经 `RenderBackend` 抽象接口）。
-
-## 6. Escape Hatches（测试专用出口，`./escape-hatch` 子路径）
-
-`./escape-hatch` 是**唯一**允许暴露上游对象与后端对象的出口。它存在的唯一原因是：
-部分验收判据（上游对象状态、设备丢失注入、缓冲尺寸）**无法**由主入口的公开 handle API 断言，
-而这些断言又必须以自动化方式落地（constitution 原则 III）。
-
-```ts
-// packages/cesium-webgpu/src/escape-hatch.ts —— 经 package.json "exports": { "./escape-hatch": ... } 暴露
-export { Viewer, CesiumWidget, Scene } from "cesium";        // 上游公开类，仅供测试读取/注入
-export type EscapeHatchDiagnostics = {
-  readonly scene: Scene;                                     // 例：断言 globe.show / baseColor / drawingBufferWidth
-  readonly device: GPUDevice | undefined;                    // 例：device.destroy() 触发 GPUDevice.lost
-};
-export function getEscapeHatch(handle: TerrainSceneHandle): EscapeHatchDiagnostics;
+```text
+preference = "webgl2"                → 不探测，直接使用上游原版 WebGL2 后端
+preference = "webgpu"                → 探测；成功用 WebGPU 后端；失败/超时（>2000ms）/低于下限 → 整体兜底到 WebGL2
+preference = "auto"                  → 同 webgpu，但把"不支持"视为正常结果（不产生错误）
 ```
 
-**规范性要求**
+- 探测内容：`navigator.gpu` 存在性 → `requestAdapter()` → `requestDevice()` → 必需特性与下限
+  （`maxTextureDimension2D`、`maxVertexAttributes`、`maxSampledTexturesPerShaderStage`、`maxUniformBufferBindingSize`）。
+- 探测成功时，设备经**后端层交接槽**同步交付给 `Context` 替换模块（见 research §3）；
+  探测失败时**不安装交接槽** → 上游原版 WebGL2 链路（不存在"两条路径各画一半"的中间态）。
+- `RenderPathStatus`：`{ active, reason, degraded, notes }`（原因类别见 data-model §2.2/§2.5）；
+  `degraded === true` 时 `notes` MUST 非空（FR-023）。
 
-| 编号 | 要求 | 追溯 |
-|---|---|---|
-| E-1 | `./escape-hatch` 的 `.d.ts` MUST 带显著标注「**引用即退出同构保证**（references exit the isomorphism guarantee）」——使用它即意味着放弃 `handle` 的同构契约 | FR-007 |
-| E-2 | 主入口（`"."`）**MUST NOT** re-export `./escape-hatch` 的任何符号；由 A1（`dist/index.d.ts` 无后端符号）与本条共同保证 | FR-007 / 原则 II |
-| E-3 | 使用场景**仅限** `tests/**` 与 `packages/verify-harness/**`；生产代码（`packages/cesium-webgpu/src/**`、`apps/demo/src/**`）引用即违规 | 原则 II |
-| E-4 | **A5 的作用域是 `apps/demo/src/**`**（禁止演示页引用 `cesium`）；**测试经 `./escape-hatch` 访问上游对象不属 A5 违规** | FR-007 |
-| E-5 | 公开 handle API 足以断言的内容**MUST** 优先用公开断言（如帧尺寸用 `captureFrame().width/height`、路径用 `handle.path`、覆盖率用 `captureFrame().stats`），`./escape-hatch` 只用于**其余无法替代**的三类场景：上游对象状态（T053(b)）、设备丢失注入（T054(a)）、上游缓冲尺寸（T042(b) 的兜底核对） | FR-010 / 原则 III |
-| E-6 | 该子路径 MUST NOT 进入发布产物的类型面：只有 `dist/escape-hatch.d.ts` 暴露后端符号（如 `GPUDevice`），`dist/index.d.ts` 中不得出现任何后端符号（A1 断言不变） | 原则 II |
+## 3. 整体切换（回退与设备丢失）
+
+| 场景 | 行为 |
+|---|---|
+| 探测失败/超时/能力不足 | 初始化阶段直接以 WebGL2 构造；**MUST NOT** 抛未捕获错误、MUST NOT 阻塞页面其余部分 |
+| 会话中途 `device.lost` | 停止提交 → **销毁** WebGPU 后端与上游场景 → 重新探测 → 按 §2 重建（成功仍用 WebGPU；失败整体切 WebGL2）；恢复后场景可继续交互并给出状态提示（FR-003） |
+| 切换记录 | `WholeSwitchRecord`（`destroyedResources > 0`、`residualDraws === 0`）MUST 可观察（data-model §2.4） |
+
+**禁止**：保留旧设备的资源或绘制结果作为叠加层；以 CSS/画布叠加掩盖旧路径；在切换期同时提交两条路径的绘制。
+
+## 4. 可观察性（FR-009）
+
+- `onStatus` 与演示页状态区 MUST 展示：当前生效路径、原因类别（`no-navigator-gpu` / `no-adapter` /
+  `device-request-failed` / `missing-feature` / `below-limit` / `timeout`）、是否降级、盲区备注。
+- 状态信息**仅供观察与排障**；业务代码 MUST NOT 依据 `status.active` 分支（架构测试断言）。
+- 测试专用出口（`./escape-hatch` 子路径，可选交付）：允许测试读取上游对象做诊断，
+  **引用即退出"同构保证"**，MUST NOT 被主入口 re-export。
+
+## 5. 契约测试（CI 必过）
+
+| 断言 | 内容 |
+|---|---|
+| C-1 | `createTerrainScene` 在两条路径下都 MUST 返回可用句柄；`ready` MUST NOT reject |
+| C-2 | 同一套用例参数化两条路径，**各自独立进程 + 独立页面加载**；断言该次运行中另一条后端的 GPU 对象创建数为 0 |
+| C-3 | 强制 WebGPU 不可用（如 `navigator.gpu = undefined`）后，页面仍渲染地形、2 秒内完成回退、无未捕获错误、无空白画面 |
+| C-4 | 设备丢失（`device.destroy()`）后免刷新恢复，且旧设备资源计数归零 |
+| C-5 | 调用方（演示页）源码 MUST NOT 出现 `=== "webgpu"` / `=== "webgl2"` / `preference ===` 之类分支（唯一例外：包内部 `src/render-path/**`） |
+| C-6 | `dist/index.d.ts` MUST NOT 出现后端/GPU 符号；包入口 MUST NOT re-export `./escape-hatch` |
+| C-7 | 两条路径的 `stats()` 与统计断言落在声明区间内（视觉等价按统计判定，见 [verification-and-benchmark.md](./verification-and-benchmark.md)） |
+
+## 6. 错误模型
+
+- 上层可见错误经 `diagnostics.onError` 上报（`{ category, message, backend?, cause? }`），**不得**静默吞掉；
+- 未实现的后端能力（切片 C：picking 回读、`CubeMap`、`Texture3D`、`TextureAtlas`、模型/体素着色器、影像重投影）
+  MUST 以**显式可诊断错误**暴露（`category: "not-implemented"`），MUST NOT 静默返回空结果或黑屏；
+- 数据不可用（瓦片缺失/网络失败）与渲染失败 MUST 可区分（FR-004）。

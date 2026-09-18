@@ -1,4 +1,4 @@
-﻿# experiments/ —— 已废弃（superseded）
+# experiments/ —— 已废弃（superseded）
 
 本目录是 **Phase 1 门禁（G-1/G-2）** 的实验产物。它验证的架构是**「双画布分层 + 隐藏上游地形」**，
 该架构已于 2026-09-19 被用户明确否决（见 `specs/001-webgpu-terrain-mvp/spec.md` 的 Clarifications Q3/Q4
@@ -19,3 +19,17 @@
 `out/` 下的截图与 JSON 是当时的原始证据，未做修饰。
 
 当前有效方向见 `specs/001-webgpu-terrain-mvp/`（受控 fork：以 WebGPU 替换渲染后端，逻辑层不改）。
+
+---
+
+## `shader-spike/` —— 有效（2026-09-18，技术可行性尖刺）
+
+与上面的 G-1/G-2 无关，是**当前方向**下的着色器转换可行性实测（GLSL → WGSL）。
+主报告：`shader-spike/REPORT.md`；结论摘要见该文件 §0。
+
+- 关键结论：路径 A（glslang→SPIR-V→naga→WGSL）顶点着色器 3/3 通过且被真机 GPU 接受，
+  片元着色器 0/2（naga 30.0.1 崩在 `invalid id %243`）；路径 B（人工移植 WGSL）真机跑通
+  （0 编译消息 + 4096/4096 非黑像素）。
+- 复现：`node shader-spike/scripts/extract-cesium-glsl.mjs`、
+  `pwsh -File shader-spike/scripts/run-path-a.ps1`、`node shader-spike/scripts/webgpu-harness.mjs`。
+- 工具链装在 `%TEMP%\shader-spike`，**仓库根没有 `package.json`**。

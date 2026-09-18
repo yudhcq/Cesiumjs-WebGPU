@@ -1,190 +1,177 @@
-# Quickstart: 验证与复现指南
+# Quickstart: 验证与复现指南（渲染后端替换版）
 
-**Feature**: `001-webgpu-terrain-mvp` | **Plan**: [plan.md](./plan.md) | **Contracts**: [contracts/](./contracts/)
+**Feature**: `001-webgpu-terrain-mvp` | **Plan**: [plan.md](./plan.md) | **Contracts**: [contracts/](./contracts/) | **Research**: [research.md](./research.md)
 
-本文件是**可运行的验证/复现指南**：它说明如何证明"地形渲染跑通"以及如何复现 CI 的每一个判定。
-它**不包含实现代码**；实现细节属于 `tasks.md` 与实现阶段。
-所有命令均为**计划中的命令形态**（阶段 3/4 落地时按实际脚本名对齐，文档随实现同步更新）。
+本文件是**可运行的验证/复现指南**：说明如何证明"地形渲染在新渲染后端下端到端跑通"，以及如何复现 CI 的每一个判定。
+它**不包含实现代码**；实现细节属 `tasks.md` 与实现阶段。命令为计划形态；阶段 3/4 落地后按实际脚本名同步。
+
+> **本版前提（与上一版的关键差异）**：不存在"我们的画布"与"上游画布"的叠加——只有**一条**渲染后端在运行：
+> 要么是受控 fork 的 WebGPU 后端（补丁层），要么是上游原版 WebGL2 后端；回退是**整体销毁重建**
+> （constitution v2.0.0 原则 II）。
 
 ---
 
 ## 0. 与验收判据的对应关系
 
-| 判据 | 复现命令（见下文编号） | 期望结果 |
-|---|---|---|
-| SC-001 两路径都渲染出地形并通过断言 | §3.2 + §4 | 两条路径用例全绿；`evidence.json` 结论 pass |
-| SC-002 高程特征可观察（非空白/非单色） | §4 | `nonBackgroundRatio` 与 `uniqueColorCount` 落在声明区间 |
-| SC-003 不支持新路径时 2 秒内回退 | §3.3 | 页面正常渲染；控制台/状态文案出现回退原因类别 |
-| SC-004 交互无 >1s 卡顿、交互后断言仍通过 | §3.4 + §4 | 交互期间无超时中断；定格帧断言通过 |
-| SC-005 从提交到结论 ≤ 20 分钟 | §5.1 | CI 总耗时打印 ≤ 20 min |
-| SC-006 两路径各至少一份可比较基准记录 | §5.2 | `history.jsonl` 中两条路径各 ≥1 条记录 |
-| SC-007 工期与消耗评估结论 | [mvp-estimate.md](./mvp-estimate.md) | 文档契约测试通过（schema + 7 条断言） |
-| SC-008 时间区间与偏差说明 | [mvp-estimate.md](./mvp-estimate.md) §2 | 交付后回填 `actualsBackfill` |
-| SC-009 合入前都有验证证据 | §6 变更检查表 | 抽查缺失证据比例为 0 |
-
----
+| 判据 | 本文件中的复现方式 |
+|---|---|
+| SC-001 地形在两路径各自通过断言 | §4 视觉回归（两次独立运行）+ §3 演示 |
+| SC-002 高程特征可观察 | §4 的统计断言（覆盖率高差、明暗差） |
+| SC-003 不支持 WebGPU 时整体兜底 ≤2s | §3.3 |
+| SC-004 交互无 >1s 卡顿 | §3.4 |
+| SC-005 流水线 ≤20 分钟、任一失败阻断 | §6 |
+| SC-006 基准可比较（两路径独立会话） | §5 |
+| SC-007 工期与消耗结论 | [mvp-estimate.md](./mvp-estimate.md) |
+| SC-010 逻辑层零改动 + 绘制 100% 由 WebGPU 完成 | §2（补丁范围审计 + 依赖完整性 + 逻辑层零覆盖） |
 
 ## 1. 前置条件
 
+- **Node.js ≥ 22**；包管理器使用仓库锁文件（`npm ci`）。
+- **浏览器**：真实 GPU 验证需要支持 WebGPU 的桌面 Chrome（本机已实测 Chrome 153 零开关即得硬件适配器）；
+  CI 等价复现使用 Playwright 自带 Chromium（**版本必须精确固定**）。
+- **CI 系统包（Ubuntu/Debian，均免费）**：`mesa-vulkan-drivers xvfb libvulkan1`。
+- **着色器转换工具链（仅一次性转换与 CI 校验，不进入运行时）**：
+  - `glslang 16.6.0`：Khronos 官方预编译包（`glslang-16.6.0-linux-x86_64-release.zip`）；
+  - `naga-cli 30.0.1`：**无预编译二进制** → `cargo install naga-cli --locked`（CI 缓存 `~/.cargo`）；
+  - `@webgpu/glslang 0.0.15`：若使用，MUST 显式引 `dist/web-devel-onefile`（默认 Node 入口实测挂死 >120 s）。
+- **上游依赖**：`@cesium/engine@26.3.0`（= `cesium@1.145.0`），精确版本 + 完整性哈希（见 `upstream/engine-26.3.0.lock.json`）。
+
+## 2. 安装、构建与**补丁边界自检**（先做这一步）
+
 ```bash
-node --version        # >= 22（本机实测 v22.20.0）
-npm --version         # >= 10（本机实测 10.9.3）
+npm ci                                   # 锁定 @cesium/engine@26.3.0 与 integrity
+npm run build                            # Rollup：别名插件把清单内模块替换为 backend-webgpu/Renderer/**
+node tools/audit-patch-scope.mjs         # AU-1…AU-4：补丁范围 / 完整性 / 逻辑层零覆盖 / 接口一致性（干跑）
+node tools/gen-interface-manifest.mjs --check   # 被依赖接口面未漂移（升级漂移的早期信号）
+node --test tests/unit/rollup-plugin-engine-patch.test.mjs   # 别名白名单穷举：被改写集合 == 清单集合
 ```
-- 浏览器：**真实 GPU 对照**需要支持 WebGPU 的桌面浏览器；**CI 等价复现**需要 Playwright 自带 Chromium。
-- **无需任何访问令牌**：固定数据集随仓库提交，CI 与本地验证都不访问外部服务（FR-004）。
-- 无需真实 GPU 即可完成全部自动化判定（降级方式见 §5.3）。
 
-## 2. 安装与构建
+**通过判据**：`PatchScopeAudit.verdict === "pass"`，且 `logicLayerOverrides === 0`。
+这一组检查就是 SC-010 的"逻辑层代码改动为零 + 改动只在渲染后端层"的机器证明。
+
+## 3. 运行演示（两条路径各一次，绝不并行）
 
 ```bash
-npm ci                      # 使用仓库锁文件，安装 workspace 依赖
-npm run build               # Rollup 构建主包（ESM + .d.ts）、验证脚手架、演示页
-npm run typecheck           # tsc --noEmit（strict）
-npm run lint
-npm run test:unit           # node:test：探测决策/解码/状态机/截断规则/架构边界/评估文档契约
+node tools/scripts/serve.mjs &            # 零依赖静态服务
+# 只启用 WebGPU（新后端）
+RENDER_BACKEND=webgpu  npm run demo -- --dataset=matterhorn-z0-12
+# 只启用 WebGL2（兜底后端，上游原版）
+RENDER_BACKEND=webgl2 npm run demo -- --dataset=matterhorn-z0-12
 ```
 
-**期望**：构建产物 `packages/cesium-webgpu/dist/` 含 `index.js`、`index.d.ts`（**不得**出现 `GPU*`/`WebGL*` 后端符号）；
-架构边界断言 A1–A5 全绿（见 [data-model.md](./data-model.md) §9）。
+### 3.1 就绪与多瓦片拼接（SC-001/SC-002）
 
-## 3. 运行演示与交互验证
+演示页状态区应显示：当前路径、是否降级、瓦片加载进度、数据源署名。
+等待 `whenTilesLoaded()` 返回 `loaded: true`；画面应为连续地形表面（非空白/非纯背景色），且可见高程起伏。
 
-### 3.1 启动（两条路径各一次）
+### 3.2 交互（SC-004）
+
+旋转/缩放/平移 3 秒：画面持续更新、无 >1 s 连续卡顿、无撕裂/空洞/错误遮挡；定格帧仍满足统计断言。
+
+### 3.3 整体回退（FR-005 / FR-009 / SC-003）
+
 ```bash
-npm run demo -- --preference=webgl2   # 兜底路径
-npm run demo -- --preference=webgpu   # 新路径
+RENDER_BACKEND=webgpu FORCE_NO_WEBGPU=1 npm run demo -- --dataset=matterhorn-z0-12
 ```
-**期望**：打开演示页后地形在固定相机下渲染出来；页面角落显示当前路径与（若回退）原因类别。
-两个命令使用**同一个** `apps/demo` 入口文件——演示应用中不存在任何路径分支（FR-007 的活证据）。
+期望：2 秒内完成探测失败判定 → **整体**以 WebGL2 构造；状态区给出原因类别（如 `no-adapter` / `device-request-failed`）；
+无未捕获错误、无空白画面、**不存在**两条路径叠加的中间态。
 
-### 3.2 就绪与多瓦片拼接
-- 打开 DevTools 控制台，等待 `handle.whenTilesLoaded()` 报告 `loaded=true`（页面上也有加载进度）。
-- **期望**：可见至少 **2×2** 瓦片拼接的表面；接缝处无可见裂缝/错位；无 NaN 顶点告警。
+### 3.4 设备丢失恢复（FR-003）
 
-### 3.3 自动回退（FR-005 / FR-009 / SC-003）
+演示页提供"模拟设备丢失"入口（`device.destroy()`）：期望停止提交 → 销毁后端与场景 → 重新探测 → 整体重建 →
+恢复交互；状态区给出提示；旧设备资源计数归零。
+
+## 4. 视觉回归（双路径各自独立运行，FR-010 ~ FR-016 / SC-009）
+
 ```bash
-npm run test:contract -- --grep "fallback"
+npm run test:visual -- --backend=webgpu     # 独立进程 + 独立页面加载
+npm run test:visual -- --backend=webgl2     # 另一次独立运行
 ```
-**期望**：以 `--preference=webgpu` 启动但在页面注入"`navigator.gpu` 不存在 / `requestAdapter→null` /
-`requestDevice→reject` / limits 低于下限 / 探测超时（2 秒）"五类条件下，页面**均**渲染出地形，
-不出现未捕获错误，控制台给出回退原因类别，且探测耗时 ≤ 2000ms。
 
-### 3.4 交互与设备丢失（FR-002 / FR-003 / SC-004）
-- 手动：拖拽旋转、滚轮缩放、右键平移；**期望**画面连续更新且几何正确，无 >1 秒连续卡顿。
-- 自动化设备丢失：
+- 参考帧：`reference-frames/<datasetId>/<caseId>.<backend>.png`（**每路径各自一份**），
+  元数据记录路径/浏览器版本/是否软件光栅化；
+- 比较：排除抗锯齿边缘；容差写在测试代码中（`ToleranceRecord` 可追溯来源）；
+- 失败时产出差异图与统计 JSON 到 `artifacts/`；
+- 断言另一条后端的 GPU 对象创建数为 0（"只启用一条路径"）。
+
+**着色器前端相关断言**（本版新增，见 [contracts/verification-and-benchmark.md](./contracts/verification-and-benchmark.md) §4）：
+
 ```bash
-npm run test:contract -- --grep "device-lost"
+node tools/shader-verify.mjs --family=globe --variants=mvp   # SH-2：真机 createRenderPipeline（需 GPU）
+naga --input-kind wgsl backend-webgpu/webgpu/wgsl/*.wgsl     # SH-7：CI 无 GPU 时的模块级校验（盲区已记录）
+node tools/shader-verify.mjs --check-leaf-map                # SH-3：叶子哈希映射完整性
+node --test tests/unit/glsl-preprocess.test.mjs              # SH-4：条件编译求值（含 #elif 与算术条件）
 ```
-**期望**：模拟设备丢失后场景在无需刷新页面的前提下恢复到可交互状态，并给出可观察提示；
-若恢复失败则按 FR-009 回退到兜底路径并提示（两种结果都必须有明确状态，不允许静默黑屏）。
 
-## 4. 视觉回归（双路径，FR-010 ~ FR-016）
+## 5. 基准（FR-017 ~ FR-020 / SC-006）
 
 ```bash
-npm run test:visual              # 两条路径都跑；任一路径失败即失败
-npm run test:visual -- --update  # 仅在有意变更视觉时更新参考帧（必须在 PR 说明原因）
+npm run bench -- --backend=webgpu   # 独立会话
+npm run bench -- --backend=webgl2   # 另一次独立会话（不得与上一条同时运行）
 ```
-产物：`artifacts/<commit>/visual/<caseId>/<path>/{capture,reference,diff}.png` + `stats.json` + `evidence.json`。
 
-**比较设计（重要，勿误用）**：
-- **路径内回归（阻断）**：`webgpu` 帧对 `webgpu` 参考帧、`webgl2` 帧对 `webgl2` 参考帧，逐像素比较。
-  **不要**把另一条路径的画面当参考帧——两条路径的光栅化器、着色器编译器（ANGLE/GLSL vs Tint/SPIR-V）、
-  MSAA 解析与 sRGB 处理路径都不同，跨路径逐像素比较会误判。
-- **跨路径等价（阻断）**：用 `FrameStatistics`（非背景覆盖率、唯一色数、亮度分布）与几何统计
-  （绘制批次数、三角形数、覆盖瓦片数）落在彼此声明的区间内判定（契约
-  [contracts/verification-and-benchmark.md](./contracts/verification-and-benchmark.md) §3.1）。
-- **跨路径像素差异**：仅在真实 GPU 本地运行并记录数值，非阻断。
+产出：帧时间 p50/p95、图形显存代理指标、draw call 数、`EnvironmentFingerprint`；写入 `artifacts/history.jsonl`；
+超阈值即失败并给出与基线的差值（`degraded: true` 时只作**相对**结论，且必须标注）。
 
-**期望**：
-- 每条路径的 `evidence.json.verdict === "pass"`，且 `tolerance.source` 非空；
-- 差异图被生成（失败时用于定位），差异区域给出包围盒；
-- **自我校验**：注入一处已知渲染缺陷（如强制某个瓦片不绘制）后，本命令**必须失败**并指出差异区域（US3-IS）；
-- 重复运行两次（同一提交）结论一致，不出现随机通过/失败（FR-012）。
-
-## 5. CI 等价复现
-
-### 5.1 全量门禁（与 CI 同序）
-```bash
-npm run ci:local        # 构建 → 单测 → 数据集校验 → 契约 → 视觉 → 基准 → 许可证
-```
-**期望**：与 `.github/workflows/ci.yml` 相同的顺序与结论；打印的总耗时 ≤ 20 分钟（SC-005）。
-
-### 5.2 基准（FR-017 ~ FR-020 / SC-006）
-```bash
-npm run bench                       # 两条路径各采集一次
-npm run bench -- --check-regression # 与同环境指纹的基线比较并判定门槛
-```
-**期望**：输出帧时间 p50/p95、图形资源字节数、绘制批次数并标注环境；
-记录追加到 `artifacts/bench/history.jsonl`；劣化超过 `frameTime +10% / gpuBytes +15% / drawCalls +10%` 即失败，
-并在输出中给出与基线的差值。
-
-### 5.3 无真实 GPU 的降级复现（FR-023，方案已核实）
-
-CI 与本地降级环境使用**同一份**浏览器标志配置（脚本内集中定义，禁止各写一份）。已核实的配方：
+## 6. CI 等价复现（无 GPU 环境，SC-005 / FR-023）
 
 ```bash
-# 系统依赖（Ubuntu/Debian；三项均免费）
+# 系统依赖
 sudo apt-get install -y mesa-vulkan-drivers xvfb libvulkan1
-npm ci && npm run build
-npx playwright install --with-deps chromium     # Playwright 版本在仓库中固定
+npx playwright install --with-deps chromium
 
-# WebGPU（新路径）：Xvfb + Mesa lavapipe；必须 headed，headless 下 WebGPU 画布呈现不可靠（截图会全黑）
-VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
-CI=1 xvfb-run -a npm run test:visual -- --path=webgpu
+# WebGPU 路径（必须 headed + Xvfb）
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json CI=1 RENDER_BACKEND=webgpu \
+  xvfb-run -a npm run test:visual -- --backend=webgpu
 # 标志：--enable-unsafe-webgpu --enable-features=Vulkan --ignore-gpu-blocklist
 #       --disable-gpu-driver-bug-workarounds --disable-gpu-watchdog --no-sandbox --hide-scrollbars
 
-# WebGL2（兜底路径）：ANGLE + SwiftShader
-LIBGL_ALWAYS_SOFTWARE=1 CI=1 xvfb-run -a npm run test:visual -- --path=webgl2
+# WebGL2 路径
+LIBGL_ALWAYS_SOFTWARE=1 CI=1 RENDER_BACKEND=webgl2 \
+  xvfb-run -a npm run test:visual -- --backend=webgl2
 # 标志：--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --no-sandbox --hide-scrollbars
 ```
-**注意**：`--enable-unsafe-swiftshader` **只对 WebGL 生效**，对 WebGPU 无任何作用；
-`--disable-vulkan-surface` 会彻底关掉 WebGPU 画布呈现，**不得**使用（其余无效/过时标志见
-[research.md](./research.md) §7）。
 
-**期望**：与 CI 相同结论；基准记录带 `degraded: true`、`adapterType: "cpu"`、完整标志列表与 `degradationNotes`。
-**盲区必须同时记录（10 条，逐条见 [research.md](./research.md) §7 与 `docs/ci-degradation.md`）**，其中对本项目影响最大的三条：
-① 软件适配器**没有真实 GPU 时间戳**，CI 中的帧时间只具备相对回归意义，绝对性能必须在真实 GPU 采集；
-② CPU 适配器被 Chromium 标注为"未完全测试/不保证符合规范"，CI 的符合性证据是弱证据；
-③ 亚像素边缘覆盖差异会随光栅化器变化，阈值调参可能掩盖真实回归。
+CI 顺序见 [contracts/verification-and-benchmark.md](./contracts/verification-and-benchmark.md) §7；
+盲区（软件光栅化 ≠ GPU、无 GPU 时间戳、**naga WGSL 校验不覆盖 WebGPU 管线校验**）见同文件 §8 与 `docs/ci-degradation.md`。
 
-### 5.4 真实 GPU 对照（可选，非阻断；**需预算批准，默认不执行**）
-```bash
-# 在真实 GPU 环境（GPU larger runner / 自托管 / 现货云 GPU）上执行与 CI 同一套用例：
-npm run test:visual -- --path=webgpu
-npm run bench -- --path=webgpu --out=bench-real-gpu.json
-npm run bench -- --path=webgl2 --out=bench-real-gpu-webgl2.json
-```
-**期望**：产出带真实 `adapterInfo` 的基准记录；与 CI 的软件光栅化记录**分别归档**，用于评估降级偏差。
-（云 GPU 的计费口径与成本见 [mvp-estimate.md](./mvp-estimate.md) §3。）
-**⛔ 门禁**：真实 GPU 需付费 runner 或自托管 GPU → **MUST 先由入口 Agent 上报用户批准预算后方可执行；默认不执行**
-（对应 `tasks.md` T078）。未获批准时只使用**相对**性能结论（同环境前后对比），绝对性能标记为**未采集**。
+**真实 GPU 对照（可选、非阻断、需预算批准，默认不执行）**：在本机/自托管 GPU 或按秒计费的现货云 GPU 上，
+跑同一套 harness（含 `tools/shader-verify.mjs` 的真机管线校验与 timestamp 剖析），记录环境指纹后归档。
 
-## 6. 变更检查表（每个变更请求必须满足）
-
-1. 单元/契约/视觉/基准四项在 CI 全绿（本地通过不作为依据，FR-022）。
-2. 若改动了渲染行为：附 `capture/diff` 与统计数值；若更新了参考帧，在提交信息中说明原因（SC-009）。
-3. 若声称性能优化：附"基线 vs 优化后"实测对比，否则不予合入（FR-019 / 原则 IV）。
-4. 若调整容差或回归门槛：在 `tolerances/tol-v1.json` 或门槛文件中更新 `source` 字段并说明理由与影响（FR-014 / FR-018）。
-5. 若新增上游 API 依赖：同步更新 `docs/upstream-api-allowlist.md`，且必须是公开（非 `@private`/`@experimental`）API（原则 I）。
-6. 若改动口径或单价相关项：更新 [mvp-estimate.md](./mvp-estimate.md) 与 `mvp-estimate.v1.json` 并递增版本（FR-028）。
-
-## 7. 上游升级演练（验证 adapter 收敛，constitution 原则 I）
+## 7. 着色器叶子的转换流程（一次性，需评审）
 
 ```bash
-npm run upgrade:check -- --cesium=<next-version>
+# 1) 取"真正送进编译器的 GLSL"（跑上游拼装逻辑；尖刺脚本已可复用）
+node experiments/shader-spike/scripts/extract-cesium-glsl.mjs
+# 2) 路径 A 出草稿（glslang → SPIR-V → naga → WGSL）
+pwsh -File experiments/shader-spike/scripts/run-path-a.ps1      # 结果落 logs/
+# 3) 人工/发射器定稿 → 入库 backend-webgpu/webgpu/wgsl/**（MUST NOT 写入 Source/Shaders/**）
+# 4) 更新映射表并做真机校验
+node tools/shader-leaf-map.mjs --update && node tools/shader-verify.mjs --family=globe
 ```
-**期望**：仅在 `packages/cesium-webgpu/src/adapters/cesium/**` 需要改动时，全量验证通过；
-若需要改动该目录以外的代码，则该升级按 constitution 视为**破坏性变更**，必须先修订计划并给出迁移方案。
-演练步骤：升级 devDependency → `npm run ci:local` → 对比 `git diff --stat` 的改动范围是否收敛于 adapter 层。
 
-## 8. 常见失败与定位
+**规则**：每个叶子 MUST 有 `verifiedOnRealGpu: true` 才允许进入验收路径；上游叶子哈希变化时该叶子 MUST 重做转换
+（CI 会失败并输出清单）。
 
-| 现象 | 优先排查 |
+## 8. 上游升级演练（constitution 原则 I）
+
+```bash
+node tools/upgrade-drill.mjs --dry-run                 # 离线：用已提交清单校验漂移（每次提交都跑）
+node tools/upgrade-drill.mjs --to=26.4.0 --full        # 升级 PR：拉取新版 tarball 做完整演练
+```
+
+完整模式产出 `UpgradeDrillRecord`：上游漂移清单 + 接口一致性差异（= 改造清单）+ 需要重做转换的着色器叶子 +
+全量验证结果；**三项齐备才可合入**。
+
+## 9. 常见失败与定位
+
+| 症状 | 首先检查 |
 |---|---|
-| 画面全背景色/空白 | `whenTilesLoaded` 是否 `loaded=true`；地形 provider 是否就绪；WebGPU 画布是否被其他元素遮挡 |
-| 只有兜底路径能出图 | 探测原因类别（`path.reason`）；`navigator.gpu` 可用性；能力下限（`maxTextureDimension2D`/`maxBufferSize`） |
-| 接缝有裂缝/尖刺 | 裙边高度与边界顶点生成；解码后的高程是否出现 NaN（`TileError.category === "decode"`） |
-| 验证结论随机波动 | 固定条件是否齐全（相机/时间/视口/像素比/数据集 checksum）；预热与采样帧数；是否有未固定的随机源 |
-| 基准数值与本地差异大 | 环境指纹（软件光栅化 vs 真实 GPU）；是否跨环境比较（禁止） |
-| CI 中 WebGPU 不可用 | `docs/ci-degradation.md` 的标志组合；浏览器版本；降级为数值断言 + 本机像素对比 |
+| 黑屏但无报错 | 通道状态机是否正确闭合（`endFrame` 前无未闭合 pass）；纹理 Y 翻转是否处理；`clear` 的 `loadOp` |
+| 管线创建失败 / 绘制消失 | 真机 `createRenderPipeline` 校验信息（varying 不匹配、绑定布局、目标格式、`sampleCount`） |
+| uniform 值不生效 | uniform 块布局与 WGSL 结构是否逐字段一致（G-4）；动态偏移是否正确 |
+| 地形位置/深度不对 | 深度范围修正（GL z∈[-1,1] → WebGPU z∈[0,1]）是否在发射器内成对处理 |
+| 补丁审计失败 | 是否改了 `Renderer/**` 之外的文件；别名白名单是否与清单一致 |
+| 着色器映射失败 | `shader-leaf-map.json` 是否命中；上游版本是否变化（哈希漂移） |
+| WebGPU 用例在 CI 上画布全黑 | 是否误用 headless（MUST headed + Xvfb）；是否漏了 `--enable-unsafe-webgpu`/`--enable-features=Vulkan` |
+| 两条路径结论不一致 | 是否在**同一次运行**里跑了两条路径（违反原则 II；必须拆成两次独立运行） |

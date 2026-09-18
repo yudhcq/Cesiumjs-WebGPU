@@ -1,508 +1,388 @@
-# Data Model: WebGPU Terrain Rendering MVP
+# Data Model: WebGPU 渲染后端替换（受控 fork / 补丁层）
 
-**Feature**: `001-webgpu-terrain-mvp` | **Date**: 2026-09-18 | **Plan**: [plan.md](./plan.md) | **Research**: [research.md](./research.md)
+**Feature**: `001-webgpu-terrain-mvp` | **Date**: 2026-09-19 | **Plan**: [plan.md](./plan.md) | **Research**: [research.md](./research.md)
 
-本文件把 `spec.md` 的 Key Entities 落成可实现的类型与状态机。**本文件是设计产物，不回写 spec**；
-spec 中的技术无关约束（FR-001…FR-029 / SC-001…SC-009）在每节以 `→ FR-0xx` 标注追溯。
+本文件把 `spec.md` 的 Key Entities 落成可实现的类型与状态机，并把**新的架构约束**（受控 fork、二选一、
+补丁范围审计、切片 A/B）建模为一等实体。**本文件是设计产物，不回写 spec**；spec 的 FR/SC 在每节以 `→ FR-0xx / SC-0xx` 追溯。
 
 约定：
-- 所有类型位于 `packages/cesium-webgpu/src/**`，产物以 ESM + `.d.ts` 发布。
-- **`src/api/**`（同构上层 API）中不得出现 `GPU*` / `WebGL*` / `navigator.gpu` 等后端符号**（FR-007，见 §9 边界断言）。
-- 时间单位统一 `ms`（number），内存单位统一字节（number，前缀 `bytes`）。
+
+- 上层 API 与状态类型位于 `packages/cesium-webgpu/src/**`；补丁层实现位于 `packages/cesium-webgpu/backend-webgpu/**`。
+- **`src/api/**` 与 `src/index.ts`（上层 API）中 MUST NOT 出现 `GPU*` / `WebGL*` / `navigator.gpu` / `@cesium/engine/Source/Renderer/**` 等后端符号**（→ FR-007、SC-010，见 §11 边界断言）。
+- 补丁层（`backend-webgpu/**`）MUST NOT 被 `src/**` 反向 import 具体实现类型（→ 原则 II 的后端抽象条款）。
+- 时间单位统一 `ms`（number）；内存单位统一字节（number，前缀 `bytes`）；货币 CNY（并附 USD 口径，见 `mvp-estimate.md`）。
+- 所有枚举值以字符串字面量联合表示，便于写进 CI 产物 JSON。
 
 ---
 
-## 1. 瓦片与几何（Terrain Tile）
+## 1. 上游基线与补丁（受控 fork 的建模）
 
-`→ FR-001, FR-004, FR-016；spec Key Entities: 地形瓦片`
+### 1.1 `UpstreamBaseline`（上游基线）
 
-```ts
-export interface TileKey {
-  readonly level: number; // >= 0
-  readonly x: number;     // 0 <= x < 2^level * (tilingScheme 宽度)
-  readonly y: number;     // 0 <= y < 2^level * (tilingScheme 高度)
-}
-
-export type TileAvailability = "data" | "no-data" | "unknown";
-
-export type TileState =
-  | "absent"      // 尚未被上游调度器请求
-  | "requested"   // 已向上游 TerrainProvider 返回 promise（或已排入本地并发队列）
-  | "decoding"    // 字节已到手，正在解码为高程场与几何
-  | "resident"    // 几何在 CPU 与 GPU 双端可用，可参与绘制
-  | "failed";     // 终态（经重试耗尽），不可绘制
-
-export interface TileRecord {
-  readonly key: TileKey;
-  /** 瓦片经纬度范围，来自 tilingScheme.tileXYToRectangle（上游公开 API 计算，本层不自行推导） */
-  readonly rectangle: Rectangle;
-  state: TileState;
-  availability: TileAvailability;
-  /** 本层唯一高程真值来源：解码后的规则高程场（FR-004 的“本地固定数据集”与“公开数据源”共用此结构） */
-  heightField?: HeightField;
-  /** 提交给上游 Cesium 的公开数据对象（QuantizedMeshTerrainData / HeightmapTerrainData） */
-  upstreamData?: QuantizedMeshTerrainData | HeightmapTerrainData;
-  geometry?: TileGeometry;
-  error?: TileError;
-  lastUsedFrame: number; // 用于 LRU 逐出
-}
-
-export interface HeightField {
-  readonly width: number;  // 采样列数（经度方向）
-  readonly height: number; // 采样行数（纬度方向）
-  readonly heights: Float32Array; // 米，长度 = width*height，行主序，自北向南、自西向东
-  readonly minimumHeight: number;
-  readonly maximumHeight: number;
-  readonly childTileMask: number; // bit0 SW, bit1 SE, bit2 NW, bit3 NE（上游语义，见 HeightmapTerrainData 文档）
-  readonly skirtHeight: number;   // 米
-  readonly vertexCountWithoutSkirts: number;
-  readonly indexCountWithoutSkirts: number;
-}
-
-export interface TileGeometry {
-  readonly key: TileKey;
-  readonly positions: Float32Array;  // ECEF，3 分量/顶点
-  readonly indices: Uint32Array;     // 与上游从同一 HeightField 建出的规则网格三角化一致（→ T-8）
-  readonly boundingSphere: BoundingSphere;
-  readonly gpu: GpuGeometryRef;
-}
-
-export interface TileError {
-  category: "network" | "http-status" | "decode" | "cancelled";
-  message: string;
-  httpStatus?: number;
-  retries: number;
-}
-```
-
-**状态迁移**（`→ FR-004`：必须区分“数据不可用”与“渲染失败”）
-
-```text
-absent ──request──▶ requested ──bytes ok──▶ decoding ──ok──▶ resident ──evict──▶ absent
-   ▲                    │                      │
-   │                    └──retry(<=N)──────────┴──fail──▶ failed  (availability="no-data" 时直接 resident 为空几何)
-```
-
-校验规则：
-- `heightField.width * heightField.heights.length` 必须一致；任一 `NaN`/`±Infinity` 值必须被拒绝并归入 `TileError.category="decode"`（`→ FR-016`：不得产生尖刺/穿模）。
-- `availability === "no-data"` 的瓦片以空几何进入 `resident`，不产生任何三角形（`→ 边界用例“地形服务返回空瓦片”`）。
-- `skirtHeight > 0` 且四边裙边顶点必须由同一边界顶点沿椭球法线下压生成，保证接缝连续（`→ FR-016`）。
-- `resident` 的瓦片必须同时持有 CPU 侧 `heightField`（用于设备丢失后重建，`→ FR-003`）。
-
-**逐帧绘制集合**（`→ FR-001, FR-008`）：绘制集合 = `resident` 瓦片 ∩ 视锥 ∩ 截断规则。
-
-```ts
-export interface FrameDrawSet {
-  readonly frameNumber: number;
-  readonly tiles: readonly TileKey[];
-  /** 被父级完全替换而剔除的瓦片数（诊断用，用于验证与上游 LOD 选择的一致性） */
-  readonly supersededByChildren: number;
-  readonly culledOutOfFrustum: number;
-}
-```
-截断规则（**待验证假设 H-2**，见 research.md）：若某瓦片的 4 个子瓦片全部 `resident`，则父瓦片不绘制；
-否则绘制。依据：上游四叉树只在判定父级精度不足时才请求子瓦片（`Globe.maximumScreenSpaceError`），
-因此 `resident` 集合的“叶子”即上游的绘制截断，本层不重新实现 LOD 决策。
-验证方法：固定相机、`globe.tilesLoaded === true` 后，两条路径的**几何统计**（顶点数、索引数、
-绘制批次数、包围盒覆盖的经纬度范围）必须落在声明区间内（见 `contracts/verification-and-benchmark.md`）。
-
----
-
-## 2. 地形数据源（Terrain Source）
-
-`→ FR-004；spec Dependencies「地形数据源」「不依赖凭据」`
-
-```ts
-export type TerrainSourceConfig =
-  | { kind: "local-fixed"; datasetId: string; baseUrl: string }  // 仓库内固定数据集，CI/离线默认
-  | { kind: "public";      datasetId: string; baseUrl: string }; // 免登录公开服务，演示用
-
-export interface TerrainDatasetManifest {
-  readonly id: string;                 // 例："alps-fixed-v1"
-  readonly format: "heightmap-u16-v1" | "quantized-mesh-1.0"; // 主路径为前者（见 contracts/terrain-source.md）
-  readonly tilingScheme: "geographic" | "web-mercator";
-  readonly levels: readonly number[];  // 实际打包的层级
-  readonly rectangle: { west: number; south: number; east: number; north: number }; // 弧度
-  readonly tileCount: number;
-  readonly totalBytes: number;
-  readonly checksum: string;           // 生成脚本写入，CI 校验（保证验证数据不可被静默替换，→ FR-012）
-  readonly attribution: string;        // 许可要求的署名文本（→ FR-024）
-  readonly sourceUrl: string;          // 生成该固定数据集所用的公开服务 URL（可追溯）
-  readonly generatedAt: string;        // ISO-8601
-  readonly structure: {                // 高程解码约定（与上游 HeightmapTerrainData.structure 同构）
-    readonly heightScale: number; readonly heightOffset: number;
-    readonly elementsPerHeight: number; readonly stride: number;
-  };
-}
-```
-
-- `layer.json`（Cesium Terrain 1.0 的标准清单）**原样透传**：`availability` 交给公开类 `TileAvailability`
-  解析并挂到 `TerrainProvider.availability`，瓦片可用性判定由上游四叉树完成，本层不自行设计空间索引。
-- 数据源实现必须满足：无任何访问令牌参数；离线（`kind="local-fixed"`）时不得发起任何外部网络请求
-  （由验证用例断言：`response` 拦截器记录到的外部主机名集合必须为空，`→ FR-012` / 边界用例“无网络或离线运行”）。
-- 两个数据集的**字节内容同源**（固定数据集是公开服务同层级同坐标瓦片的拷贝），只是 URL 不同，
-  以保证“CI 离线可复现”与“演示用公开数据源”两条链路在几何上等价（`→ FR-008`）。
-
----
-
-## 3. 渲染路径与能力探测（Render Path / Capability Probe）
-
-`→ FR-005, FR-006, FR-007, FR-009；spec Key Entities: 渲染路径、能力探测结果`
-
-```ts
-export type RenderPathId = "webgl2" | "webgpu";
-
-export type PathUnavailableReason =
-  | "no-navigator-gpu"        // navigator.gpu 不存在
-  | "adapter-unavailable"     // requestAdapter 返回 null
-  | "device-request-failed"   // requestDevice 抛错/拒绝
-  | "probe-timeout"           // 超过 2000ms 上限
-  | "limits-below-floor"      // 能力下限不满足
-  | "device-lost"             // 会话中途设备丢失且恢复失败
-  | "init-error";             // 其他初始化异常
-
-export interface CapabilityFloor {
-  readonly maxTextureDimension2D: number; // >= 4096
-  readonly maxBufferSize: number;         // >= 256 * 1024 * 1024
-  readonly maxVertexBuffers: number;      // >= 2
-  readonly maxBindGroups: number;         // >= 2
-  readonly requiredFeatures: readonly string[]; // MVP 为空集（只使用 WebGPU 核心里程碑能力）
-}
-
-export interface CapabilityProbeResult {
-  readonly available: boolean;
-  readonly deviceAcquired: boolean;
-  readonly elapsedMs: number;                 // 必须 <= probe.timeoutMs（→ FR-005：上限 2s）
-  readonly limits?: Readonly<Record<string, number>>;
-  readonly adapterInfo?: { vendor: string; architecture: string; device: string; description: string };
-  readonly reasons: readonly PathUnavailableReason[]; // 空数组表示可用
-}
-
-export interface PathInfo {
-  readonly active: RenderPathId;
-  readonly degraded: boolean;                 // 是否“非首选路径”（用于状态提示，→ FR-009）
-  readonly reason?: PathUnavailableReason;    // 回退原因类别
-  readonly probeDurationMs?: number;
-}
-```
-
-状态机（`→ FR-006`：兜底路径任何时刻可用；`→ FR-003`：设备丢失恢复）：
-
-```text
-           ┌──────────── probe(<=2s) ───────────┐
-           ▼                                    │
-  [webgl2-active] ◀──fail/timeout/limits/low── [probing] ──ok──▶ [webgpu-active]
-        ▲                                                             │
-        │                                                      device.lost
-        └────────── restore 失败（可观察提示，→ FR-003/FR-009）◀───────┤
-                                                                      │
-                        restore 成功（重建 device + 重传 resident 几何）┘
-```
-
-不变式：
-- `webgl2` 无需任何探测即可启用：探测失败不得阻塞 `CesiumWidget` 构造，也不得抛出未捕获错误（`→ FR-005`）。
-- 探测超时后即使 promise 迟到 resolve，也**不得**切换路径，且必须释放已获取的 device（`device.destroy()`）。
-- 选择逻辑只依赖 `RenderPathPreference` 与 `CapabilityProbeResult`；后端实现之间互不 import（`→ FR-007`）。
-
----
-
-## 4. 帧与统计（Frame / FrameStats）
-
-`→ FR-002, FR-017；constitution 原则 IV`
-
-```ts
-export interface FrameStats {
-  readonly frameNumber: number;
-  readonly frameTimeMs: number;      // 两次 postRender 之间的墙钟时间
-  readonly cpuEncodeMs: number;      // 本帧 WebGPU 编码耗时（对照指标）
-  readonly drawCalls: number;        // 本帧提交给图形接口的绘制请求数
-  readonly triangles: number;
-  readonly gpuResourceBytes: number; // 由统一资源登记表统计（见 §5）
-}
-
-export interface FrameStatsSummary {
-  readonly samples: number;
-  readonly warmupFrames: number;
-  readonly p50: number;
-  readonly p95: number;
-  readonly min: number;
-  readonly max: number;
-}
-```
-
-指标口径（**必须与基准文档一致，变更需记录理由**，`→ FR-017/FR-018`、constitution 原则 IV）：
-- `frameTimeMs`：`Scene.postRender` 相邻两次回调的 `performance.now()` 差值；采样前固定预热帧数
-  （默认 120 帧），采样帧数固定（默认 600 帧），样本在报告中完整存档（用于复核 p50/p95）。
-- `drawCalls`：两条路径同口径统计——WebGPU 侧统计 `GPURenderPassEncoder.drawIndexed()` 调用次数；
-  WebGL2 侧由**验证脚手架**包装平台 API `WebGL2RenderingContext.prototype.drawElements/drawArrays`
-  计数（包装的是浏览器平台 API，不是 Cesium 内部实现，不违反 constitution 原则 I）。
-- `gpuResourceBytes`：定义为“经图形 API 分配的资源字节数”，由共享的 `GpuResourceRegistry`
-  统一登记：WebGPU 侧登记 `createBuffer/createTexture` 的字节数；WebGL2 侧由同一脚手架包装
-  `bufferData/texImage2D` 统计上传字节数。**这是一个声明过的代理指标**，不等于驱动层真实显存占用
-  （浏览器不暴露真实 VRAM），必须与 `adapterInfo`、`degraded` 标注一起解读。
-
----
-
-## 5. GPU 资源登记表（GpuResourceRegistry）
-
-`→ FR-003（设备丢失重建）, FR-017（显存指标）`
-
-```ts
-export interface GpuResourceRegistry {
-  readonly totalBytes: number;
-  createBuffer(desc: { size: number; usage: number; label: string }): GpuBufferHandle;
-  createTexture(desc: { bytes: number; label: string }): GpuTextureHandle;
-  release(handle: GpuBufferHandle | GpuTextureHandle): void;
-  /** 设备丢失后：所有句柄失效，registry 必须在同一 device 生命周期内保持一致 */
-  invalidateAll(): void;
-  stats(): { buffers: number; textures: number; bytes: number };
-}
-```
-规则：
-- 每个 GPU 资源必须携带 `label = "<kind>:<tileKey|purpose>"`，使基准报告中的显存占用可按用途分解。
-- 设备丢失（`GPUDevice.lost`）后，`invalidatedAll()` 置空登记表；随后由 `TileRegistry` 中仍处于
-  `resident` 的 `heightField` 逐帧限量重建（`→ FR-003`：恢复过程不需要刷新页面）。
-- 逐帧上传预算：默认 ≤ 4 个瓦片或 ≤ 8 MiB/帧，避免恢复/加载造成的长帧（`→ FR-002`：单次交互不出现 >1s 卡顿）。
-
----
-
-## 6. 视觉验证证据（Visual Verification Evidence）
-
-`→ FR-010…FR-016, FR-022；spec Key Entities: 视觉验证证据、验证数据集`
-
-```ts
-export interface VerificationDataset {
-  readonly id: string;                        // 例："vd-alps-01"
-  readonly terrain: TerrainSourceConfig;      // 固定数据集
-  readonly camera: CameraSnapshot;            // 固定相机（位置/朝向/视场角/近远平面）
-  readonly viewport: { width: number; height: number; pixelRatio: number };
-  readonly sceneTime: string;                 // ISO-8601，固定场景时间
-  readonly seed: number;                      // 固定随机种子
-  readonly multiTile: boolean;                // 必须为 true（→ FR-015：覆盖多瓦片拼接）
-}
-
-export interface CameraSnapshot {
-  readonly longitude: number; readonly latitude: number; readonly height: number; // 弧度/米
-  readonly heading: number; readonly pitch: number; readonly roll: number;        // 弧度
-  readonly fov?: number; readonly near?: number; readonly far?: number;
-}
-
-export interface ToleranceProfile {
-  readonly id: string;              // 例："tol-v1"
-  readonly maxMismatchRatio: number;   // 例 0.02（2% 像素）
-  readonly maxMeanAbsDiff: number;     // 例 1.5（0-255）
-  readonly perChannelTolerance: number;// 例 8
-  readonly ignoreEdgePixels: number;   // 抗锯齿边缘收缩像素数（例 1）
-  readonly source: string;             // 可追溯来源：推导过程 + 批准记录链接（→ FR-014）
-}
-
-export interface VisualVerificationEvidence {
-  readonly id: string;                 // 稳定 id（dataset + path + case）
-  readonly path: RenderPathId;
-  readonly datasetId: string;
-  readonly fixedConditions: VerificationDataset;
-  readonly capturePngPath: string;
-  readonly referencePngPath: string;
-  readonly diffPngPath: string;
-  readonly stats: FrameStatistics;
-  readonly tolerance: ToleranceProfile;
-  readonly verdict: "pass" | "fail";
-  readonly metrics: {
-    mismatchRatio: number; meanAbsDiff: number; maxAbsDiff: number;
-    diffRegions: readonly { x: number; y: number; width: number; height: number }[];
-  };
-}
-
-export interface FrameStatistics {
-  readonly width: number; readonly height: number;
-  readonly nonBackgroundRatio: number;     // 非背景色像素占比（→ SC-002：不得近似 0，不得为 1 的单色）
-  readonly uniqueColorCount: number;       // 唯一颜色数（→ SC-002：避免“整片单色”假通过）
-  readonly luminanceMean: number;
-  readonly luminanceStdDev: number;
-  readonly colorHistogram: readonly number[]; // 16 bins × 3 通道，归一化
-  readonly skylineRatio: number;           // 背景（天空/纯背景色）像素占比
-}
-```
-export interface CrossPathEquivalenceRecord {
-  readonly id: string;                 // dataset + case
-  readonly datasetId: string;
-  readonly fixedConditions: VerificationDataset;
-  readonly perPath: Readonly<Record<RenderPathId, {
-    readonly stats: FrameStatistics;
-    readonly geometry: { triangles: number; tilesDrawn: number; drawCalls: number };
-  }>>;
-  /** 声明的跨路径统计等价区间（FR-008 的"声明的容差"落在这里） */
-  readonly declaredBands: Readonly<Record<string, { min: number; max: number }>>;
-  /** 无法消除的差异（亚像素边缘、MSAA 解析、sRGB 处理、深度表示）——必须显式列出 */
-  readonly declaredDifferences: readonly string[];
-  readonly verdict: "pass" | "fail";
-}
-
-规则：
-- **每个路径各自一份参考帧**（`reference-frames/<datasetId>/<caseId>.<path>.png`）：
-  路径内回归用像素对比（阻断）。**禁止**把另一条路径的画面当作参考帧做逐像素比较——
-  两条路径的光栅化器、着色器编译器（ANGLE/GLSL vs Tint/SPIR-V）、MSAA 解析与 sRGB 处理路径均不同
-  （已核实，见 research.md §7）；跨路径等价改用 `CrossPathEquivalenceRecord` 的**统计量**判定。
-- 参考帧**必须**由固定数据集在固定条件下生成，并记录生成时的路径、后端、浏览器版本与 GPU 标注
-  （软件光栅化下生成的参考帧必须显式标注 `degraded: true`，`→ FR-023`）；Playwright/Chromium 版本升级
-  必须重新生成参考帧并在提交信息中说明（`→ US3-AS3`）。
-- 几何类缺陷断言（`→ FR-016`）：
-  - 覆盖率突变：相邻两帧 `nonBackgroundRatio` 变化 > 5% 且相机未变 → 失败；
-  - 深度不连续处像素比例：`depthStats` 中相邻像素深度差 > 阈值的像素占比超出区间 → 失败；
-  - 异常顶点：`TileGeometry` 中 `|height| > 9_000m` 或非有限值计数必须为 0。
-
----
-
-## 7. 基准记录（Benchmark Record）
-
-`→ FR-017…FR-020；constitution 原则 IV`
-
-```ts
-export interface BenchmarkRecord {
-  readonly schemaVersion: 1;
-  readonly commit: string;
-  readonly timestamp: string;
-  readonly path: RenderPathId;
-  readonly datasetId: string;
-  readonly cameraId: string;
-  readonly scene: { viewport: [number, number]; pixelRatio: number; requestRenderMode: boolean; msaaSamples: number };
-  readonly environment: BenchmarkEnvironment;
-  readonly warmupFrames: number;
-  readonly sampleFrames: number;
-  readonly frameTimeMs: { p50: number; p95: number; min: number; max: number };
-  readonly drawCalls: number;
-  readonly gpuResourceBytes: number;
-  readonly triangles: number;
-  readonly degraded: boolean;
-  readonly degradationNotes?: string;   // → FR-023：降级方式与盲区
-  readonly thresholds: BenchmarkThresholds;
-  readonly passed: boolean;
-}
-
-export interface BenchmarkEnvironment {
-  readonly os: string; readonly browser: string; readonly browserVersion: string;
-  readonly gpuVendor: string; readonly gpuDevice: string; readonly gpuArchitecture: string;
-  readonly adapterType: "cpu" | "integrated-gpu" | "discrete-gpu" | "unknown"; // 软件适配器为 "cpu"
-  readonly backend: string;      // 例 "vulkan" / "opengl"（Dawn 后端类型）
-  readonly software: boolean;    // 是否软件光栅化（lavapipe / SwiftShader 等）
-  readonly headless: boolean;    // CI 中为 false（headed + Xvfb，见 research.md §7）
-  readonly browserFlags: readonly string[]; // 完整标志列表，随记录归档
-}
-
-export interface BenchmarkThresholds {
-  readonly frameTimeRegressionPct: number;   // 例 10（超过即失败）
-  readonly gpuBytesRegressionPct: number;    // 例 15
-  readonly drawCallsRegressionPct: number;   // 例 10
-  readonly source: string;                   // 阈值来源与批准记录（→ FR-018：变更需记录理由与影响）
-}
-```
-- 基线取同一 `environment` 指纹下的最近一次通过记录；环境指纹变化（换 GPU、换浏览器大版本、
-  切换软件光栅化）必须重新建立基线并在记录中标注，避免跨环境误判（`→ FR-018/FR-023`）。
-- 记录以 JSON 数组追加存档为 CI 产物，形成历史序列（`→ FR-020`）。
-
----
-
-## 8. MVP 评估结论（MVP Estimate）
-
-`→ FR-026…FR-029, SC-007；spec Key Entities: MVP 评估结论`
-
-机器可校验的 schema 见 [`contracts/mvp-estimate.schema.json`](./contracts/mvp-estimate.schema.json)，
-人类可读结论见 [`mvp-estimate.md`](./mvp-estimate.md)。
-
-```ts
-export interface MvpEstimate {
-  readonly schemaVersion: 1;
-  readonly milestone: string;            // "地形渲染跑通（WebGPU 路径 + 兜底路径 + 可验证 + 基准）"
-  readonly version: string;              // 语义化版本，随仓库版本化发布（→ FR-028）
-  readonly createdAt: string;
-  readonly currency: { primary: "CNY"; secondary: "USD"; fxRate: number; fxSource: string; fxDate: string };
-  readonly meteringBasis: {
-    readonly includesHumanCost: false;   // MUST 为 false，且结论中显式声明（→ FR-027）
-    readonly statement: string;          // "仅计 AI/Agent 消耗：模型 token（输入/输出分别计量）+ 算力费用；人工成本不计入"
-    readonly tokenMetering: "input-output-separate";
-    readonly priceSources: readonly { item: string; unitPrice: number; unit: string; currency: string; source: string; consultedAt: string }[];
-    readonly includesCiCompute: boolean;
-    readonly includesCloudGpu: boolean;
-    readonly executionEnvironment: string;  // 执行方式与并行度假设（→ spec Assumptions）
-    readonly selfHostedHardware: string;    // 本机/自托管硬件（电力与折旧）是否计入的显式说明
-  };
-  readonly workflows: readonly {
-    readonly id: string; readonly name: string;
-    readonly timeDays: { min: number; max: number };
-    readonly agentTurns: { min: number; max: number };   // 每工作流的 Agent 回合数区间
-    readonly tokens: { inputM: { min: number; max: number }; outputM: { min: number; max: number } };
-    readonly modelCost: { cny: { min: number; max: number }; usd: { min: number; max: number } };
-    readonly computeCost: { cny: { min: number; max: number }; usd: { min: number; max: number } };
-    readonly assumptions: readonly string[];
-  }[];
-  readonly totals: {
-    readonly timeDays: { min: number; max: number };
-    readonly calendarWeeks?: { min: number; max: number };
-    readonly agentTurns: { min: number; max: number };
-    readonly tokens: { inputM: { min: number; max: number }; outputM: { min: number; max: number } };
-    readonly cost: { cny: { min: number; max: number }; usd: { min: number; max: number } };
-  };
-  readonly scenarios?: readonly { id: string; name: string; description: string; cost: { cny: { min: number; max: number }; usd: { min: number; max: number } } }[];
-  readonly planningValue?: { cny: { min: number; max: number }; usd: { min: number; max: number } };
-  readonly confirmedItems: readonly string[];   // → FR-029
-  readonly unconfirmedItems: readonly { item: string; impactDirection: "up" | "down" | "both"; impactMagnitude: string; note: string }[];
-  readonly exclusions: readonly string[];       // 例：凭据类地形服务（已后置，MUST NOT 计入，→ FR-029）
-  readonly revisionPolicy: string;              // 触发修订的条件（→ spec Assumptions「估算结论的时效」）
-  readonly baselineGapNote?: string;            // 无历史基线时区间偏宽的原因（如实说明）
-  readonly actualsBackfill?: {                  // 首个增量交付后回填（FR-028）；未交付时为 null
-    readonly recordedAt: string;
-    readonly timeDays: number;
-    readonly tokens: { inputM: number; outputM: number };
-    readonly cost: { cny: { min: number; max: number }; usd: { min: number; max: number } };
-    readonly deviationNote: string;
-  } | null;
-}
-```
-
-> 本接口以 [`contracts/mvp-estimate.schema.json`](./contracts/mvp-estimate.schema.json) 为**唯一权威**（该 schema 的
-> `required` / `additionalProperties: false` 决定字段必填性）；上面已补齐此前缺失的 `meteringBasis.selfHostedHardware`、
-> `workflows[].agentTurns`、`totals.agentTurns`（+ `calendarWeeks`）与 `scenarios` / `planningValue` /
-> `baselineGapNote` / `actualsBackfill`（后四项在 JSON 中均存在）。两者不一致时**以 schema 为准**回写本接口。
-
-**机器可校验断言**（对应 SC-007，作为 CI 的文档契约测试）：
-1. `meteringBasis.includesHumanCost === false` 且 `statement` 含"人工成本不计入"字样；
-2. `currency.primary === "CNY"` 且同时存在 `usd` 数值；
-3. `totals.timeDays.min > 0 && totals.timeDays.max >= min`；
-4. `workflows` 至少覆盖 5 个工作流：渲染管线与地形绘制 / 双路径能力探测与兜底 / 验证资产与测试基建 /
-   CI 与基准基建 / 开源交付与文档（`→ FR-026`）；
-5. 每个 `priceSources` 条目必须有 `source`（URL）与 `consultedAt`（`→ FR-027`：单价来源必须写明）；
-6. `unconfirmedItems` 非空时，每项必须给出 `impactDirection` 与 `impactMagnitude`（`→ FR-029`）；
-7. 每个工作流的 `modelCost` 必须能由 `tokens` × `priceSources` 按其声明的计价模型复算，
-   判据为**绝对误差 ≤ ¥0.01 或相对误差 ≤ 2%**（记录值按 2 位小数舍入后比较）——保证"结论数字可追溯"，
-   避免出现无来源的金额；复算模型常量（min 端：命中率 0.92 + 空闲时段 + 100% flash；
-   max 端：命中率 0.75 + 高峰时段 + 80% flash + 20% v4-pro）固化在
-   `tests/unit/fixtures/mvp-estimate-recompute-model.json`，来源 `mvp-estimate.md` §3.1；
-8. `exclusions` MUST 至少含 1 条同时具备"凭据/令牌"与"不计入"语义的条目
-   （即 FR-029 第三子句「凭据类地形服务 MUST NOT 计入本增量消耗」的 CI 断言，而非仅靠流程门禁）。
-
-> 断言 7 的阈值说明：按 `mvp-estimate.md` §3.1 的记录模型本机实测复算，`min` 端 W5/W6 的偏差为 1.52%
-> （复算 ¥0.2538 vs 记录 ¥0.25，源于 2 位小数舍入），**旧的"≤1%"阈值会导致该 CI 门禁必然失败**；
-> 改为「绝对误差 ≤ ¥0.01 或相对误差 ≤ 2%」后，2 位小数舍入的记录值可合法通过，且不影响对"无来源金额"的阻断力。
-
----
-
-## 9. 边界断言（架构测试用）
-
-`→ FR-007, constitution 原则 I/II`
-
-| 断言 | 检查方式 | 违反后果 |
+| 字段 | 类型 | 说明 / 校验 |
 |---|---|---|
-| A1 上层 API 不引用后端类型 | `src/api/**` 的 import 图不得包含 `src/backends/**`；`api` 的 `.d.ts` 文本不得匹配 `/GPU[A-Z]|WebGL2RenderingContext|navigator\.gpu/` | 构建失败 |
-| A2 后端之间互不引用 | `src/backends/webgl2/**` 与 `src/backends/webgpu/**` 的 import 图交集为空 | 构建失败 |
-| A3 上游耦合收敛于 adapter 层 | 仅 `src/adapters/cesium/**` 允许 `from "cesium"`；其他目录出现即失败 | 构建失败 |
-| A4 不使用非公开 API（**强化**） | 对 `src/**` 静态扫描：① 禁止 import 上游 `Source/**` 深路径（只允许包入口 `cesium`）；② 对 `from "cesium"` / `from "@cesium/*"` 的**所有命名导入**（`import { X } from "cesium"`、`import { X as Y }`）与**命名空间成员访问**（`Cesium.X`、`ns.X`）**逐一比对** `packages/cesium-webgpu/src/adapters/cesium/public-api-allowlist.ts` 的**白名单**——白名单外的任何符号一律判为违规，**包括不带下划线前缀的 `@private` 类（如 `DrawCommand`、`FrameState`）** | 构建失败 |
-| A5 演示应用无路径分支（**作用域仅限 `apps/demo/src/**`**） | `apps/demo/src/**` 只 import 包入口；不得出现 `"webgpu"`/`"webgl2"` 字面量作为行为分支（只允许作为配置值传入）。**测试代码（`tests/**`、`packages/verify-harness/**`）经 `./escape-hatch` 子路径访问上游对象不属 A5 违规**——A5 的判定范围不含测试目录 | 构建失败 |
+| `packageName` | `"@cesium/engine"` | 常量 |
+| `version` | `string` | MUST 为精确版本（MVP：`"26.3.0"`），MUST NOT 使用 `^`/`~` 范围（→ FR-032） |
+| `cesiumVersion` | `string` | 上游 `index.js` 的 `CESIUM_VERSION`（MVP：`"1.145.0"`，已核实） |
+| `integrity` | `string` | 安装包完整性哈希（lockfile 中的 `sha512-…`）；CI MUST 断言安装后一致 |
+| `license` | `"Apache-2.0"` | 与 `LICENSE.md` 一致 |
+| `recordedAt` | `string` (date-time) | 基线登记时间 |
+| `notes` | `string` | 基线说明（含"逻辑层不改动"的边界声明） |
 
-A4 的依据：本阶段已核实 `TerrainData.createMesh` / `TerrainMesh` / `TerrainEncoding` /
-`GlobeSurfaceTileProvider` / `QuadtreePrimitive` / `Scene.context` / `Scene.pixelRatio` / `Scene.frameState` /
-**`DrawCommand` / `FrameState`（无下划线前缀的 `@private` 类）** 均为上游 `@private`
-（详见 research.md §1 证据表），因此这些符号在代码中**出现即视为违规**。
-**强化理由**：`DrawCommand`/`FrameState` 这类"能被 import 但不是公开 API"的符号**不带下划线前缀**，
-原规则只匹配 `\._[a-zA-Z]` 会漏判；改为"逐一比对白名单"后，任何白名单外符号（无论有无下划线）都会被阻断。
-**测试访问上游对象的唯一合法出口**是 `./escape-hatch` 子路径（`contracts/render-path-api.md` §6）：
-该出口仅测试使用、引用即退出同构保证、**MUST NOT 被主入口 re-export**，且仅供观察/断言，不参与生产代码路径。
+**校验规则**：`version` 变更 MUST 触发 `UpgradeDrillRecord`（→ §1.4）与结论修订评估（→ FR-028）。
+
+### 1.2 `PatchManifestEntry`（替换清单条目）
+
+| 字段 | 类型 | 说明 / 校验 |
+|---|---|---|
+| `upstreamModule` | `string` | MUST 匹配 `^Renderer/[A-Za-z0-9_]+\.js$`（→ FR-031、SC-010） |
+| `localFile` | `string` | 相对 `backend-webgpu/` 的路径；MUST 存在 |
+| `kind` | `"replace" \| "adapt" \| "adapt-shader"` | `replace`=WebGL 调用点重实现；`adapt`=语义绑定 GL 资源需小改；`adapt-shader`=着色器编译目标参数化（`ShaderSource.js`），改动 MUST 限于"增加 WGSL 发射通道"且 GLSL 视图不变 |
+| `requirementRef` | `string[]` | MUST 非空，元素形如 `"FR-030"` / `"FR-031"`（补丁最小性与可追溯，→ 原则 I） |
+| `reason` | `string` | 该文件为何必须进入补丁层（一句话） |
+| `glCallSites` | `number` | 上游该文件的 WebGL 调用点数（证据；`replace` 类 MUST > 0） |
+
+**关系**：`PatchManifest` = `{ baseline: UpstreamBaseline, entries: PatchManifestEntry[], keptModulesHash: string }`；
+`keptModulesHash` 覆盖 `Renderer/**` 中**未**进入清单的模块（31 个 GL-free 文件）的哈希集合 → 任一被保留模块发生变化即告警（→ §1.3 审计）。
+
+### 1.3 `PatchScopeAudit`（补丁范围审计记录，CI 产物）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `baselineVersion` | `string` | 审计针对的上游版本 |
+| `integrityOk` | `boolean` | 安装物完整性哈希与基线一致（字节级不变的机器证明之一） |
+| `manifestPathsValid` | `boolean` | 全部 `upstreamModule` 匹配 `^Renderer/` |
+| `aliasWhitelistExhaustive` | `boolean` | 喂入 `Source/**` 全部模块路径后，被改写的路径集合**恰好等于**清单集合 |
+| `logicLayerOverrides` | `number` | 构建产物中来自本仓库的、`Renderer/**` 之外的模块数；MUST 为 `0`（→ SC-010） |
+| `keptModulesUnchanged` | `boolean` | `keptModulesHash` 一致 |
+| `verdict` | `"pass" \| "fail"` | 任一布尔为 false 或 `logicLayerOverrides > 0` 即 `fail`（阻断合入） |
+
+### 1.4 `InterfaceManifest` 与 `InterfaceManifestDiff`（升级可维护性）
+
+| 实体 | 字段 | 说明 |
+|---|---|---|
+| `InterfaceManifest` | `baselineVersion`, `generatedAt`, `entries: InterfaceEntry[]` | `InterfaceEntry = { module, exportedSymbols[], consumedMembers: {name, kind, arity?}[], consumedBy: string[] }`（`consumedBy` 为逻辑层文件列表，来自静态扫描） |
+| `InterfaceManifestDiff` | `fromVersion`, `toVersion`, `changedRenderModules: string[]`, `driftedKeptModules: string[]`, `breakingConsumedMembers: InterfaceEntry[]`, `affectedReplacements: string[]`, `estimatedEffort: "none" \| "low" \| "medium" \| "high"` | 升级演练产物（→ FR-032） |
+| `UpgradeDrillRecord` | `mode: "dry-run" \| "full"`, `ranAt`, `diff: InterfaceManifestDiff`, `verification: VerificationRun[]`, `verdict` | 三项齐备（补丁范围审计 + 接口一致性 + 全量验证）才可 `pass`（→ 原则 I 的升级演练条款） |
+
+---
+
+## 2. 渲染路径二选一（不同时运行）
+
+### 2.1 `BackendKind`
+
+`"webgpu" | "webgl2"`。**同一会话（同一次页面加载/进程）中只有一个取值生效**（→ FR-006、SC-001）。
+
+### 2.2 `CapabilityProbeResult`（能力探测结果）
+
+| 字段 | 类型 | 校验 |
+|---|---|---|
+| `navigatorGpuPresent` | `boolean` | `navigator.gpu` 存在性 |
+| `adapterObtained` | `boolean` | `requestAdapter()` 是否返回适配器 |
+| `deviceObtained` | `boolean` | `requestDevice()` 是否成功 |
+| `adapterInfo` | `{vendor?, architecture?, device?, description?}` | 用于基准环境指纹；MUST NOT 进入公开 API 的类型签名（仅状态/日志） |
+| `features` | `string[]` | 必需特性子集判定结果 |
+| `limits` | `Record<string, number>` | 关键下限：`maxTextureDimension2D`、`maxVertexAttributes`、`maxSampledTexturesPerShaderStage`、`maxUniformBufferBindingSize` |
+| `elapsedMs` | `number` | MUST ≤ 2000（→ FR-005；超时即判定不可用） |
+| `reason` | `"ok" \| "no-navigator-gpu" \| "no-adapter" \| "device-request-failed" \| "missing-feature" \| "below-limit" \| "timeout"` | 原因类别（→ FR-009 可观察提示） |
+
+### 2.3 `BackendSelection`（路径选择，初始化阶段一次性）
+
+| 字段 | 类型 | 校验 |
+|---|---|---|
+| `preference` | `"auto" \| "webgpu" \| "webgl2"` | 来自配置（构建期常量或运行时参数）；**调用方代码 MUST NOT 依据它分支**（→ FR-007） |
+| `probe` | `CapabilityProbeResult \| undefined` | `preference === "webgl2"` 时 MAY 为 `undefined`（不探测） |
+| `selected` | `BackendKind` | `preference==="webgl2"` → `webgl2`；`preference==="webgpu"` 且探测失败 → `webgl2`（整体兜底）；`auto` → 探测成功取 `webgpu`，否则 `webgl2` |
+| `decidedAt` | `number` (ms) | 初始化阶段时间戳；**一经选定，本会话内 MUST NOT 变更**（→ FR-006） |
+| `switches` | `WholeSwitchRecord[]` | 仅含"设备丢失后整体切换"记录（正常路径为空） |
+
+**状态机（路径生命周期）**：
+
+```text
+[未开始] --探测(≤2s)--> [已选择 webgpu] --device.lost--> [整体销毁] --重建--> [已选择 webgpu | webgl2]
+      \--探测失败/不满足下限--> [已选择 webgl2]（本会话内不再尝试 WebGPU）
+约束：任一时刻至多一条路径在绘制；不存在"两条路径叠加/遮挡/逐帧合成"的状态（→ 原则 II）
+```
+
+### 2.4 `WholeSwitchRecord`（整体切换记录）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `trigger` | `"probe-failed" \| "device-lost" \| "startup-error"` | 触发原因类别 |
+| `from` / `to` | `BackendKind` | 切换前后 |
+| `destroyedResources` | `number` | 被销毁的后端资源计数（MUST > 0；证明"不保留旧路径资源"，→ FR-006） |
+| `rebuildMs` | `number` | 重建耗时 |
+| `residualDraws` | `number` | 切换后旧路径的绘制提交数；MUST 为 `0` |
+
+### 2.5 `RenderPathStatus`（可观察状态，→ FR-009）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `active` | `BackendKind` | 当前生效路径；**只在状态面出现，不参与业务分支** |
+| `reason` | `CapabilityProbeResult["reason"]` | 回退/选择原因类别 |
+| `degraded` | `boolean` | 是否处于降级运行（如 CI 软件适配器、切片 A 的临时能力关闭） |
+| `notes` | `string[]` | 降级与盲区标注（如"lavapipe 软件适配器""`depthTexture` 临时关闭（切片 A）"） |
+
+**校验规则**：`degraded === true` 时 `notes` MUST 非空（→ FR-023）。
+
+---
+
+## 3. 后端能力与限制（逻辑层门控的事实来源）
+
+### 3.1 `BackendCapabilities`
+
+| 字段 | 类型 | 取值来源 | 关联 FR |
+|---|---|---|---|
+| `webgl2` | `boolean` | 语义="现代渲染能力可用"（MVP：`true`） | — |
+| `msaa` | `boolean` | WebGPU 4× 支持 | — |
+| `depthTexture` | `boolean` | **切片 A：`false`（临时降级）；切片 B：`true`** | FR-030（帧缓冲） |
+| `fragmentDepth` | `boolean` | `@builtin(frag_depth)` | — |
+| `instancedArrays` / `drawBuffers` / `elementIndexUint` | `boolean` | 原生支持 | — |
+| `stencilBuffer` / `stencilBits` | `boolean` / `number` | `depth24plus-stencil8` | — |
+| `colorBufferFloat` / `colorBufferHalfFloat` / `floatingPointTexture` / `halfFloatingPointTexture` | `boolean` | 由适配器特性与格式能力计算 | — |
+| `textureFilterAnisotropic` / `s3tc` / `pvctc`*(sic，上游拼写为 `pvrtc`)* / `astc` / `etc` / `etc1` / `bc7` / `supportsBasis` | `boolean` | MVP 一律 `false`（未实现的能力 MUST 诚实上报） | FR-030 |
+| `sliceBComplete` | `boolean` | 切片 B 是否已完成（`depthTexture` 翻转的前置） | FR-030 |
+
+**校验规则**：任何 `false` 能力 MUST 有对应的"未实现"分支与显式记录；**MUST NOT** 虚报为 `true`；
+`depthTexture === false && sliceBComplete === true` 为**不一致状态**，CI MUST 判失败（防止长期停留在降级态）。
+
+### 3.2 `ContextLimitsSnapshot`
+
+由 `adapter.limits` 合成（映射表见 research §4），含 `maximumTextureSize`、`maximumCubeMapSize`、`maximum3DTextureSize`、
+`maximumTextureImageUnits`、`maximumVertexTextureImageUnits`、`maximumCombinedTextureImageUnits`、`maximumRenderbufferSize`、
+`maximumSamples`、`maximumVertexAttributes`、`maximumVaryingVectors`、`maximumVertexUniformVectors`、`maximumFragmentUniformVectors`、
+`maximumAliasedLineWidth`、`minimumAliasedLineWidth`、`maximumAliasedPointSize`、`maximumTextureFilterAnisotropy`、
+`maximumViewportWidth`、`maximumViewportHeight`。
+
+**校验规则**：每个字段 MUST 在构造期同步可读（`Scene` 构造期逻辑层即读取；→ research §3）；
+`maximumSamples` MUST ≥ 4；单元测试断言映射表与 adapter limits 的对应关系。
+
+---
+
+## 4. 通道、管线与绑定（命令执行映射）
+
+### 4.1 `RenderPassKey`（通道身份，派生式）
+
+| 字段 | 类型 | 来源 |
+|---|---|---|
+| `colorTargets` | `ColorTargetRef[]`（`{id, format, loadOp, resolveRef?}`） | `drawCommand._framebuffer ?? passState.framebuffer`（research §1.5） |
+| `depthStencilTarget` | `DepthTargetRef \| undefined`（`{id, format, depthLoadOp, stencilLoadOp}`） | 帧缓冲附件描述 |
+| `sampleCount` | `1 \| 4` | `scene.msaaSamples` 与目标能力 |
+| `viewport` | `{x,y,width,height}` | `renderState.viewport ?? passState.viewport ?? drawingBuffer` |
+| `scissorRect` | `{x,y,width,height} \| undefined` | `passState.scissorTest ?? renderState.scissorTest` |
+
+**校验规则**：`RenderPassKey` 变化 → 结束当前 pass 并开启新 pass；`endFrame` MUST 关闭当前 pass（→ FR-030）。
+不得要求逻辑层提供 pass 回调（上游无该 API，research §1.5）。
+
+### 4.2 `PipelineCacheKey` 与 `PipelineRecord`
+
+`PipelineCacheKey = (shaderProgramId, renderStateFingerprint, vertexLayoutFingerprint, topology, colorFormats[], depthFormat?, sampleCount)`；
+`PipelineRecord = { key, pipeline: GPURenderPipeline, createdAt, hits, misses }`。
+
+**校验规则**：`renderStateFingerprint` MUST 覆盖 `RenderState` 的全部字段（research §5.3 映射表）；
+未支持的字段组合（如 `lineWidth !== 1`、`sampleCoverage.enabled === true`）MUST 抛出可诊断错误而非静默忽略。
+
+### 4.3 `UniformBlockLayout` 与 `BindingPlan`
+
+| 实体 | 字段 | 说明 |
+|---|---|---|
+| `UniformBlockLayout` | `uniformNames: string[]`, `fields: {name, kind, byteOffset, byteSize, arrayStride?}[]`, `blockSize`, `wgslStruct: string` | 由"着色器实际引用的 uniform 名集合"生成；与 WGSL 结构 MUST 逐字段一致（→ H-4/G-4） |
+| `BindingPlan` | `groups: {groupIndex, entries: {binding, kind: "uniform" \| "texture" \| "sampler" \| "storage", name, slot}[]}[]`, `textureCount`, `samplerCount` | 纹理/采样器进独立 bind group（便于按纹理集合变化切换） |
+| `UniformRingBuffer` | `buffer`, `frameCapacityBytes`, `writeOffset`, `dynamicOffsetsUsed: number[]` | 自动 uniform 块每帧写一次；手工 uniform 命令级写（动态偏移） |
+
+**校验规则**：`UniformBlockLayout.blockSize` MUST ≤ `limits.maxUniformBufferBindingSize`；
+`BindingPlan` 的 `entries` 数 MUST ≤ `maxBindingsPerBindGroup`；布局生成器的输出 MUST 由单元测试与 WGSL 源码交叉校验。
+
+### 4.4 `CommandTraceEntry`（用于 G-3 的录制-回放断言）
+
+`{ frameIndex, seq, kind: "clear" | "draw" | "compute" | "beginFrame" | "endFrame", targetId, viewport?, scissor?, topology?, indexCount?, instanceCount?, passKeyHash }`。
+
+**校验规则**：录制（后端）与回放（测试）序列 MUST 与逻辑层 `clear`/`draw` 调用序列一一对应；
+`passKeyHash` 的变化点 MUST 与 `RenderPassKey` 状态机的通道边界一致。
+
+### 4.5 着色器编译前端（WGSL 发射路线，已由尖刺定案）
+
+| 实体 | 字段 | 校验 / 说明 |
+|---|---|---|
+| `ShaderEmissionTarget` | `"glsl" \| "wgsl"` | `ShaderSource` 的发射目标；**默认仍为 `glsl`**，`wgsl` 仅供后端内部使用 |
+| `ShaderLeafMapping` | `upstreamLeafHash: string`, `wgslFile: string`, `convertedBy: "path-a-draft+path-b-final"`, `verifiedOnRealGpu: boolean`, `notes?: string` | 上游叶子文本的内容哈希 → 转换后的 WGSL 文件（存于后端层目录，**不写入 `Source/Shaders/**`**）；`verifiedOnRealGpu` MUST 为 true 才可进入验收路径 |
+| `WgslPreludeEntry` | `czmName: string`, `wgslName: string`（重载拆分为不同名字）, `kind: "constant" \| "function" \| "struct" \| "builtin"` | `czm_` 内建在 WGSL 侧的等价物；重载 MUST 拆名（WGSL 无重载），结构体常量 MUST 转为函数或字面量 |
+| `VariantKey` | `shaderFamily: string`, `defines: Record<string, string \| number>`, `textureUnits: number`, `flags: number`（上游 39 位打包值） | 与上游缓存键语义一致（`[numberOfDayTextures][flags]`，`GlobeSurfaceShaderSet.js:243-267`） |
+| `VaryingContract` | `variantKey`, `varyingSet: {name, wgslLocation, type}[]`, `vsOutputs`, `fsInputs` | **`vsOutputs` MUST 与 `fsInputs` 逐项匹配**（实测：不匹配时 `createRenderPipeline` 硬失败）；不匹配即判失败并出具差异报告 |
+| `GeneratedFragmentMirror` | `generator: "computeDayColor" \| …`, `params: {textureUnits, flags}`, `wgslFile` | 镜像上游运行时生成的 GLSL 片段（如 `GlobeSurfaceShaderSet.js:419-472` 的 `computeDayColor()`，磁盘上不存在）；覆盖度以"可达参数组合"计数验收 |
+| `ConditionalCompilationTrace` | `variantKey`, `blocksEvaluated: number`, `branchesTaken: number[]`, `warnings: string[]` | 上游把 `#define/#ifdef` 交给 GL 驱动求值，WebGPU 侧由本项目实现 → 该记录用于审计"求值结果与上游一致"（含 `#elif` 链与算术条件） |
+
+---
+
+## 5. GPU 资源（映射与登记）
+
+### 5.1 `GpuResourceRecord`（登记表项）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | `string` | 稳定标识 |
+| `kind` | `"buffer" \| "texture" \| "sampler" \| "pipeline" \| "bindGroup" \| "shaderModule"` | — |
+| `bytes` | `number` | `buffer`/`texture` 的估算字节数（图形显存代理指标，→ FR-017） |
+| `upstreamClass` | `"Buffer" \| "Texture" \| "Sampler" \| …` | 对应上游类（便于按类统计） |
+| `createdFrame` / `destroyedFrame` | `number \| undefined` | 生命周期（用于泄漏断言） |
+
+**校验规则**：`destroy()` 后 MUST 从登记表移除；测试断言"帧 N 与帧 N+K 的活跃资源集合在稳态下不增长"（泄漏断言）。
+
+### 5.2 资源类映射（类型层面的契约）
+
+| 上游类（补丁层替换） | WebGPU 承载 | 保留的上游语义（必须一致） |
+|---|---|---|
+| `Buffer` | `GPUBuffer` | 三种工厂、`usage`、`copyFrom`、`sizeInBytes` |
+| `Texture` | `GPUTexture` + `GPUTextureView` | `source` 类型集合、`flipY`、`preMultiplyAlpha`、`sampler`、`copyFrom` 重载 |
+| `Sampler`（保留上游文件） | `GPUSamplerDescriptor` | wrap/filter 枚举语义 |
+| `VertexArray` | `GPUVertexBufferLayout[]` + `GPUBuffer` | `attributes[]` 的 `index/componentDatatype/componentsPerAttribute/normalized/offsetInBytes/strideInBytes/instanced/divisor`、`indexBuffer`、`numberOfVertices` |
+| `Framebuffer` | 附件描述集合（无对象） | 颜色附件数组、深度/模板附件、`hasDepthAttachment` |
+| `Renderbuffer` | `GPUTexture`（depth/stencil 格式） | 格式枚举语义 |
+| `MultisampleFramebuffer` | `sampleCount:4` 附件 + `resolveTarget` | `getRenderFramebuffer`/`getColorFramebuffer`/`blitFramebuffers` |
+| `FramebufferManager`（小改） | 编排保留 | 颜色/深度纹理与多采样配对的生命周期 |
+| `CubeMap` / `Texture3D` / `TextureAtlas`（切片 C） | `viewDimension:"cube"` / `dimension:"3d"` / 区域拷贝 | 骨架 + 显式失败 |
+
+**校验规则**：`Context.id`（每上下文 GUID）MUST 保持唯一且稳定（逻辑层用它做索引缓冲缓存键，research §1.3）。
+
+---
+
+## 6. 地形与数据源
+
+### 6.1 `TerrainDataset`（固定数据集）
+
+| 字段 | 类型 | 校验 |
+|---|---|---|
+| `datasetId` | `string` | 目录名，MUST 在包的 `fixtures/` 中存在 |
+| `manifest` | `DatasetManifest` | 见下 |
+| `totalBytes` | `number` | MUST ≤ 20 MiB（仓库可承载） |
+| `offline` | `true` | 固定数据集 MUST 可在离线环境完成验证（→ FR-004、FR-012） |
+
+### 6.2 `DatasetManifest`
+
+| 字段 | 类型 | 校验 |
+|---|---|---|
+| `tilingScheme` | `"geographic" \| "webMercator"` | MVP：`geographic`（level 0 = 2 块瓦片，已实测） |
+| `levels` | `number[]` | 连续区间；MUST 覆盖至少 2 个层级且 z 最大层在覆盖区内 ≥ 2×2 瓦片（多瓦片拼接，→ FR-015） |
+| `rectangle` | `{west, south, east, north}` | 覆盖区（度） |
+| `tileSize` | `number` | 高程场边长（如 65/256） |
+| `encoding` | `"uint16-height"` | 本地格式：`<level>/<x>/<y>.hgt` 为小端 Uint16 高程（米，含 `noDataValue`） |
+| `noDataValue` | `number` | 无数据哨兵值 |
+| `attribution` | `string` | **MUST 非空**（强制署名，→ FR-024） |
+| `sources` | `{name, url, license}[]` | 逐来源许可与链接（可追溯） |
+| `sha256` | `string` | 数据集内容哈希（CI 断言固定数据集未被意外改动） |
+
+### 6.3 `TerrainSourceAdapter`（数据源适配，公开接缝）
+
+| 字段/方法 | 说明 |
+|---|---|
+| `createProvider(dataset, mode)` | 返回**上游公开类** `CustomHeightmapTerrainProvider` 实例（MVP：`mode` 为 `"fixture"` 或 `"public"`；→ FR-004） |
+| `callback(x, y, level)` | 读固定数据集或公开 Terrarium 源 → 构造 `HeightmapTerrainData`（公开类）|
+| 几何与调度 | **不由本层实现**：由上游 `HeightmapTerrainData.createMesh` / `TerrainEncoding` / 四叉树调度完成（→ FR-031） |
+
+**校验规则**：`createProvider` MUST NOT 使用任何需要凭据的服务；数据不可用 MUST 以"数据不可用"状态呈现（与"渲染失败"区分，→ FR-004）。
+
+### 6.4 `Attribution`（署名）
+
+`{ text: string, url?: string, shownInDemo: boolean, ciChecked: boolean }`。
+**校验规则**：`text` MUST 非空且包含逐来源署名（CI 断言）；`shownInDemo` MUST 为 `true`（演示页展示）。
+
+---
+
+## 7. 验证证据
+
+### 7.1 `VerificationRun`
+
+| 字段 | 类型 | 校验 |
+|---|---|---|
+| `runId` | `string` | — |
+| `backend` | `BackendKind` | **每次运行只有一个**（→ FR-011、原则 II） |
+| `isolation` | `"separate-process" \| "separate-page-load"` | MUST NOT 为"同会话双路径" |
+| `fixedConditions` | `{camera, sceneTime, rngSeed, viewport, devicePixelRatio, datasetId, baseLayer:false, skyBox:false, skyAtmosphere:false}` | 全字段必填（→ FR-012） |
+| `frames` | `FrameCapture[]` | 每帧含像素数据引用与统计 |
+| `stats` | `FrameStatistics` | `nonBackgroundRatio`、`uniqueColorCount`、`depthDiscontinuityRatio`、`triangleCount`、`drawCallCount`、`tileCount`、`frameTimeMs{p50,p95}` |
+| `verdict` | `"pass" \| "fail"` | 断言结果 |
+| `degraded` / `degradationNotes` | `boolean` / `string[]` | 降级运行标注（→ FR-023） |
+
+### 7.2 `VisualEvidence`
+
+`{ runId, backend, referenceFrameId, diffImagePath, mismatchRatio, tolerance: ToleranceRecord, regions: {label, statistic, observed, expectedRange}[] }`。
+
+**校验规则**：MUST 产出差异图（→ FR-013）；`mismatchRatio` 与 `tolerance` 的比较 MUST 使用代码中固定的阈值（→ FR-014）。
+
+### 7.3 `ToleranceRecord`
+
+`{ metric, threshold, unit, rationale, source, recordedAt }`。**校验规则**：`rationale` 与 `source` MUST 非空（禁止"任意差异均通过"，→ FR-014）。
+
+### 7.4 `CrossBackendEquivalence`
+
+`{ metric, webgpuRange, webgl2Range, overlapRatio, declaredDifferences: string[] }`。
+用于 FR-008 的**统计等价**（不做逐点像素比较；无法消除的差异 MUST 在 `declaredDifferences` 中显式声明）。
+
+---
+
+## 8. 基准记录
+
+### 8.1 `EnvironmentFingerprint`
+
+`{ os, cpu, gpu: {adapterVendor?, adapterArchitecture?, adapterType: "hardware" | "software"}, browser, browserVersion, playwrightVersion, backend, degraded: boolean, timestampMode: "none" | "timestamp-query" }`。
+**校验规则**：`degraded === true` 时基准结论 MUST 标注为"相对回归意义"（→ FR-017/FR-023）。
+
+### 8.2 `BenchmarkRecord`
+
+`{ commit, fingerprint, backend, samples: {frameTimeMs{p50,p95}, gpuBytes, drawCalls}, warmupFrames, sampleFrames, verdict: {regressed: boolean, thresholds: ToleranceRecord[]} }`。
+**校验规则**：两条路径的记录 MUST 来自**各自独立的会话**（→ 原则 IV）；结果作为 `history.jsonl` 存档（→ FR-020）。
+
+---
+
+## 9. MVP 评估结论（沿用并升级）
+
+`MvpEstimate` 的结构由 [contracts/mvp-estimate.schema.json](./contracts/mvp-estimate.schema.json) 定义（schemaVersion 1，未改动）：
+
+| 字段 | 本次取值要点 |
+|---|---|
+| `version` | `"2.1.0"`（结论版本；v1.0.0 对应被否决架构，v2.0.0 为着色器路径待定版，均已失效） |
+| `milestone` | "地形渲染在新渲染后端下端到端跑通 + 兜底路径独立运行通过 + 逻辑层零改动由补丁范围审计证明" |
+| `meteringBasis.includesHumanCost` | `false`，且 `statement` 显式声明"人工成本不计入"（→ FR-027） |
+| `totals` | 时间 20.0–41.5 工作日；token ¥8.46–264.36；算力 ¥127.30–400.00（本机 GPU 可用时下界 0） |
+| `planningValue` | ¥260–670（$38–99） |
+| `unconfirmedItems` | 9 项，含 **变体规模（+1–3 工作日）**、**精度/纹理 Y 翻转（+1–2 工作日，场景 S-V）**、**全库着色器覆盖 2–4 人月（外推，不计入本增量）** |
+| `exclusions` | 凭据类地形服务、全库着色器转换与后续增量、订阅套餐、本机折旧、**人工成本**（→ FR-029） |
+
+---
+
+## 10. 状态机汇总
+
+```text
+① 路径生命周期（§2.3）
+   未开始 →[探测 ≤2s]→ 已选择(webgpu) →[device.lost]→ 整体销毁 →[重建]→ 已选择(webgpu|webgl2)
+                       ↘ 探测失败/低于下限 → 已选择(webgl2)
+   不变量：任一时刻至多一条路径绘制（原则 II）
+
+② 切片状态（backend capability）
+   切片A(depthTexture=false) →[切片B 完成]→ 切片B(depthTexture=true, sliceBComplete=true)
+   不变量：sliceBComplete=true 时 depthTexture MUST 为 true；否则 CI 失败
+
+③ 通道生命周期（每帧）
+   beginFrame →[首个 clear/draw]→ pass#1 →[RenderPassKey 变化]→ pass#2 → … →[endFrame]→ 提交/呈现
+   不变量：passKey 变化必须闭合当前 pass；帧末无未闭合 pass
+
+④ 设备丢失恢复
+   正常渲染 →[device.lost]→ 停止提交 → 销毁后端与上游场景 → 重新探测 → 整体重建 → 恢复渲染
+   不变量：恢复后旧设备资源计数为 0，且无未捕获错误（FR-003）
+```
+
+## 11. 边界断言（架构测试用，→ SC-010 / FR-007 / 原则 II）
+
+| 断言 | 对象 | 判定 |
+|---|---|---|
+| A1 | `src/api/**`、`src/index.ts`、`dist/index.d.ts` | MUST NOT 出现 `GPU[A-Z]`、`WebGL`、`navigator.gpu`、`backend-webgpu` 等后端符号 |
+| A2 | `src/**` 的 import 图 | MUST NOT import `backend-webgpu/**` 的具体实现（只允许经抽象接口） |
+| A3 | `backend-webgpu/manifest.json` | 全部 `upstreamModule` MUST 匹配 `^Renderer/[A-Za-z0-9_]+\.js$` |
+| A4 | 别名插件 | 白名单穷举：被改写路径集合 == 清单集合（无遗漏、无额外） |
+| A5 | 演示页源码 | MUST NOT 出现 `preference ===` / `=== "webgpu"` / `=== "webgl2"` 等路径分支（唯一例外：包内部的 `render-path/`） |
+| A6 | 场景构造参数 | MUST 含 `baseLayer:false`、`skyBox:false`、`skyAtmosphere:false`（保证 MVP 零 `ComputeCommand`，research §1.6） |
+| A7 | 测试运行 | 每次 `VerificationRun` 只允许一个 `backend`；同会话双路径的用例 MUST 被判失败 |
+| A8 | 能力一致性 | `sliceBComplete === true ⇒ depthTexture === true`；任何 `false` 能力 MUST 有 `notes` 记录 |
+| A9 | 着色器视图不变 | 逻辑层读取的 `shaderProgram.vertexShaderSource`/`fragmentShaderSource` MUST 仍为 GLSL（`Scene/Primitive.js:849,1011-1020` 的正则探测 MUST 仍能命中），`_attributeLocations` MUST 存在且与 `attributeLocations` 一致 |
+| A10 | 变体一致性 | 每个可达 `VariantKey` 的 `VaryingContract` MUST 匹配；未覆盖的 `VariantKey` MUST 显式失败而非静默降级 |
+| A11 | 叶子映射完整性 | 验收路径用到的每个上游着色器叶子 MUST 在 `shader-leaf-map.json` 中命中且 `verifiedOnRealGpu === true`；哈希漂移 MUST 使 CI 失败 |

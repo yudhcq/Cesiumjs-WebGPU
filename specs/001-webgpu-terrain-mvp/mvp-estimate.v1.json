@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "milestone": "MVP 里程碑：地形渲染跑通 —— WebGPU 新路径与 WebGL2 兜底路径在同一上层 API 下均可渲染固定数据集地形，并通过自动化视觉/数值断言与首份基准记录",
-  "version": "1.0.0",
-  "createdAt": "2026-09-18T00:00:00Z",
+  "milestone": "地形渲染在新渲染后端（受控 fork：以 WebGPU 替换上游 WebGL2 渲染后端）下端到端跑通，并通过自动化视觉/数值断言；WebGL2 兜底路径在另一次独立运行中同样通过；逻辑层零改动由补丁范围审计证明（SC-010）；产出首份基准记录；本评估结论随仓库版本化发布",
+  "version": "2.1.0",
+  "createdAt": "2026-09-19T00:00:00Z",
   "currency": {
     "primary": "CNY",
     "secondary": "USD",
@@ -12,7 +12,7 @@
   },
   "meteringBasis": {
     "includesHumanCost": false,
-    "statement": "本结论只计 AI/Agent 消耗：模型 token 消耗（输入与输出分别计量，缓存命中/未命中分别计价）加算力费用（持续集成 runner 与可选云 GPU）。人工成本不计入本消耗区间，且在此显式声明 —— 需求确认、产物评审、合入决策等人工投入全部排除在金额与区间之外。",
+    "statement": "本结论只计 AI/Agent 消耗：模型 token 消耗（输入与输出分别计量，缓存命中/未命中分别计价）加算力费用（持续集成 runner 与可选云 GPU）。人工成本不计入本结论的任何金额或区间 —— 需求确认、产物评审、合入决策等人工投入全部排除。货币为人民币并同时给出美元口径。",
     "tokenMetering": "input-output-separate",
     "priceSources": [
       { "item": "deepseek-flash 输入·缓存命中（空闲时段）", "unitPrice": 0.02, "unit": "CNY / 1M tokens", "currency": "CNY", "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", "consultedAt": "2026-09-18" },
@@ -24,197 +24,270 @@
       { "item": "deepseek-v4-pro 输入·缓存命中（高峰时段）", "unitPrice": 0.3, "unit": "CNY / 1M tokens", "currency": "CNY", "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", "consultedAt": "2026-09-18" },
       { "item": "deepseek-v4-pro 输入·缓存未命中（高峰时段）", "unitPrice": 9.0, "unit": "CNY / 1M tokens", "currency": "CNY", "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", "consultedAt": "2026-09-18" },
       { "item": "deepseek-v4-pro 输出（高峰时段）", "unitPrice": 27.0, "unit": "CNY / 1M tokens", "currency": "CNY", "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing", "consultedAt": "2026-09-18" },
-      { "item": "deepseek-flash 输入（高峰，USD 口径）", "unitPrice": 0.3, "unit": "USD / 1M tokens", "currency": "USD", "source": "https://api-docs.deepseek.com/quick_start/pricing", "consultedAt": "2026-09-18" },
+      { "item": "deepseek-flash 输入·缓存未命中（高峰，USD 口径）", "unitPrice": 0.3, "unit": "USD / 1M tokens", "currency": "USD", "source": "https://api-docs.deepseek.com/quick_start/pricing", "consultedAt": "2026-09-18" },
       { "item": "deepseek-flash 输出（高峰，USD 口径）", "unitPrice": 1.2, "unit": "USD / 1M tokens", "currency": "USD", "source": "https://api-docs.deepseek.com/quick_start/pricing", "consultedAt": "2026-09-18" },
+      { "item": "deepseek-v4-pro 输入·缓存未命中（高峰，USD 口径）", "unitPrice": 1.32, "unit": "USD / 1M tokens", "currency": "USD", "source": "https://api-docs.deepseek.com/quick_start/pricing", "consultedAt": "2026-09-18" },
+      { "item": "deepseek-v4-pro 输出（高峰，USD 口径）", "unitPrice": 3.96, "unit": "USD / 1M tokens", "currency": "USD", "source": "https://api-docs.deepseek.com/quick_start/pricing", "consultedAt": "2026-09-18" },
       { "item": "GitHub Actions 公共仓标准 runner 分钟", "unitPrice": 0.0, "unit": "USD / minute", "currency": "USD", "source": "https://docs.github.com/en/billing/concepts/product-billing/github-actions", "consultedAt": "2026-09-18" },
       { "item": "GitHub Actions Linux 4-core larger runner", "unitPrice": 0.012, "unit": "USD / minute", "currency": "USD", "source": "https://docs.github.com/en/billing/reference/actions-runner-pricing", "consultedAt": "2026-09-18" },
       { "item": "GitHub Actions Linux 4-core GPU larger runner", "unitPrice": 0.052, "unit": "USD / minute", "currency": "USD", "source": "https://docs.github.com/en/billing/reference/actions-runner-pricing", "consultedAt": "2026-09-18" },
       { "item": "Vast.ai RTX 4090（现货最低档）", "unitPrice": 0.136, "unit": "USD / hour", "currency": "USD", "source": "https://vast.ai/pricing", "consultedAt": "2026-09-18" },
       { "item": "RunPod RTX 4090（列表价）", "unitPrice": 0.34, "unit": "USD / hour", "currency": "USD", "source": "https://www.runpod.io/product/cloud-gpus", "consultedAt": "2026-09-18" },
-      { "item": "AWS EC2 g6.xlarge（1×L4，按需，托管上界）", "unitPrice": 0.8048, "unit": "USD / hour", "currency": "USD", "source": "https://instances.vantage.sh/aws/ec2/g6.xlarge", "consultedAt": "2026-09-18" }
+      { "item": "AWS EC2 g6.xlarge（1×L4，按需，托管上界）", "unitPrice": 0.8048, "unit": "USD / hour", "currency": "USD", "source": "https://instances.vantage.sh/aws/ec2/g6.xlarge", "consultedAt": "2026-09-18" },
+      { "item": "现货云 GPU（CNY 下界，按小时）", "unitPrice": 0.92, "unit": "CNY / hour", "currency": "CNY", "source": "https://vast.ai/pricing", "consultedAt": "2026-09-18" },
+      { "item": "现货云 GPU（CNY 上界，按小时）", "unitPrice": 2.97, "unit": "CNY / hour", "currency": "CNY", "source": "https://www.runpod.io/product/cloud-gpus", "consultedAt": "2026-09-18" },
+      { "item": "托管云 GPU（CNY 上界 AWS g6/L4）", "unitPrice": 5.44, "unit": "CNY / hour", "currency": "CNY", "source": "https://instances.vantage.sh/aws/ec2/g6.xlarge", "consultedAt": "2026-09-18" }
     ],
     "includesCiCompute": true,
     "includesCloudGpu": true,
-    "executionEnvironment": "由 Agent 工作流执行：1 个主 Agent 串行推进阶段，允许 ≤3 个无依赖子 Agent 并行；人工只承担审批与验收（需求确认、产物审阅、合入决策），不计入实现工时。工期与消耗区间均按该执行方式成立。",
-    "selfHostedHardware": "本机/自托管的开发机与 GPU 不产生外部付费，其电力与硬件折旧不计入本消耗口径（仅在基准记录中标注环境）。本机真实 GPU 仅用于对照验证，若不可用则改租云 GPU，对应费用已计入算力项。"
+    "executionEnvironment": "由 Agent 工作流执行：1 个主 Agent 串行推进阶段，允许 ≤3 个无依赖子 Agent 并行（并行度按 1.5–2.0 计）；人工只承担审批与验收（需求确认、产物审阅、合入决策），不计入实现工时。开发与初步验证在本机（Windows + Node 22 + 无头 Chrome 153，已实测零启动开关取得硬件 WebGPU 适配器）；CI 为 GitHub Actions 公共仓（标准 runner 分钟免费，larger runner 即便公共仓也始终计费）。",
+    "selfHostedHardware": "本机/自托管的开发机与 GPU 不产生外部付费，其电力与硬件折旧不计入本消耗口径（仅在基准记录中标注环境）。本机硬件 WebGPU 适配器可用，故真实硬件对照的算力项可低至 0；仅在需要与真实 GPU 数值可比或受门控的绝对性能作业时才租用云 GPU。"
   },
   "workflows": [
     {
       "id": "W1",
-      "name": "渲染管线与地形绘制",
-      "timeDays": { "min": 3.0, "max": 6.0 },
-      "agentTurns": { "min": 120, "max": 300 },
-      "tokens": { "inputM": { "min": 3.6, "max": 21.0 }, "outputM": { "min": 0.24, "max": 1.5 } },
-      "modelCost": { "cny": { "min": 1.31, "max": 37.0 }, "usd": { "min": 0.19, "max": 5.48 } },
-      "computeCost": { "cny": { "min": 0.0, "max": 120.0 }, "usd": { "min": 0.0, "max": 17.76 } },
+      "name": "渲染管线与地形绘制 / 后端基线与补丁层工程化",
+      "timeDays": { "min": 1.5, "max": 3.0 },
+      "agentTurns": { "min": 60, "max": 130 },
+      "tokens": { "inputM": { "min": 1.8, "max": 9.1 }, "outputM": { "min": 0.09, "max": 0.52 } },
+      "modelCost": { "cny": { "min": 0.54, "max": 14.5 }, "usd": { "min": 0.08, "max": 2.15 } },
+      "computeCost": { "cny": { "min": 0, "max": 0 }, "usd": { "min": 0, "max": 0 } },
       "assumptions": [
-        "消耗驱动因素：WGSL 管线与绑定布局、瓦片几何与裙边构建、公开高程源解码与固定数据集生成、GL→WebGPU 深度范围与坐标系换算、多瓦片接缝正确性、设备丢失恢复路径",
-        "回合数按每个可独立交付的实现单元 20–50 回合估算（含测试与修复循环）",
-        "输入 30–70k tokens/回合（含上游源码与文档读取），输出 2–5k tokens/回合"
+        "上游基线固定为 @cesium/engine@26.3.0（= cesium@1.145.0），以完整性哈希钉版",
+        "补丁层形态为模块级替换（patch layer），不做上游源码拷贝式 fork",
+        "补丁范围审计与接口一致性清单由脚本生成并纳入 CI；全部在工作流成本为 0 的本机完成"
       ]
     },
     {
       "id": "W2",
-      "name": "双路径能力探测与兜底",
-      "timeDays": { "min": 1.0, "max": 2.0 },
-      "agentTurns": { "min": 40, "max": 90 },
-      "tokens": { "inputM": { "min": 1.0, "max": 5.4 }, "outputM": { "min": 0.06, "max": 0.36 } },
-      "modelCost": { "cny": { "min": 0.34, "max": 9.21 }, "usd": { "min": 0.05, "max": 1.36 } },
-      "computeCost": { "cny": { "min": 0.0, "max": 60.0 }, "usd": { "min": 0.0, "max": 8.88 } },
+      "name": "渲染管线与地形绘制 / WebGPU 后端核心（设备、交换链、命令执行与管线状态）",
+      "timeDays": { "min": 3.0, "max": 6.5 },
+      "agentTurns": { "min": 150, "max": 360 },
+      "tokens": { "inputM": { "min": 5.25, "max": 30.6 }, "outputM": { "min": 0.3, "max": 2.16 } },
+      "modelCost": { "cny": { "min": 1.72, "max": 53.61 }, "usd": { "min": 0.26, "max": 7.95 } },
+      "computeCost": { "cny": { "min": 0, "max": 0 }, "usd": { "min": 0, "max": 0 } },
       "assumptions": [
-        "消耗驱动因素：2 秒探测上限、能力下限判定、回退原因分类、页面内可观察提示、设备丢失后恢复或降级",
-        "单元测试需在 Node 中以伪 navigator.gpu 覆盖 5 类失败分支，回合数主要来自分支覆盖"
+        "工作面为上游 Renderer/ 中直接调用 WebGL 的 16 个文件 / 348 个调用点里属于上下文与绘制执行的部分",
+        "GPU 设备在构造上游场景之前预取，Context 构造保持同步（逻辑层零改动的前提）",
+        "本机硬件 WebGPU 适配器承担该工作流验证，算力成本为 0"
       ]
     },
     {
       "id": "W3",
-      "name": "验证资产与测试基建",
-      "timeDays": { "min": 2.5, "max": 5.0 },
-      "agentTurns": { "min": 100, "max": 260 },
-      "tokens": { "inputM": { "min": 3.0, "max": 19.5 }, "outputM": { "min": 0.2, "max": 1.3 } },
-      "modelCost": { "cny": { "min": 1.1, "max": 33.26 }, "usd": { "min": 0.16, "max": 4.92 } },
-      "computeCost": { "cny": { "min": 0.0, "max": 260.0 }, "usd": { "min": 0.0, "max": 38.47 } },
+      "name": "渲染管线与地形绘制 / 资源层（缓冲区、纹理、采样器、顶点数组、帧缓冲与 MSAA）",
+      "timeDays": { "min": 2.5, "max": 5.5 },
+      "agentTurns": { "min": 130, "max": 300 },
+      "tokens": { "inputM": { "min": 3.9, "max": 24.0 }, "outputM": { "min": 0.26, "max": 1.8 } },
+      "modelCost": { "cny": { "min": 1.42, "max": 43.3 }, "usd": { "min": 0.21, "max": 6.42 } },
+      "computeCost": { "cny": { "min": 0, "max": 0 }, "usd": { "min": 0, "max": 0 } },
       "assumptions": [
-        "消耗驱动因素：固定地形数据集的获取与落盘、Playwright 采集脚手架、像素对比与差异图、统计断言、容差标定对照实验（人为注入缺陷必须失败）",
-        "算力项包含视觉回归在软件光栅化 runner 上的运行时间与真实 GPU 对照租用",
-        "输入 30–75k tokens/回合（差异图与控制台日志会显著推高上下文）"
+        "WebGPU 无同步上传语义（无 texImage2D 等价物），需要期次化上传与同步点策略",
+        "帧缓冲映射为 render pass 附件 + MSAA 解析，不再存在 FBO 对象",
+        "顶点数组需原样消费上游 TerrainEncoding 生成的属性描述（名称、类型、归一化、步长、偏移）"
       ]
     },
     {
       "id": "W4",
-      "name": "持续集成与基准基建",
-      "timeDays": { "min": 1.5, "max": 3.0 },
-      "agentTurns": { "min": 60, "max": 150 },
-      "tokens": { "inputM": { "min": 1.8, "max": 10.5 }, "outputM": { "min": 0.09, "max": 0.68 } },
-      "modelCost": { "cny": { "min": 0.54, "max": 17.67 }, "usd": { "min": 0.08, "max": 2.61 } },
-      "computeCost": { "cny": { "min": 0.0, "max": 330.0 }, "usd": { "min": 0.0, "max": 48.83 } },
+      "name": "着色器编译前端（WGSL 发射器、条件编译引擎、着色器库转换、uniform/绑定布局）",
+      "timeDays": { "min": 5.0, "max": 10.0 },
+      "agentTurns": { "min": 130, "max": 360 },
+      "tokens": { "inputM": { "min": 5.2, "max": 32.4 }, "outputM": { "min": 0.26, "max": 1.8 } },
+      "modelCost": { "cny": { "min": 1.55, "max": 51.02 }, "usd": { "min": 0.23, "max": 7.57 } },
+      "computeCost": { "cny": { "min": 0, "max": 0 }, "usd": { "min": 0, "max": 0 } },
       "assumptions": [
-        "消耗驱动因素：双路径流水线编排、无 GPU 环境降级、基准门槛判定与历史序列、许可证与依赖检查、20 分钟总耗时目标",
-        "算力项为上限场景：4-core larger runner 20–60 runner-hour 与 GPU larger runner 10–30 runner-hour；后者已确认 GA（2024-07-08）且**公共仓也始终计费**，需 Team/Enterprise Cloud 计划 + 信用卡 + 消费上限",
-        "公共仓标准 runner 免费，因此最小场景算力成本为 0；软件光栅化所需系统包（mesa-vulkan-drivers / xvfb / libvulkan1）免费"
+        "路线已由 experiments/shader-spike/REPORT.md 实测定案：纯转译（glslang→SPIR-V→naga）不可交付（原始 6/6 失败；修补后片元 2/2 因 naga 30.0.1 崩溃；varying 名字丢失）",
+        "定案路线：把 ShaderSource/ShaderBuilder 参数化输出 WGSL（输入与变体机制不变）+ 着色器叶子一次性转换（路径 A 出草稿、路径 B 人工定稿）",
+        "实测锚点：手工 WGSL 已在真机跑通（globe-vs 181 行 + globe-fs 151 行，0 编译消息、4096/4096 非黑像素）；地形 MVP 着色器层 ≈1–2 周；GlobeVS+GlobeFS 一对（含 MVP 变体与约 40 个 czm_ 内建）≈3–5 人日",
+        "必须自建上游缺失的 GLSL 条件编译求值（上游把 #define/#ifdef 作为文本交给 GL 驱动求值），并要求 varying 集合在 VS/FS 间成对推导（WebGPU 对不匹配输入是硬失败）",
+        "运行时生成的着色器片段（GlobeSurfaceShaderSet.js:419-472 的 computeDayColor，磁盘上不存在）需在后端层镜像生成 WGSL",
+        "全库 319 个 .glsl / 244 个 czm_ 内建的完整覆盖 ≈2–4 人月（纯外推，未逐家族实测），MUST NOT 计入本增量"
       ]
     },
     {
       "id": "W5",
-      "name": "开源交付与文档",
-      "timeDays": { "min": 1.0, "max": 2.0 },
-      "agentTurns": { "min": 30, "max": 80 },
-      "tokens": { "inputM": { "min": 0.75, "max": 4.8 }, "outputM": { "min": 0.045, "max": 0.32 } },
-      "modelCost": { "cny": { "min": 0.25, "max": 8.19 }, "usd": { "min": 0.04, "max": 1.21 } },
-      "computeCost": { "cny": { "min": 0.0, "max": 20.0 }, "usd": { "min": 0.0, "max": 2.96 } },
+      "name": "渲染管线与地形绘制 / 地形端到端跑通（数据源、几何、裙边、多瓦片、设备丢失）",
+      "timeDays": { "min": 2.0, "max": 4.5 },
+      "agentTurns": { "min": 100, "max": 230 },
+      "tokens": { "inputM": { "min": 3.0, "max": 18.4 }, "outputM": { "min": 0.15, "max": 1.15 } },
+      "modelCost": { "cny": { "min": 0.9, "max": 30.48 }, "usd": { "min": 0.13, "max": 4.52 } },
+      "computeCost": { "cny": { "min": 5.5, "max": 59.0 }, "usd": { "min": 0.81, "max": 8.73 } },
       "assumptions": [
-        "消耗驱动因素：LICENSE/CONTRIBUTING/可复现构建说明/CI 降级与盲区说明/README 与演示页说明/许可证检查接入",
-        "文档类回合的输入与输出比实现类更小"
+        "地形数据源使用上游公开接缝 CustomHeightmapTerrainProvider（免登录公开数据 + 本地固定数据集）",
+        "几何构建（TerrainEncoding / HeightmapTerrainData.createMesh）与四叉树调度全部由上游逻辑层完成，本项目不重写、不旁路",
+        "算力项为真实硬件对照的现货云 GPU 5–20 小时（下界按 ¥1.10/小时、上界按 ¥2.97/小时）；本机 GPU 可用时该项为 0"
       ]
     },
     {
       "id": "W6",
-      "name": "治理、评审与评估结论收尾",
-      "timeDays": { "min": 0.5, "max": 1.5 },
-      "agentTurns": { "min": 30, "max": 90 },
-      "tokens": { "inputM": { "min": 0.75, "max": 5.4 }, "outputM": { "min": 0.045, "max": 0.36 } },
-      "modelCost": { "cny": { "min": 0.25, "max": 9.21 }, "usd": { "min": 0.04, "max": 1.36 } },
-      "computeCost": { "cny": { "min": 0.0, "max": 61.0 }, "usd": { "min": 0.0, "max": 9.03 } },
+      "name": "双路径能力探测与整体兜底（二选一，不同时运行）",
+      "timeDays": { "min": 1.0, "max": 2.0 },
+      "agentTurns": { "min": 45, "max": 100 },
+      "tokens": { "inputM": { "min": 1.13, "max": 6.0 }, "outputM": { "min": 0.05, "max": 0.3 } },
+      "modelCost": { "cny": { "min": 0.29, "max": 9.05 }, "usd": { "min": 0.04, "max": 1.34 } },
+      "computeCost": { "cny": { "min": 0, "max": 0 }, "usd": { "min": 0, "max": 0 } },
       "assumptions": [
-        "消耗驱动因素：一致性分析（speckit-analyze）、评审往返修订、评估结论落盘与版本化、实际值回填机制",
-        "人工评审等待时间不计入 AI 消耗，但计入日历跨度"
+        "路径在初始化阶段二选一，回退为整体切换（销毁当前后端并以其对端重建）",
+        "严禁两条管线同时绘制同一场景（constitution v2.0.0 原则 II），因此不需要任何合成、分层或遮挡工作",
+        "探测在 2 秒内完成，调用方代码不出现后端分支"
+      ]
+    },
+    {
+      "id": "W7",
+      "name": "验证资产与测试基建（固定数据集、独立进程双路径、像素与统计断言）",
+      "timeDays": { "min": 2.0, "max": 4.0 },
+      "agentTurns": { "min": 100, "max": 230 },
+      "tokens": { "inputM": { "min": 3.0, "max": 17.25 }, "outputM": { "min": 0.15, "max": 0.92 } },
+      "modelCost": { "cny": { "min": 0.9, "max": 26.71 }, "usd": { "min": 0.13, "max": 3.96 } },
+      "computeCost": { "cny": { "min": 48.7, "max": 146.1 }, "usd": { "min": 7.21, "max": 21.62 } },
+      "assumptions": [
+        "两条路径的用例各自独立运行（独立进程 / 独立页面加载），不并发渲染同一场景",
+        "参考帧每路径各自一份；跨路径等价用统计断言与几何统计判定，不做逐点像素比较",
+        "算力项为 4-core larger runner 10–30 小时（¥4.87/小时）；全部改用免费标准 runner 时该项为 0"
+      ]
+    },
+    {
+      "id": "W8",
+      "name": "持续集成与基准基建（含补丁范围审计与升级演练门禁）",
+      "timeDays": { "min": 1.5, "max": 3.0 },
+      "agentTurns": { "min": 70, "max": 170 },
+      "tokens": { "inputM": { "min": 2.1, "max": 11.9 }, "outputM": { "min": 0.11, "max": 0.68 } },
+      "modelCost": { "cny": { "min": 0.63, "max": 18.96 }, "usd": { "min": 0.09, "max": 2.81 } },
+      "computeCost": { "cny": { "min": 73.1, "max": 194.9 }, "usd": { "min": 10.82, "max": 28.84 } },
+      "assumptions": [
+        "无 GPU 环境用两套免费软件适配器配方：Xvfb + Mesa lavapipe（WebGPU）与 ANGLE + SwiftShader（WebGL2）",
+        "补丁范围审计（改动 MUST 全部落在渲染后端层）与接口一致性门禁是相对 v1.0.0 新增的 CI 产物",
+        "算力项为 4-core larger runner 15–40 小时；免费标准 runner 可覆盖其中大部分",
+        "付费 GPU 作业默认不执行，MUST 先获批预算"
+      ]
+    },
+    {
+      "id": "W9",
+      "name": "开源交付与文档（LICENSE/NOTICE/署名、rebase 手册、评估回填与治理收尾）",
+      "timeDays": { "min": 1.5, "max": 3.0 },
+      "agentTurns": { "min": 60, "max": 150 },
+      "tokens": { "inputM": { "min": 1.5, "max": 10.5 }, "outputM": { "min": 0.09, "max": 0.6 } },
+      "modelCost": { "cny": { "min": 0.51, "max": 16.73 }, "usd": { "min": 0.08, "max": 2.48 } },
+      "computeCost": { "cny": { "min": 0, "max": 0 }, "usd": { "min": 0, "max": 0 } },
+      "assumptions": [
+        "Apache-2.0 派生作品的 NOTICE 与修改文件清单随仓库交付（上游许可证与版权声明保留）",
+        "交付升级（rebase）演练手册：补丁范围审计 + 接口一致性 + 既有全量验证三项齐备才可合入",
+        "不含发布到包管理器的正式版本号与语义化发布节奏（spec Out of Scope）"
       ]
     }
   ],
   "totals": {
-    "timeDays": { "min": 9.5, "max": 19.5 },
-    "calendarWeeks": { "min": 2.0, "max": 4.0 },
-    "agentTurns": { "min": 380, "max": 970 },
-    "tokens": { "inputM": { "min": 10.9, "max": 66.6 }, "outputM": { "min": 0.68, "max": 4.52 } },
-    "cost": { "cny": { "min": 4.0, "max": 966.0 }, "usd": { "min": 0.6, "max": 143.0 } }
+    "timeDays": { "min": 20.0, "max": 41.5 },
+    "calendarWeeks": { "min": 2.6, "max": 6.53 },
+    "agentTurns": { "min": 845, "max": 2030 },
+    "tokens": { "inputM": { "min": 26.88, "max": 160.15 }, "outputM": { "min": 1.46, "max": 9.93 } },
+    "cost": { "cny": { "min": 135.76, "max": 664.36 }, "usd": { "min": 20.1, "max": 98.4 } }
   },
   "scenarios": [
     {
       "id": "S0",
-      "name": "最小消耗场景（乐观端）",
-      "description": "公共仓标准 runner 免费跑全部流水线 + 本机真实 GPU 完成对照验证 + 全程空闲时段调度 + 高缓存命中（0.92）+ 仅 deepseek-flash。",
-      "cost": { "cny": { "min": 4.0, "max": 4.0 }, "usd": { "min": 0.6, "max": 0.6 } }
+      "name": "最小",
+      "description": "全部流水线跑公共仓免费标准 runner；真实硬件对照使用本机已实测可用的硬件 WebGPU 适配器；全程空闲时段计价；输入缓存命中 0.92；仅 deepseek-flash",
+      "cost": { "cny": { "min": 8.46, "max": 8.46 }, "usd": { "min": 1.27, "max": 1.27 } }
     },
     {
       "id": "S1",
-      "name": "推荐执行方案（计划值）",
-      "description": "CI 使用公共仓标准 runner（免费）承担构建/单测/契约测试，基准与视觉回归使用 4-core larger runner 20–60 runner-hour；真实 GPU 验证租用 RTX 4090 级云 GPU 10–40 小时；token 项取中位场景（输入 39M、输出 2.6M、缓存命中 0.85、高峰价、仅 flash）。",
-      "cost": { "cny": { "min": 150.0, "max": 450.0 }, "usd": { "min": 22.0, "max": 67.0 } }
+      "name": "推荐（计划值）",
+      "description": "token 取中位至上界（¥130–265）；算力按现实开销：W7/W8 用 4-core larger runner 25–70 小时（¥122–341）+ 现货云 GPU 5–20 小时做真实硬件对照（¥6–59）；不含返工风暴与全程高峰计价",
+      "cost": { "cny": { "min": 260, "max": 670 }, "usd": { "min": 38, "max": 99 } }
     },
     {
       "id": "S2",
-      "name": "上限场景（悲观端）",
-      "description": "返工与重试回合数取 1.8× 放大（token 项 ¥206）+ 20% 回合由 deepseek-v4-pro 承担 + 全部按高峰价 + 4-core larger runner 60 runner-hour + GPU larger runner 30 runner-hour + 云 GPU 40 小时（AWS g6/L4 托管价）。",
-      "cost": { "cny": { "min": 1057.0, "max": 1057.0 }, "usd": { "min": 156.0, "max": 156.0 } }
+      "name": "上限",
+      "description": "返工回合 ×1.8 + 40% 回合由 deepseek-v4-pro 承担 + 全高峰价（token ¥723）+ larger runner 100 小时（¥487）+ GPU larger runner 30 小时（¥633）+ 托管 GPU 40 小时（¥218）",
+      "cost": { "cny": { "min": 2060, "max": 2060 }, "usd": { "min": 305, "max": 305 } }
+    },
+    {
+      "id": "S-V",
+      "name": "变体/精度回归返工（条件场景）",
+      "description": "触发条件：运行时变体数量与编译缓存规模超出预期，或精度变化（WGSL 无 highp/mediump）与纹理 Y 翻转导致像素回归需多轮标定；尖刺 §7.4 将这两项标注为未测",
+      "cost": { "cny": { "min": 15, "max": 60 }, "usd": { "min": 2, "max": 9 } }
     }
   ],
-  "planningValue": { "cny": { "min": 150.0, "max": 450.0 }, "usd": { "min": 22.0, "max": 67.0 } },
+  "planningValue": { "cny": { "min": 260, "max": 670 }, "usd": { "min": 38, "max": 99 } },
   "confirmedItems": [
-    "DeepSeek 现行公开价目表（deepseek-flash 与 deepseek-v4-pro；CNY 与 USD 两套原生价目；缓存命中/未命中与输出分别计价；空闲时段为高峰半价，高峰时段为 UTC 周一至周五 01:00–04:00 与 06:00–10:00），2026-09-18 读取官方文档",
-    "GitHub Actions 计费费率：Linux 2-core $0.006/min、4-core larger $0.012/min、4-core GPU larger $0.052/min；公共仓标准托管 runner 分钟免费；**larger runner（含 GPU runner）即便在公共仓也始终计费**；GPU larger runner 已 GA（2024-07-08，规格 4 vCPU / 1× Tesla T4 / 16GB VRAM），需 Team 或 Enterprise Cloud 计划 + 信用卡 + 消费上限大于 0；Free 计划总并发 20 个作业、GPU 并发上限 100",
-    "持续集成无 GPU 环境下的可用降级方案已核实：Xvfb（headed）+ Mesa lavapipe 作为 WebGPU 软件适配器、ANGLE/SwiftShader 作为 WebGL2 软件适配器（所需的 mesa-vulkan-drivers / xvfb / libvulkan1 系统包免费），因此每提交的双路径验证与相对基准不需要付费 GPU",
-    "云 GPU 现货报价：Vast.ai RTX 4090 $0.136–$0.382/h、RunPod RTX 4090 $0.34/h、AWS g6.xlarge（L4）$0.8048/h；三者均按秒计费（AWS 有 60 秒最小计费）",
-    "汇率锚定：1 USD = 6.7580 CNY（PBOC/CFETS 2026-09-17）",
-    "工具链许可成本为 0：Node.js 22、TypeScript、Rollup、Playwright、CesiumJS 1.145.0（Apache-2.0）均为开源免费使用，不产生外部付费"
+    "DeepSeek 现行公开价目表（deepseek-flash / deepseek-v4-pro，CNY 与 USD 双原生币种，缓存命中/未命中与输出分别计价，空闲时段为高峰半价）——2026-09-18 读取官网",
+    "GitHub Actions 费率：公共仓标准托管 runner 分钟免费；4-core larger runner $0.012/min（≈¥4.87/小时）；4-core GPU larger runner $0.052/min（≈¥21.08/小时）且即便公共仓也始终计费",
+    "无 GPU 环境下的双路径验证方案已核实可行：Xvfb（headed）+ Mesa lavapipe 作为 WebGPU 软件适配器、ANGLE + SwiftShader 作为 WebGL2 软件适配器；系统包免费 → 每次提交的两条路径验证与相对基准不需要付费 GPU",
+    "本机可用于真实硬件验证：无头 Chrome 153 零启动开关即取得硬件 WebGPU 适配器（adapter.info={vendor:\"nvidia\",architecture:\"lovelace\"}，requestDevice() 成功）→ W2/W3/W5 的算力成本为 0",
+    "上游基线已核实：cesium@1.145.0 依赖 @cesium/engine@26.3.0（包内 index.js 置 CESIUM_VERSION=\"1.145.0\"），Source/ 随包发布，许可证 Apache-2.0 → 模块级替换的补丁层方案在工程与许可证上均可行",
+    "云 GPU 现货报价：Vast.ai RTX 4090 $0.136–0.382/h、RunPod $0.34/h、AWS g6.xlarge（L4）$0.8048/h",
+    "汇率锚定 1 USD = 6.7580 CNY（PBOC/CFETS 2026-09-17）",
+    "工具链许可成本为 0：Node.js 22、TypeScript、Rollup、Playwright、CesiumJS 1.145.0（Apache-2.0）、glslang（Apache-2.0/BSD 系）、naga（MIT/Apache-2.0）",
+    "着色器转换工具链已实测可装：glslang 16.6.0 有 Khronos 官方预编译包（Linux 7.57 MB，零编译成本）；naga-cli 30.0.1 无预编译二进制，必须 cargo install naga-cli --locked（CI 需缓存 ~/.cargo）；@webgpu/glslang 0.0.15 必须用 dist/web-devel-onefile（默认 Node 入口实测 >120 s 挂死）",
+    "手工 WGSL 已在真机跑通（Chrome 153 + RTX 4080 SUPER）：globe-vs.wgsl 181 行 + globe-fs.wgsl 151 行 → 0 编译消息、createRenderPipeline 成功、绘制回读 4096/4096 非黑像素、四角取到 2×2 影像四个纹素色 → uniform 布局/varying/纹理采样/bind group 全链路正确",
+    "两条硬性 WebGPU 事实已实测：①片元输入若无对应顶点输出，管线创建硬失败（fragment input at location 7 doesn't have a corresponding vertex output）；②纹理原点在上（回读四角显示 Y 方向与 GL 相反），必须显式处理 Y 翻转",
+    "纯转译路线不可交付（实测：原始 GLSL 6/6 失败；修补后顶点 3/3 成功、片元 2/2 因 naga 30.0.1 崩溃；SPIR-V 路线丢失 varying 名字）→ 已定案改走 WGSL 发射器 + 着色器库一次性转换",
+    "上游地形着色器闭包的转译难度已量化：GlobeVS/GlobeFS + 约 42 个内建成员中 dFdx/dFdy/fwidth、textureLod/texelFetch、gl_FragDepth、整数/位运算、循环、flat/noperspective 均为 0；风险集中在 sampler2D 作为函数参数、sampler 数组布尔 uniform、以及 MVP 不启用的可选变体"
   ],
   "unconfirmedItems": [
     {
-      "item": "真实 GPU 绝对性能与带时间戳剖析的执行方案选择（GitHub GPU larger runner $0.052/min ≈ ¥21.1/小时 vs 现货云 GPU ¥0.92–¥2.97/小时）",
-      "impactDirection": "both",
-      "impactMagnitude": "¥60–¥633（两种方案相差约 7–23×，占上限场景算力项 7%–74%）",
-      "note": "GPU larger runner 已确认 GA 且公共仓也计费（需 Team/Enterprise Cloud + 信用卡 + 消费上限）；软件适配器不提供真实 GPU 时间戳，因此绝对性能只能在付费 GPU 环境采集。建议按需在夜间受门控作业中使用现货云 GPU，而非每次提交都启用 GPU runner。"
-    },
-    {
-      "item": "云 GPU 实际成交价（同型号跨主机 $0.136–$0.382，跨平台 $0.74–$2.50）",
-      "impactDirection": "both",
-      "impactMagnitude": "算力项 ±2×（约 ±¥60）",
-      "note": "现货市场分钟级波动，报价须在下单时重新核对；建议按 RunPod 列表价而非最低现货价做预算。"
-    },
-    {
-      "item": "模型单价变动（厂商保留调价权；同类模型历史单次降价幅度 50–90%）",
-      "impactDirection": "both",
-      "impactMagnitude": "2×（峰谷）至 3–6×（型号代际），token 项约 ±¥10–¥150",
-      "note": "引用价目表均带日期；结论中所有单价必须可追溯到 2026-09-18 的官方页面。"
-    },
-    {
-      "item": "模型输入缓存命中率（无实测基线；命中与未命中单价相差 31–50×）",
-      "impactDirection": "both",
-      "impactMagnitude": "token 项 ±2–3×（区间 ¥4–¥206 宽度的主因）",
-      "note": "首个增量交付后必须用 API usage 中的 prompt_cache_hit_tokens / prompt_cache_miss_tokens 回填真实值。"
-    },
-    {
-      "item": "执行时段（高峰/空闲 2× 差；空闲时段占全周 79.2%）",
-      "impactDirection": "both",
-      "impactMagnitude": "token 项 2×",
-      "note": "重试风暴若落在高峰时段是超出区间的主要机制；可通过调度与重试退避策略控制。"
-    },
-    {
-      "item": "本机是否具备可用的真实 GPU（用于本地对照验证）",
-      "impactDirection": "down",
-      "impactMagnitude": "−¥9 – −¥119（云 GPU 项可归零）",
-      "note": "本机真实 GPU 不产生外部付费，仅替代云 GPU 租用。"
-    },
-    {
-      "item": "返工与重试回合数（无历史基线：仓库当前为空仓，无既往 Agent 消耗记录）",
+      "item": "变体数量与编译缓存的真实规模（38 个 boolean 门控 × TEXTURE_UNITS × 场景模式；尖刺仅做静态计数，未测运行时）",
       "impactDirection": "up",
-      "impactMagnitude": "1.0–1.8×（token 与 CI runner 分钟同步放大）",
-      "note": "渲染类缺陷（接缝、深度精度、管线校验错误）通常需要多轮差分定位，是本项目返工的主要来源。"
+      "impactMagnitude": "工期 +1–3 工作日；算力 +¥20–80（场景 S-V 的一部分）",
+      "note": "变体按需生成 + 管线缓存；用运行时 ShaderProgram 实例数与编译耗时直方图验收；超出预算时收敛 define 子集"
     },
     {
-      "item": "Playwright/Chromium 版本升级导致参考帧重建的频次（像素随浏览器版本漂移）",
+      "item": "精度变化与纹理 Y 翻转的像素影响（WGSL 无 highp/mediump；Y 翻转已观察但未与 WebGL2 基线做 diff）",
+      "impactDirection": "both",
+      "impactMagnitude": "工期 +1–2 工作日（含容差标定）",
+      "note": "与 WebGL2 基线做像素 diff + 地形高程数值比对；Y 翻转在 Texture 映射层统一处理并加四角回读断言"
+    },
+    {
+      "item": "渲染后端替换的真实集成复杂度（上游 Renderer/ 内部接口无公开契约，升级可能改签名）",
+      "impactDirection": "both",
+      "impactMagnitude": "工期 ±20%；token ±¥30–60",
+      "note": "以接口一致性清单 + 门禁量化：升级时的清单差异即改造清单，成本可提前看到"
+    },
+    {
+      "item": "MVP 之外的全库着色器覆盖度（319 个 .glsl 叶子 / 244 个 czm_ 内建 / 84 个组装点，仅 Globe 家族已覆盖）",
       "impactDirection": "up",
-      "impactMagnitude": "+¥0 – ¥60（额外的重采集与重验证 runner 分钟与 Agent 回合）",
-      "note": "Playwright 版本在仓库中固定（精确版本 + 锁文件）以压低频次；每次升级必须重新生成参考帧并在提交信息中说明。"
+      "impactMagnitude": "+2–4 人月（纯外推，未逐家族实测）",
+      "note": "不计入本增量；后续增量按家族推进，每家族一个真机编译用例作为门禁"
+    },
+    {
+      "item": "CI 无 GPU 时的 WGSL 校验盲区（以 naga --input-kind wgsl 代替 WebGPU 管线校验）",
+      "impactDirection": "up",
+      "impactMagnitude": "漏检风险（不直接计费）",
+      "note": "按 FR-023 显式记录降级策略与盲区，并保留本机真机 harness 复现步骤"
+    },
+    {
+      "item": "输入缓存命中率（无实测值，命中/未命中单价相差 31–50×）",
+      "impactDirection": "both",
+      "impactMagnitude": "token 项 ±2–3×（区间宽度的主因）",
+      "note": "交付后用 API usage.prompt_cache_hit_tokens 回填"
+    },
+    {
+      "item": "模型单价变动（厂商保留调价权）",
+      "impactDirection": "both",
+      "impactMagnitude": "token 项 ±¥10–150",
+      "note": "所有单价带读取日期；调价即触发结论修订"
+    },
+    {
+      "item": "软件适配器（lavapipe）渲染一帧完整 Cesium 场景的耗时",
+      "impactDirection": "up",
+      "impactMagnitude": "算力 +¥50–200",
+      "note": "固定采样帧数、按用例分片；CI 只跑相对基准，绝对性能放受门控作业"
+    },
+    {
+      "item": "返工与重试回合数（无历史基线）",
+      "impactDirection": "up",
+      "impactMagnitude": "×1.0–1.8",
+      "note": "WebGPU 的管线/绑定组/格式/varying 契约错误只在运行时暴露，多轮差分定位是本项目返工主因"
     }
   ],
   "exclusions": [
-    "人工成本（需求确认、产物评审、合入决策等）一律不计入本结论的任何金额或区间，且已在 meteringBasis.statement 中显式声明",
-    "凭据类/商业地形服务（Cesium ion 等需要访问令牌的服务）已确认后置到后续增量，MUST NOT 计入本增量消耗",
-    "本机/自托管硬件的电力与折旧不计入（未发生外部付费）",
-    "订阅制模型套餐（若采用包月而非 API 计量）不属于本口径，本结论只按 API 计量计价",
-    "后续增量（三维瓦片、模型、影像、大气、阴影、后处理等）的消耗不在本结论范围内"
+    "凭据类/商业地形服务（Cesium ion、MapTiler、Mapbox 等需要访问令牌的服务）——已确认后置到后续增量，不计入本增量消耗",
+    "后续增量（三维瓦片、glTF/模型、影像图层、大气与光照特效、阴影、后处理、粒子、矢量与标注）的实现与验收消耗",
+    "订阅制模型套餐、包管理器发布与语义化发布节奏相关消耗",
+    "本机/自托管硬件的电力与折旧",
+    "人工成本：需求确认、产物评审、合入决策等人工投入不计入任何金额或区间（FR-027）"
   ],
-  "revisionPolicy": "出现以下任一情形必须修订本文件并递增版本号，且经维护者评审：(1) 范围或成功判据变化；(2) 数据源或验证数据集变化；(3) 执行方式或并行度变化；(4) 模型单价、峰谷规则或算力报价变化；(5) 首个增量实际交付后回填实际时间与消耗并说明偏差（FR-028）。修订必须保留历史版本以支持追溯。",
-  "baselineGapNote": "本估算没有历史基线：仓库当前为空仓（无任何既往 Agent 消耗记录），亦无同类「WebGPU 渲染路径移植」的可比公开消耗数据，因此区间偏宽（token 项上界约为下界的 30 倍）。三个主因：(1) 单回合输入 token 数随上下文与工具输出增长，跨度 25k–75k；(2) 缓存命中率无实测值（按 0.75–0.92 假设），而命中与未命中单价相差 31–50×；(3) 高峰/空闲时段与返工回合数不可预知（合计可造成 3–4× 摆动）。时间区间偏宽的主因是首次采用「双画布分层 + 自定义公开 TerrainProvider」这一组合，其集成风险（上游四叉树与自定义数据源的配合）只能在实现阶段实测收敛。首个增量交付并回填实际值后，预计区间可收窄至 ±40%。",
+  "revisionPolicy": "以下情形 MUST 触发结论修订并递增结论版本（保留历史版本与差异说明）：①范围或成功判据变更（spec 的 FR/SC 变化，含是否把全库着色器转换纳入范围）；②地形数据源或验证数据集变化；③执行方式或并行度变化（改为人工实现、并行度改变）；④模型或算力单价、峰谷规则、汇率变化（汇率偏离超过 5% 即重算）；⑤着色器覆盖范围或变体规模实测结果变化（含 naga 片元崩溃是否被上游修复从而改变路线选择）；⑥上游 Renderer/ 变更幅度导致 rebase 成本变化；⑦实际交付后回填 actualsBackfill 并给出偏差说明。历史版本：v1.0.0（双画布分层，已因架构被否决而失效）、v2.0.0（后端替换，着色器路径待定，已被 v2.1.0 取代）。MUST NOT 再引用 v1.0.0 的任何数字作为排期或预算依据。",
+  "baselineGapNote": "仓库无既往 Agent 消耗记录；业界也无“把 CesiumJS 渲染后端替换为 WebGPU”的可比公开消耗数据（同类工作如 three.js 的 WebGPU 后端由上游自行重写，无外部 fork 成本数据）。token 项上界约为下界的 31 倍：单回合输入跨度 25k–90k、缓存命中率无实测值（假设 0.75–0.92 而命中/未命中单价相差 31–50×）、时段与返工回合数不可预知（合计 3–4× 摆动）。时间区间偏宽的主因是：WebGPU 管线/绑定组/格式/varying 契约错误只在运行时暴露（定位成本无法预先精确）+ 着色器层规模化成本未测（尖刺只覆盖 Globe 家族与一个配置）。相对 v2.0.0 已收窄：转译路线的未知已由实测消除（纯转译不可交付 → 改 WGSL 发射器路线），剩余为已知路线内的规模未知（对应条件场景 S-V，+1–4 工作日）。W1/W4 完成后区间预计收窄至 ±40%。",
   "actualsBackfill": null
 }

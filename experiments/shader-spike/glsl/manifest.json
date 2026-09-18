@@ -1,0 +1,149 @@
+{
+  "engine": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\shader-spike\\node_modules\\@cesium\\engine",
+  "cesiumVersion": "1.145.0",
+  "ctx": {
+    "webgl2": true,
+    "textureFloatLinear": true,
+    "floatingPointTexture": true
+  },
+  "cases": {
+    "default-3d": {
+      "cfg": {
+        "textureUnits": 1,
+        "quantization": false,
+        "sceneMode": "SCENE3D",
+        "enableLighting": true,
+        "hasVertexNormals": false,
+        "showGroundAtmosphere": true,
+        "perFragmentGroundAtmosphere": false,
+        "useWebMercatorProjection": true,
+        "enableFog": false,
+        "dynamicAtmosphereLighting": true,
+        "dynamicAtmosphereLightingFromSun": true
+      },
+      "defines": {
+        "vertex": [
+          "DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN",
+          "ENABLE_DAYNIGHT_SHADING",
+          "DYNAMIC_ATMOSPHERE_LIGHTING",
+          "GROUND_ATMOSPHERE",
+          "INCLUDE_WEB_MERCATOR_Y"
+        ],
+        "fragment": [
+          "TEXTURE_UNITS 1",
+          "DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN",
+          "ENABLE_DAYNIGHT_SHADING",
+          "DYNAMIC_ATMOSPHERE_LIGHTING",
+          "GROUND_ATMOSPHERE",
+          "INCLUDE_WEB_MERCATOR_Y"
+        ]
+      },
+      "lines": {
+        "vertex": 870,
+        "fragment": 1886
+      },
+      "bytes": {
+        "vertex": 19933,
+        "fragment": 41688
+      },
+      "attributeLocations": {
+        "position3DAndHeight": 0,
+        "textureCoordAndEncodedNormals": 1
+      }
+    },
+    "kitchen-sink": {
+      "cfg": {
+        "textureUnits": 4,
+        "quantization": true,
+        "sceneMode": "SCENE3D",
+        "enableLighting": true,
+        "hasVertexNormals": true,
+        "showGroundAtmosphere": true,
+        "perFragmentGroundAtmosphere": true,
+        "useWebMercatorProjection": true,
+        "enableFog": true,
+        "dynamicAtmosphereLighting": true,
+        "dynamicAtmosphereLightingFromSun": true,
+        "hasGeodeticSurfaceNormals": true,
+        "hasExaggeration": true,
+        "translucent": true,
+        "enableClippingPlanes": true,
+        "applyAlpha": true,
+        "showReflectiveOcean": true,
+        "hasWaterMask": true,
+        "colorToAlpha": true
+      },
+      "defines": {
+        "vertex": [
+          "QUANTIZATION_BITS12",
+          "TRANSLUCENT",
+          "DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN",
+          "PER_FRAGMENT_GROUND_ATMOSPHERE",
+          "GEODETIC_SURFACE_NORMALS",
+          "EXAGGERATION",
+          "SHOW_REFLECTIVE_OCEAN",
+          "ENABLE_VERTEX_LIGHTING",
+          "DYNAMIC_ATMOSPHERE_LIGHTING",
+          "GROUND_ATMOSPHERE",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "FOG"
+        ],
+        "fragment": [
+          "TEXTURE_UNITS 4",
+          "APPLY_ALPHA",
+          "HAS_WATER_MASK",
+          "APPLY_COLOR_TO_ALPHA",
+          "TRANSLUCENT",
+          "DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN",
+          "PER_FRAGMENT_GROUND_ATMOSPHERE",
+          "ENABLE_CLIPPING_PLANES",
+          "SHOW_REFLECTIVE_OCEAN",
+          "ENABLE_VERTEX_LIGHTING",
+          "DYNAMIC_ATMOSPHERE_LIGHTING",
+          "GROUND_ATMOSPHERE",
+          "INCLUDE_WEB_MERCATOR_Y",
+          "FOG"
+        ]
+      },
+      "lines": {
+        "vertex": 877,
+        "fragment": 1945
+      },
+      "bytes": {
+        "vertex": 20115,
+        "fragment": 43198
+      },
+      "attributeLocations": {
+        "compressed0": 0,
+        "compressed1": 1
+      }
+    },
+    "minimal-3d": {
+      "cfg": {
+        "textureUnits": 1,
+        "quantization": false,
+        "sceneMode": "SCENE3D",
+        "enableLighting": false,
+        "useWebMercatorProjection": false
+      },
+      "defines": {
+        "vertex": [],
+        "fragment": [
+          "TEXTURE_UNITS 1"
+        ]
+      },
+      "lines": {
+        "vertex": 865,
+        "fragment": 1881
+      },
+      "bytes": {
+        "vertex": 19765,
+        "fragment": 41518
+      },
+      "attributeLocations": {
+        "position3DAndHeight": 0,
+        "textureCoordAndEncodedNormals": 1
+      }
+    }
+  }
+}
