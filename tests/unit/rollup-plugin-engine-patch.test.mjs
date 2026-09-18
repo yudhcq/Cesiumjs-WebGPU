@@ -236,12 +236,15 @@ test("a manifest entry without a local replacement file fails loudly at build ti
   assert.throws(() => plugin.resolveId("@cesium/engine/Source/Renderer/Buffer.js", undefined), /no local replacement file/);
 });
 
-test("the repository runs with an empty replacement list before the manifest lands", () => {
-  // Phase 1 has no backend-webgpu/manifest.json yet: the plugin must warn once and be inert,
-  // never rewrite anything and never crash the build.
+test("the repository's replacement manifest is live and the plugin rewrites exactly that set", () => {
+  // Phase 1 ran with no `backend-webgpu/manifest.json` at all (the plugin was inert). T031 has
+  // since landed the manifest, so the same probe MUST now report the real patch boundary:
+  // Renderer/** modules are rewritten, every other upstream module is left untouched.
   const plugin = createEnginePatchPlugin({ quiet: true });
-  assert.equal(plugin.api.manifest.entries.length, 0);
+  assert.equal(plugin.api.manifest.entries.length, 23, "T031 lands 16 replacement + 7 adaptation entries");
   const upstreamContext = path.join(REPO_ROOT, "node_modules/@cesium/engine/Source/Renderer/Context.js");
   assert.ok(fs.existsSync(upstreamContext), "the pinned upstream module MUST be installed");
-  assert.equal(plugin.api.shouldRewrite(upstreamContext), null);
+  assert.equal(plugin.api.shouldRewrite(upstreamContext)?.upstreamModule, "Renderer/Context.js");
+  const upstreamScene = path.join(REPO_ROOT, "node_modules/@cesium/engine/Source/Scene/Scene.js");
+  assert.equal(plugin.api.shouldRewrite(upstreamScene), null, "the logic layer MUST NOT be rewritten");
 });

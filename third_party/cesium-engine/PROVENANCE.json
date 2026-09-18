@@ -1,0 +1,12 @@
+{
+  "package": "@cesium/engine",
+  "version": "26.3.0",
+  "cesiumVersion": "1.145.0",
+  "license": "Apache-2.0",
+  "copyright": "Copyright 2011-2024 CesiumJS Contributors",
+  "vendoredFile": "third_party/cesium-engine/LICENSE.md",
+  "upstreamFile": "node_modules/@cesium/engine/LICENSE.md",
+  "sha256": "sha256-1a1e0a70642c277baabd897794193ed0755accaa2bfe6b7b496f5dfa8d3b1c48",
+  "recordedAt": "2026-09-18T21:24:24.703Z",
+  "notes": "Verbatim copy of the upstream license file (which also carries the third-party notices of the packages bundled by upstream). Apache-2.0 section 4(d) requires retaining the NOTICE/attribution of the original work; keeping the file inside the deliverable makes that independent of node_modules being present. tools/scripts/check-license-notice.mjs asserts the copy is byte-identical to the installed upstream file."
+}

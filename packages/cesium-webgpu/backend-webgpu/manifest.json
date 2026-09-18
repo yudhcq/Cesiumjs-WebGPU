@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "packageName": "@cesium/engine",
+    "version": "26.3.0",
+    "cesiumVersion": "1.145.0",
+    "integrity": "sha512-jtgOewm/IZoypmqpbeTlYhMOKhQg+XPwUXoYat84vhIU8l8SfVSEat4Lc/Y4Fb7ypi3z1YmElKjVYvoI5CH6Pw==",
+    "license": "Apache-2.0",
+    "recordedIn": "upstream/engine-26.3.0.lock.json"
+  },
+  "boundary": "Source/Renderer/** only. Every upstreamModule MUST match ^Renderer/[A-Za-z0-9_]+\\.js$; the upstream package on disk is never modified (principle I, stage = render backend layer).",
+  "glCallSitesMetric": "Occurrences of a call expression on the GL context receiver (`gl`, `_gl`, `this._gl`, `context._gl`, `context.gl`) in the installed upstream module. Measured by tools/lib/patch-layer.mjs (countGlCallSites) on @cesium/engine 26.3.0; reproduces the per-file vector of research.md section 1.1 exactly (16 modules, 348 call sites in total).",
+  "entries": [
+    {
+      "upstreamModule": "Renderer/Context.js",
+      "localFile": "Renderer/Context.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030",
+        "FR-031",
+        "FR-032"
+      ],
+      "reason": "GPU 设备/交换链/能力发布与绘制命令分派；上游逻辑层在 Scene 构造期同步读取其能力标志与 ContextLimits。",
+      "glCallSites": 46
+    },
+    {
+      "upstreamModule": "Renderer/Texture.js",
+      "localFile": "Renderer/Texture.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "纹理资源与采样器生命周期（含纹理原点/Y 翻转的统一处理）必须以 GPUTexture + GPUSampler 重实现。",
+      "glCallSites": 58
+    },
+    {
+      "upstreamModule": "Renderer/ShaderProgram.js",
+      "localFile": "Renderer/ShaderProgram.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030",
+        "FR-031"
+      ],
+      "reason": "着色器程序编译/反射改为 GPUShaderModule + GPURenderPipeline；MUST 保留 GLSL 视图与 _attributeLocations（契约 §5 R2）。",
+      "glCallSites": 42
+    },
+    {
+      "upstreamModule": "Renderer/RenderState.js",
+      "localFile": "Renderer/RenderState.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "GL 状态机改为管线状态映射；选项对象形状 MUST 保持不变（50+ 逻辑层文件按同一形状构造）。",
+      "glCallSites": 22
+    },
+    {
+      "upstreamModule": "Renderer/Buffer.js",
+      "localFile": "Renderer/Buffer.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "顶点/索引/uniform 缓冲改为 GPUBuffer（含 map/unmap 与同步语义差异的处理）。",
+      "glCallSites": 18
+    },
+    {
+      "upstreamModule": "Renderer/createUniform.js",
+      "localFile": "Renderer/createUniform.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "uniform setter 由 GL 逐调用写入改为绑定布局/uniform 缓冲写入。",
+      "glCallSites": 16
+    },
+    {
+      "upstreamModule": "Renderer/createUniformArray.js",
+      "localFile": "Renderer/createUniformArray.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "数组 uniform setter 同上（含数组元素对齐与 stride 约束，见 G-4 结论）。",
+      "glCallSites": 14
+    },
+    {
+      "upstreamModule": "Renderer/VertexArray.js",
+      "localFile": "Renderer/VertexArray.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "顶点数组对象改为 vertex buffer layout + setVertexBuffer 绑定。",
+      "glCallSites": 10
+    },
+    {
+      "upstreamModule": "Renderer/Framebuffer.js",
+      "localFile": "Renderer/Framebuffer.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "离屏渲染目标改为 render pass 附件（颜色/深度模板 + 解析目标）。",
+      "glCallSites": 9
+    },
+    {
+      "upstreamModule": "Renderer/Renderbuffer.js",
+      "localFile": "Renderer/Renderbuffer.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "深度/模板渲染缓冲改为 GPUTexture 附件（切片 A 下 depthTexture 能力临时关闭）。",
+      "glCallSites": 6
+    },
+    {
+      "upstreamModule": "Renderer/MultisampleFramebuffer.js",
+      "localFile": "Renderer/MultisampleFramebuffer.js",
+      "kind": "replace",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "多采样解析改为 colorAttachments[i].resolveTarget；通道边界仍由后端派生（G-3）。",
+      "glCallSites": 3
+    },
+    {
+      "upstreamModule": "Renderer/ShaderSource.js",
+      "localFile": "Renderer/ShaderSource.js",
+      "kind": "adapt-shader",
+      "requirementRef": [
+        "FR-031"
+      ],
+      "reason": "着色器编译目标参数化（GLSL/WGSL 双发射）；改动 MUST 只到「增加 WGSL 发射通道」为止，GLSL 视图与预处理语义不变（契约 §5 R1/R2）。",
+      "glCallSites": 0
+    },
+    {
+      "upstreamModule": "Renderer/ShaderCache.js",
+      "localFile": "Renderer/ShaderCache.js",
+      "kind": "adapt",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "程序缓存键与生命周期需与新后端的管线缓存对齐（缓存键含变体与 RenderState 指纹）。",
+      "glCallSites": 0
+    },
+    {
+      "upstreamModule": "Renderer/FramebufferManager.js",
+      "localFile": "Renderer/FramebufferManager.js",
+      "kind": "adapt",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "多采样/解析编排需适配派生式通道状态机（GL 侧依赖的绑定顺序在新后端不适用）。",
+      "glCallSites": 0
+    },
+    {
+      "upstreamModule": "Renderer/ComputeEngine.js",
+      "localFile": "Renderer/ComputeEngine.js",
+      "kind": "adapt",
+      "requirementRef": [
+        "FR-033"
+      ],
+      "reason": "基于 Context/Framebuffer/ShaderProgram 的 GPGPU 绘制路径；地形 MVP 不触发，被调用时 MUST 抛可诊断错误而非静默降级。",
+      "glCallSites": 0
+    },
+    {
+      "upstreamModule": "Renderer/SharedContext.js",
+      "localFile": "Renderer/SharedContext.js",
+      "kind": "adapt",
+      "requirementRef": [
+        "FR-033"
+      ],
+      "reason": "GL 上下文多路复用 + 2D blit，在新后端无对应语义；WebGPU 路径下被使用 MUST 显式报错（契约 §9）。",
+      "glCallSites": 0
+    },
+    {
+      "upstreamModule": "Renderer/TextureCache.js",
+      "localFile": "Renderer/TextureCache.js",
+      "kind": "adapt",
+      "requirementRef": [
+        "FR-030"
+      ],
+      "reason": "纹理缓存与默认纹理的生命周期需与新后端的资源创建/销毁时机一致。",
+      "glCallSites": 0
+    },
+    {
+      "upstreamModule": "Renderer/loadCubeMap.js",
+      "localFile": "Renderer/loadCubeMap.js",
+      "kind": "adapt",
+      "requirementRef": [
+        "FR-033"
+      ],
+      "reason": "立方体贴图加载依赖 CubeMap 桩（切片 C 边界）：本增量 MUST 显式失败而非返回空纹理。",
+      "glCallSites": 0
+    },
+    {
+      "upstreamModule": "Renderer/Texture3D.js",
+      "localFile": "Renderer/Texture3D.js",
+      "kind": "stub-not-implemented",
+      "requirementRef": [
+        "FR-033"
+      ],
+      "reason": "切片 C 边界（仅体素/3D 纹理路径使用，地形 MVP 不可达）：本增量只交付显式失败桩，调用即抛 category=not-implemented 的可诊断错误（tasks.md T053）。",
+      "glCallSites": 37
+    },
+    {
+      "upstreamModule": "Renderer/CubeMap.js",
+      "localFile": "Renderer/CubeMap.js",
+      "kind": "stub-not-implemented",
+      "requirementRef": [
+        "FR-033"
+      ],
+      "reason": "切片 C 边界（skyBox/IBL/模型环境贴图，地形 MVP 不可达）：只交付显式失败桩，MUST NOT 返回空纹理或黑屏。",
+      "glCallSites": 33
+    },
+    {
+      "upstreamModule": "Renderer/CubeMapFace.js",
+      "localFile": "Renderer/CubeMapFace.js",
+      "kind": "stub-not-implemented",
+      "requirementRef": [
+        "FR-033"
+      ],
+      "reason": "CubeMap 的逐面包装，随 CubeMap 一并落在切片 C 边界之外：只交付显式失败桩。",
+      "glCallSites": 27
+    },
+    {
+      "upstreamModule": "Renderer/TextureAtlas.js",
+      "localFile": "Renderer/TextureAtlas.js",
+      "kind": "stub-not-implemented",
+      "requirementRef": [
+        "FR-033"
+      ],
+      "reason": "图集（模型/标签路径）不在 MVP 范围内：只交付显式失败桩。",
+      "glCallSites": 4
+    },
+    {
+      "upstreamModule": "Renderer/Sync.js",
+      "localFile": "Renderer/Sync.js",
+      "kind": "stub-not-implemented",
+      "requirementRef": [
+        "FR-033"
+      ],
+      "reason": "GL fence 同步在 WebGPU 路径无对应（与 readPixels 桩同族）：只交付显式失败桩。",
+      "glCallSites": 3
+    }
+  ],
+  "keptModulesHash": "sha256-042002f15231049679a829017604018f9b25bcd6b07fa66fcef4296ef04e0279",
+  "keptModules": {
+    "Renderer/AutomaticUniforms.js": "sha256-fd57375edf8e9b21ec49f018a7157b6cc40dc1083b67b891f2cb3407c89238fe",
+    "Renderer/BufferUsage.js": "sha256-5a883ca1dfb4d3989695c841f57c25d9bbb5ea272fa7eedc95b56d662b0d9db6",
+    "Renderer/ClearCommand.js": "sha256-8fe47e6de7194d8af7e38c8e8b1d68dc5e90ec8b2df439577312faf8e82aab6c",
+    "Renderer/ComputeCommand.js": "sha256-e531a391c99657cb1a8e42683134516d4af0d5df29e81df3bd668a6e58289af8",
+    "Renderer/ContextLimits.js": "sha256-b24965ae722646629ab80da5bd1185be920d17370518653350320211c64cbb89",
+    "Renderer/DrawCommand.js": "sha256-7264cecd7f062a55d8bfd159a602775d459ca983a743a0553f496c7a8102a7b6",
+    "Renderer/MipmapHint.js": "sha256-6b5ca2eb75c272709bdec174e4250299f30f2f7175ab8ae5c3028bdc79de0821",
+    "Renderer/Pass.js": "sha256-5b231da76955383455bc64deed470d464022216c130c05e51bf76e0ff13e6d1c",
+    "Renderer/PassState.js": "sha256-60e6caf56451cb7b26b04d472dd10309ac1fb39791cf3fb9ad7516b178f994c3",
+    "Renderer/PickId.js": "sha256-e7cde4170d6ff73dcbb97b4a533266ebe1ec819c8a84d08283989da47b01cd30",
+    "Renderer/PixelDatatype.js": "sha256-ea1a2b8f4e8a725816c633fdc01926f52a7cf691b675ad3986e80ec60c4becbb",
+    "Renderer/RenderbufferFormat.js": "sha256-ecbba5b6689febe4a69aa2ffdb36a547a2017e050ed44669a19a2d3c19238ef0",
+    "Renderer/Sampler.js": "sha256-fb65fced667103116bc5b3e8a7c4a005805a4bf0975f9da4359f6147864320b1",
+    "Renderer/ShaderBuilder.js": "sha256-c887183c13753e11f5201cc2de826fe73b8e52119e1d9765546afe8c1b786e7f",
+    "Renderer/ShaderDestination.js": "sha256-f11f2ed44ef5e69e06fc0d93faa2569a55589e8f7f35b395c4f6a550c66bd90d",
+    "Renderer/ShaderFunction.js": "sha256-cbc2174f42ecb1b95fd057c4d3dcc3455501ef38e430c7a89e989f808f302c2d",
+    "Renderer/ShaderStruct.js": "sha256-5855dcaf0957c45bb02e5b58227e272cad3f81e52e9b152fa3ae0ca5dd872000",
+    "Renderer/TextureMagnificationFilter.js": "sha256-4e0f87ce250ff9f478a62c12e3bda889cde2ad0152fe6a4a57ba7f7dc39e8a9e",
+    "Renderer/TextureMinificationFilter.js": "sha256-3586076b7384e7c955244db203ad33cfb59aad965dc47306e3dded71c4924aac",
+    "Renderer/TextureWrap.js": "sha256-d4eb2208cc71f58f4638a92574886053b01733d6ef837317c3840058c1c53fad",
+    "Renderer/UniformState.js": "sha256-365623296dfb9a27f7f43769c0b10242de680c9a864dcfbe5995e6b19a8805c6",
+    "Renderer/VertexArrayFacade.js": "sha256-eb2c223e9b89e580228b8669029a266917421327ea366c59725237b0a378a530",
+    "Renderer/demodernizeShader.js": "sha256-ecae6df4a5e083cf7d8acb1bb0a4926e3eee3cff637bae43b79eab7b76e7c0a0",
+    "Renderer/freezeRenderState.js": "sha256-19fc5c80f01d4d8cbd0a6c2da10ab5d7251c25e7f420a96a20a747b5f7f31688"
+  },
+  "keptModulesNote": "Generated by tools/scripts/gen-kept-hash.mjs: content hash of every Renderer/** module that is NOT listed in entries[] (the modules consumed byte-identically from the installed upstream package). tools/audit-patch-scope.mjs asserts keptModulesUnchanged against this record; regenerate with the generator whenever an entry is added or removed.",
+  "keptModulesAlgorithm": "sha256",
+  "keptModulesCount": 24,
+  "keptModulesRecordedAt": "2026-09-18T21:08:29.639Z"
+}

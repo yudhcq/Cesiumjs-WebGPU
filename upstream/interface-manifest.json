@@ -1,0 +1,2356 @@
+{
+  "baselineVersion": "26.3.0",
+  "cesiumVersion": "1.145.0",
+  "generatedAt": "2026-09-18T21:20:32.626Z",
+  "generator": "tools/gen-interface-manifest.mjs",
+  "method": "Static scan of the installed upstream sources. `exportedSymbols` = the module's exposed member surface (prototype methods, Object.defineProperties accessors, instance fields, static members, named exports). `consumedMembers` = members of that surface reached from logic-layer files (Source/** outside Source/Renderer/**) through the receiver identifiers declared in the generator (RECEIVER_HINTS + the default-exported class name). `consumedBy` lists those logic-layer files. `digest` folds module, surface, consumed members and consumers.",
+  "entries": [
+    {
+      "module": "Renderer/Buffer.js",
+      "exportedSymbols": [
+        "Buffer",
+        "_bind",
+        "_buffer",
+        "_bufferTarget",
+        "_getBuffer",
+        "_gl",
+        "_id",
+        "_sizeInBytes",
+        "_unBind",
+        "_usage",
+        "_webgl2",
+        "copyFromArrayView",
+        "copyFromBuffer",
+        "createIndexBuffer",
+        "createPixelBuffer",
+        "createVertexBuffer",
+        "destroy",
+        "getBufferData",
+        "isDestroyed",
+        "sizeInBytes",
+        "usage",
+        "vertexArrayDestroyable"
+      ],
+      "consumedMembers": [
+        {
+          "name": "_id",
+          "kind": "field"
+        },
+        {
+          "name": "copyFromArrayView",
+          "kind": "method",
+          "arity": 1
+        },
+        {
+          "name": "createIndexBuffer",
+          "kind": "static"
+        },
+        {
+          "name": "createVertexBuffer",
+          "kind": "static"
+        },
+        {
+          "name": "destroy",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "getBufferData",
+          "kind": "method",
+          "arity": 1
+        },
+        {
+          "name": "isDestroyed",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "sizeInBytes",
+          "kind": "accessor"
+        },
+        {
+          "name": "vertexArrayDestroyable",
+          "kind": "field"
+        }
+      ],
+      "consumedBy": [
+        "Scene/BillboardCollection.js",
+        "Scene/ClippingPolygonCollection.js",
+        "Scene/CloudCollection.js",
+        "Scene/DepthPlane.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GlobeSurfaceTileProvider.js",
+        "Scene/GltfIndexBufferLoader.js",
+        "Scene/GltfLoader.js",
+        "Scene/GltfVertexBufferLoader.js",
+        "Scene/ImageryLayer.js",
+        "Scene/Model/EdgeVisibilityPipelineStage.js",
+        "Scene/Model/FeatureIdPipelineStage.js",
+        "Scene/Model/GeoJsonLoader.js",
+        "Scene/Model/I3dmLoader.js",
+        "Scene/Model/InstancingPipelineStage.js",
+        "Scene/Model/ModelPrimitiveImagery.js",
+        "Scene/Model/ModelReader.js",
+        "Scene/Model/ModelStatistics.js",
+        "Scene/Model/PickingPipelineStage.js",
+        "Scene/Model/PntsLoader.js",
+        "Scene/Model/SceneMode2DPipelineStage.js",
+        "Scene/Model/WireframePipelineStage.js",
+        "Scene/PointCloud.js",
+        "Scene/PolylineCollection.js",
+        "Scene/PostProcessStageTextureCache.js",
+        "Scene/PrimitiveLoadPlan.js",
+        "Scene/ResourceCacheStatistics.js",
+        "Scene/Sun.js",
+        "Scene/Vector3DTileClampedPolylines.js",
+        "Scene/Vector3DTilePolylines.js",
+        "Scene/Vector3DTilePrimitive.js",
+        "Scene/renderBufferPointCollection.js",
+        "Scene/renderBufferPolygonCollection.js",
+        "Scene/renderBufferPolylineCollection.js"
+      ],
+      "defaultExport": "Buffer",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-a9e33654d32c4a704bb710ecb81de7636cfd8374019d81a41fec8c901a9f51ec"
+    },
+    {
+      "module": "Renderer/BufferUsage.js",
+      "exportedSymbols": [
+        "DYNAMIC_DRAW",
+        "DYNAMIC_READ",
+        "STATIC_DRAW",
+        "STREAM_DRAW"
+      ],
+      "consumedMembers": [
+        {
+          "name": "DYNAMIC_DRAW",
+          "kind": "property"
+        },
+        {
+          "name": "STATIC_DRAW",
+          "kind": "property"
+        },
+        {
+          "name": "STREAM_DRAW",
+          "kind": "property"
+        }
+      ],
+      "consumedBy": [
+        "Scene/BillboardCollection.js",
+        "Scene/CloudCollection.js",
+        "Scene/CubeMapPanorama.js",
+        "Scene/DepthPlane.js",
+        "Scene/EllipsoidPrimitive.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GlobeSurfaceTileProvider.js",
+        "Scene/GltfIndexBufferLoader.js",
+        "Scene/GltfVertexBufferLoader.js",
+        "Scene/ImageryLayer.js",
+        "Scene/Model/EdgeVisibilityPipelineStage.js",
+        "Scene/Model/FeatureIdPipelineStage.js",
+        "Scene/Model/GeoJsonLoader.js",
+        "Scene/Model/I3dmLoader.js",
+        "Scene/Model/InstancingPipelineStage.js",
+        "Scene/Model/ModelPrimitiveImagery.js",
+        "Scene/Model/PickingPipelineStage.js",
+        "Scene/Model/PntsLoader.js",
+        "Scene/Model/SceneMode2DPipelineStage.js",
+        "Scene/Model/WireframePipelineStage.js",
+        "Scene/PointCloud.js",
+        "Scene/PointPrimitiveCollection.js",
+        "Scene/PolylineCollection.js",
+        "Scene/Primitive.js",
+        "Scene/PrimitiveLoadPlan.js",
+        "Scene/SkyAtmosphere.js",
+        "Scene/Sun.js",
+        "Scene/Vector3DTileClampedPolylines.js",
+        "Scene/Vector3DTilePolylines.js",
+        "Scene/Vector3DTilePrimitive.js",
+        "Scene/renderBufferPointCollection.js",
+        "Scene/renderBufferPolygonCollection.js",
+        "Scene/renderBufferPolylineCollection.js"
+      ],
+      "defaultExport": "BufferUsage",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-d02f212a1d456052001e36ae2aeda6992c32b41f9035b3870127bff9a6aabc53"
+    },
+    {
+      "module": "Renderer/ClearCommand.js",
+      "exportedSymbols": [
+        "ALL",
+        "ClearCommand",
+        "color",
+        "depth",
+        "execute",
+        "framebuffer",
+        "owner",
+        "pass",
+        "renderState",
+        "stencil"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "ClearCommand",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-b544f14a1c330ef63879c9cdf2647a4693b531c8c1523fbf2f1560ecc84b5cb6"
+    },
+    {
+      "module": "Renderer/ComputeCommand.js",
+      "exportedSymbols": [
+        "ComputeCommand",
+        "canceled",
+        "execute",
+        "fragmentShaderSource",
+        "outputTexture",
+        "owner",
+        "pass",
+        "persists",
+        "postExecute",
+        "preExecute",
+        "shaderProgram",
+        "uniformMap",
+        "vertexArray"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "ComputeCommand",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-933eba939bce064bae8d21de4227d89e6f90b98d8b007c707e889f1983b055c5"
+    },
+    {
+      "module": "Renderer/ComputeEngine.js",
+      "exportedSymbols": [
+        "ComputeEngine",
+        "_context",
+        "color",
+        "createFramebuffer",
+        "createRenderState",
+        "createViewportQuadShader",
+        "destroy",
+        "execute",
+        "isDestroyed",
+        "primitiveType"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "ComputeEngine",
+      "namedExports": [],
+      "kind": "adapt",
+      "inManifest": true,
+      "digest": "sha256-a6fd958dac8b7f371da75aad26249b1012ed6eff1c77bf25eaa9e7f57da5cd6c"
+    },
+    {
+      "module": "Renderer/Context.js",
+      "exportedSymbols": [
+        "Context",
+        "_antialias",
+        "_astc",
+        "_bc7",
+        "_blendMinmax",
+        "_canvas",
+        "_clearColor",
+        "_clearDepth",
+        "_clearStencil",
+        "_colorBufferFloat",
+        "_colorBufferHalfFloat",
+        "_currentFramebuffer",
+        "_currentPassState",
+        "_currentRenderState",
+        "_debugShaders",
+        "_defaultCubeMap",
+        "_defaultEmissiveTexture",
+        "_defaultNormalTexture",
+        "_defaultPassState",
+        "_defaultRenderState",
+        "_defaultTexture",
+        "_depthTexture",
+        "_drawBuffers",
+        "_elementIndexUint",
+        "_etc",
+        "_etc1",
+        "_floatBlend",
+        "_fragDepth",
+        "_gl",
+        "_id",
+        "_instancedArrays",
+        "_maxFrameTextureUnitIndex",
+        "_nextPickColor",
+        "_originalGLContext",
+        "_pickId",
+        "_pickObjects",
+        "_previousDrawInstanced",
+        "_pvrtc",
+        "_s3tc",
+        "_shaderCache",
+        "_standardDerivatives",
+        "_stencilBits",
+        "_supportsTextureLod",
+        "_textureCache",
+        "_textureFilterAnisotropic",
+        "_textureFloat",
+        "_textureFloatLinear",
+        "_textureHalfFloat",
+        "_textureHalfFloatLinear",
+        "_throwOnWebGLError",
+        "_us",
+        "_vertexArrayObject",
+        "_vertexAttribDivisors",
+        "_webgl2",
+        "antialias",
+        "applyRenderState",
+        "astc",
+        "bc7",
+        "beginDraw",
+        "beginFrame",
+        "bindFramebuffer",
+        "blendMinmax",
+        "cache",
+        "canvas",
+        "clear",
+        "colorBufferFloat",
+        "colorBufferHalfFloat",
+        "continueDraw",
+        "createErrorMessage",
+        "createPickId",
+        "createViewportQuadCommand",
+        "debugShaders",
+        "defaultCubeMap",
+        "defaultEmissiveTexture",
+        "defaultFramebuffer",
+        "defaultNormalTexture",
+        "defaultTexture",
+        "depthTexture",
+        "destroy",
+        "draw",
+        "drawBuffers",
+        "drawingBufferHeight",
+        "drawingBufferWidth",
+        "elementIndexUint",
+        "endFrame",
+        "errorToString",
+        "etc",
+        "etc1",
+        "floatBlend",
+        "floatingPointTexture",
+        "fragmentDepth",
+        "getExtension",
+        "getObjectByPickColor",
+        "getViewportQuadVertexArray",
+        "getWebGLContext",
+        "glBindVertexArray",
+        "glCreateVertexArray",
+        "glDeleteVertexArray",
+        "glDrawArraysInstanced",
+        "glDrawBuffers",
+        "glDrawElementsInstanced",
+        "glVertexAttribDivisor",
+        "halfFloatingPointTexture",
+        "id",
+        "instancedArrays",
+        "isDestroyed",
+        "logShaderCompilation",
+        "makeGetterSetter",
+        "msaa",
+        "options",
+        "position",
+        "pvrtc",
+        "readPixels",
+        "readPixelsToPBO",
+        "s3tc",
+        "shaderCache",
+        "standardDerivatives",
+        "stencilBits",
+        "stencilBuffer",
+        "supportsBasis",
+        "supportsTextureLod",
+        "textureCache",
+        "textureCoordinates",
+        "textureFilterAnisotropic",
+        "textureFloatLinear",
+        "textureHalfFloatLinear",
+        "throwOnError",
+        "throwOnWebGLError",
+        "uniformState",
+        "validateFramebuffer",
+        "validateShaderProgram",
+        "vertexArrayObject",
+        "webgl2",
+        "wrapGL"
+      ],
+      "consumedMembers": [
+        {
+          "name": "astc",
+          "kind": "accessor"
+        },
+        {
+          "name": "bc7",
+          "kind": "accessor"
+        },
+        {
+          "name": "beginFrame",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "cache",
+          "kind": "field"
+        },
+        {
+          "name": "colorBufferFloat",
+          "kind": "accessor"
+        },
+        {
+          "name": "colorBufferHalfFloat",
+          "kind": "accessor"
+        },
+        {
+          "name": "createPickId",
+          "kind": "method",
+          "arity": 1
+        },
+        {
+          "name": "createViewportQuadCommand",
+          "kind": "method"
+        },
+        {
+          "name": "defaultCubeMap",
+          "kind": "accessor"
+        },
+        {
+          "name": "defaultTexture",
+          "kind": "accessor"
+        },
+        {
+          "name": "depthTexture",
+          "kind": "accessor"
+        },
+        {
+          "name": "destroy",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "drawBuffers",
+          "kind": "accessor"
+        },
+        {
+          "name": "drawingBufferHeight",
+          "kind": "accessor"
+        },
+        {
+          "name": "drawingBufferWidth",
+          "kind": "accessor"
+        },
+        {
+          "name": "elementIndexUint",
+          "kind": "accessor"
+        },
+        {
+          "name": "endFrame",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "etc",
+          "kind": "accessor"
+        },
+        {
+          "name": "etc1",
+          "kind": "accessor"
+        },
+        {
+          "name": "floatBlend",
+          "kind": "accessor"
+        },
+        {
+          "name": "floatingPointTexture",
+          "kind": "accessor"
+        },
+        {
+          "name": "fragmentDepth",
+          "kind": "accessor"
+        },
+        {
+          "name": "getObjectByPickColor",
+          "kind": "method",
+          "arity": 1
+        },
+        {
+          "name": "getViewportQuadVertexArray",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "halfFloatingPointTexture",
+          "kind": "accessor"
+        },
+        {
+          "name": "id",
+          "kind": "accessor"
+        },
+        {
+          "name": "instancedArrays",
+          "kind": "accessor"
+        },
+        {
+          "name": "msaa",
+          "kind": "accessor"
+        },
+        {
+          "name": "pvrtc",
+          "kind": "accessor"
+        },
+        {
+          "name": "readPixels",
+          "kind": "method"
+        },
+        {
+          "name": "readPixelsToPBO",
+          "kind": "method"
+        },
+        {
+          "name": "s3tc",
+          "kind": "accessor"
+        },
+        {
+          "name": "shaderCache",
+          "kind": "accessor"
+        },
+        {
+          "name": "stencilBuffer",
+          "kind": "accessor"
+        },
+        {
+          "name": "supportsBasis",
+          "kind": "accessor"
+        },
+        {
+          "name": "supportsTextureLod",
+          "kind": "accessor"
+        },
+        {
+          "name": "textureCache",
+          "kind": "accessor"
+        },
+        {
+          "name": "uniformState",
+          "kind": "accessor"
+        },
+        {
+          "name": "webgl2",
+          "kind": "accessor"
+        }
+      ],
+      "consumedBy": [
+        "Core/FeatureDetection.js",
+        "Core/PixelFormat.js",
+        "Scene/AutoExposure.js",
+        "Scene/BatchTable.js",
+        "Scene/BatchTexture.js",
+        "Scene/Billboard.js",
+        "Scene/BillboardCollection.js",
+        "Scene/BrdfLutGenerator.js",
+        "Scene/BufferPrimitiveCollection.js",
+        "Scene/Cesium3DTile.js",
+        "Scene/Cesium3DTileBatchTable.js",
+        "Scene/Cesium3DTileset.js",
+        "Scene/ClassificationPrimitive.js",
+        "Scene/ClippingPlaneCollection.js",
+        "Scene/ClippingPolygonCollection.js",
+        "Scene/CloudCollection.js",
+        "Scene/DerivedCommand.js",
+        "Scene/DynamicEnvironmentMapManager.js",
+        "Scene/EdgeFramebuffer.js",
+        "Scene/EllipsoidPrimitive.js",
+        "Scene/GlobeDepth.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GlobeSurfaceTileProvider.js",
+        "Scene/GlobeTranslucencyFramebuffer.js",
+        "Scene/GlobeTranslucencyState.js",
+        "Scene/GltfLoader.js",
+        "Scene/GltfTextureLoader.js",
+        "Scene/GroundPolylinePrimitive.js",
+        "Scene/GroundPrimitive.js",
+        "Scene/ImageryLayer.js",
+        "Scene/InvertClassification.js",
+        "Scene/Material.js",
+        "Scene/Model/CustomShader.js",
+        "Scene/Model/FeatureIdPipelineStage.js",
+        "Scene/Model/GeometryPipelineStage.js",
+        "Scene/Model/InstancingPipelineStage.js",
+        "Scene/Model/MaterialPipelineStage.js",
+        "Scene/Model/MetadataPipelineStage.js",
+        "Scene/Model/Model.js",
+        "Scene/Model/ModelClippingPlanesPipelineStage.js",
+        "Scene/Model/ModelClippingPolygonsPipelineStage.js",
+        "Scene/Model/ModelRuntimePrimitive.js",
+        "Scene/Model/ModelVectorLookupPipelineStage.js",
+        "Scene/Model/PickingPipelineStage.js",
+        "Scene/Model/PointCloudStylingPipelineStage.js",
+        "Scene/Model/PrimitiveOutlineGenerator.js",
+        "Scene/Model/SceneMode2DPipelineStage.js",
+        "Scene/Model/TextureManager.js",
+        "Scene/Model/WireframePipelineStage.js",
+        "Scene/OIT.js",
+        "Scene/PickDepth.js",
+        "Scene/PickDepthFramebuffer.js",
+        "Scene/PickFramebuffer.js",
+        "Scene/Picking.js",
+        "Scene/PlanarFillIdFramebuffer.js",
+        "Scene/PointCloud.js",
+        "Scene/PointCloudEyeDomeLighting.js",
+        "Scene/PointPrimitive.js",
+        "Scene/PointPrimitiveCollection.js",
+        "Scene/Polyline.js",
+        "Scene/PostProcessStage.js",
+        "Scene/PostProcessStageCollection.js",
+        "Scene/PostProcessStageLibrary.js",
+        "Scene/PostProcessStageTextureCache.js",
+        "Scene/Primitive.js",
+        "Scene/QuadtreePrimitive.js",
+        "Scene/ResourceCacheKey.js",
+        "Scene/Scene.js",
+        "Scene/SceneFramebuffer.js",
+        "Scene/SceneTransforms.js",
+        "Scene/ShadowMap.js",
+        "Scene/SkyAtmosphere.js",
+        "Scene/SnapFramebuffer.js",
+        "Scene/Snapping.js",
+        "Scene/SpecularEnvironmentCubeMap.js",
+        "Scene/Sun.js",
+        "Scene/SunPostProcess.js",
+        "Scene/TimeDynamicPointCloud.js",
+        "Scene/TranslucentTileClassification.js",
+        "Scene/Vector3DTileClampedPolylines.js",
+        "Scene/Vector3DTilePolylines.js",
+        "Scene/Vector3DTilePrimitive.js",
+        "Scene/View.js",
+        "Scene/ViewportQuad.js",
+        "Scene/VoxelBoxShape.js",
+        "Scene/VoxelCylinderShape.js",
+        "Scene/VoxelEllipsoidShape.js",
+        "Scene/VoxelPrimitive.js",
+        "Scene/VoxelTraversal.js",
+        "Scene/buildVoxelDrawCommands.js",
+        "Scene/createElevationBandMaterial.js"
+      ],
+      "defaultExport": "Context",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-4b2912d8a3f58580d760ad48dfa2bd5e6d9311d01bd0bacc3b3295abb24e56f6"
+    },
+    {
+      "module": "Renderer/ContextLimits.js",
+      "exportedSymbols": [
+        "highpFloatSupported",
+        "highpIntSupported",
+        "maximum3DTextureSize",
+        "maximumAliasedLineWidth",
+        "maximumAliasedPointSize",
+        "maximumColorAttachments",
+        "maximumCombinedTextureImageUnits",
+        "maximumCubeMapSize",
+        "maximumDrawBuffers",
+        "maximumFragmentUniformVectors",
+        "maximumRenderbufferSize",
+        "maximumSamples",
+        "maximumTextureFilterAnisotropy",
+        "maximumTextureImageUnits",
+        "maximumTextureSize",
+        "maximumVaryingVectors",
+        "maximumVertexAttributes",
+        "maximumVertexTextureImageUnits",
+        "maximumVertexUniformVectors",
+        "maximumViewportHeight",
+        "maximumViewportWidth",
+        "minimumAliasedLineWidth",
+        "minimumAliasedPointSize"
+      ],
+      "consumedMembers": [
+        {
+          "name": "maximumAliasedLineWidth",
+          "kind": "accessor"
+        },
+        {
+          "name": "maximumAliasedPointSize",
+          "kind": "accessor"
+        },
+        {
+          "name": "maximumCubeMapSize",
+          "kind": "accessor"
+        },
+        {
+          "name": "maximumSamples",
+          "kind": "accessor"
+        },
+        {
+          "name": "maximumTextureFilterAnisotropy",
+          "kind": "accessor"
+        },
+        {
+          "name": "maximumTextureImageUnits",
+          "kind": "accessor"
+        },
+        {
+          "name": "maximumTextureSize",
+          "kind": "accessor"
+        },
+        {
+          "name": "maximumVertexTextureImageUnits",
+          "kind": "accessor"
+        },
+        {
+          "name": "minimumAliasedLineWidth",
+          "kind": "accessor"
+        }
+      ],
+      "consumedBy": [
+        "Scene/BatchTable.js",
+        "Scene/BatchTexture.js",
+        "Scene/BillboardCollection.js",
+        "Scene/Cesium3DTileBatchTable.js",
+        "Scene/ClippingPlaneCollection.js",
+        "Scene/DynamicEnvironmentMapManager.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/GlobeSurfaceTileProvider.js",
+        "Scene/ImageryLayer.js",
+        "Scene/Model/PrimitiveOutlineGenerator.js",
+        "Scene/PointPrimitiveCollection.js",
+        "Scene/PolylineCollection.js",
+        "Scene/PostProcessStage.js",
+        "Scene/Primitive.js",
+        "Scene/Scene.js",
+        "Scene/ShadowMap.js",
+        "Scene/VoxelBoundsCollection.js",
+        "Scene/parseStructuralMetadata.js"
+      ],
+      "defaultExport": "ContextLimits",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-e05aa62dd15a3eb465624df76dad549e41b854561482fcd915fe2db52d0f68c5"
+    },
+    {
+      "module": "Renderer/CubeMap.js",
+      "exportedSymbols": [
+        "CubeMap",
+        "FaceName",
+        "NEGATIVEX",
+        "NEGATIVEY",
+        "NEGATIVEZ",
+        "POSITIVEX",
+        "POSITIVEY",
+        "POSITIVEZ",
+        "_attributeLocations",
+        "_context",
+        "_flipY",
+        "_hasMipmap",
+        "_negativeX",
+        "_negativeY",
+        "_negativeZ",
+        "_pixelDatatype",
+        "_pixelFormat",
+        "_positiveX",
+        "_positiveY",
+        "_positiveZ",
+        "_preMultiplyAlpha",
+        "_sampler",
+        "_size",
+        "_sizeInBytes",
+        "_texture",
+        "_textureFilterAnisotropic",
+        "_textureTarget",
+        "copyFace",
+        "createVertexArray",
+        "destroy",
+        "faceNames",
+        "flipY",
+        "generateMipmap",
+        "getDirection",
+        "height",
+        "isDestroyed",
+        "loadFace",
+        "loadMipmaps",
+        "negativeX",
+        "negativeY",
+        "negativeZ",
+        "pixelDatatype",
+        "pixelFormat",
+        "positiveX",
+        "positiveY",
+        "positiveZ",
+        "preMultiplyAlpha",
+        "sampler",
+        "setupSampler",
+        "sizeInBytes",
+        "width"
+      ],
+      "consumedMembers": [
+        {
+          "name": "FaceName",
+          "kind": "static"
+        },
+        {
+          "name": "createVertexArray",
+          "kind": "static",
+          "arity": 2
+        },
+        {
+          "name": "faceNames",
+          "kind": "static",
+          "arity": 0
+        },
+        {
+          "name": "getDirection",
+          "kind": "static",
+          "arity": 2
+        },
+        {
+          "name": "loadMipmaps",
+          "kind": "method",
+          "arity": 1
+        },
+        {
+          "name": "negativeX",
+          "kind": "accessor"
+        },
+        {
+          "name": "negativeY",
+          "kind": "accessor"
+        },
+        {
+          "name": "negativeZ",
+          "kind": "accessor"
+        },
+        {
+          "name": "positiveX",
+          "kind": "accessor"
+        },
+        {
+          "name": "positiveY",
+          "kind": "accessor"
+        },
+        {
+          "name": "positiveZ",
+          "kind": "accessor"
+        }
+      ],
+      "consumedBy": [
+        "Scene/CubeMapPanorama.js",
+        "Scene/DynamicEnvironmentMapManager.js",
+        "Scene/ShadowMap.js",
+        "Scene/SpecularEnvironmentCubeMap.js"
+      ],
+      "defaultExport": "CubeMap",
+      "namedExports": [],
+      "kind": "stub-not-implemented",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-b96cf1d8b32e41d6074bf0089ce853b838d4534ef36c965f172066b2705646cf"
+    },
+    {
+      "module": "Renderer/CubeMapFace.js",
+      "exportedSymbols": [
+        "CubeMapFace",
+        "_context",
+        "_flipY",
+        "_initialized",
+        "_internalFormat",
+        "_pixelDatatype",
+        "_pixelFormat",
+        "_preMultiplyAlpha",
+        "_size",
+        "_targetFace",
+        "_texture",
+        "_textureTarget",
+        "copyFrom",
+        "copyFromFramebuffer",
+        "copyMipmapFromFramebuffer",
+        "pixelDatatype",
+        "pixelFormat"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "CubeMapFace",
+      "namedExports": [],
+      "kind": "stub-not-implemented",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-f9e8125b9e9945b58f1a012adc6b32ba0a3382ccd1b58e01b07a15fbbd33be00"
+    },
+    {
+      "module": "Renderer/DrawCommand.js",
+      "exportedSymbols": [
+        "CAST_SHADOWS",
+        "CULL",
+        "DEBUG_SHOW_BOUNDING_VOLUME",
+        "DEPTH_FOR_TRANSLUCENT_CLASSIFICATION",
+        "EXECUTE_IN_CLOSEST_FRUSTUM",
+        "OCCLUDE",
+        "PICK_ONLY",
+        "RECEIVE_SHADOWS",
+        "_boundingVolume",
+        "_count",
+        "_debugOverlappingFrustums",
+        "_flags",
+        "_framebuffer",
+        "_instanceCount",
+        "_modelMatrix",
+        "_offset",
+        "_orientedBoundingBox",
+        "_owner",
+        "_pass",
+        "_pickId",
+        "_pickMetadataAllowed",
+        "_pickedMetadataInfo",
+        "_primitiveType",
+        "_renderState",
+        "_shaderProgram",
+        "_snapId",
+        "_uniformMap",
+        "_vertexArray",
+        "castShadows",
+        "constructor",
+        "cull",
+        "debugShowBoundingVolume",
+        "depthForTranslucentClassification",
+        "derivedCommands",
+        "dirty",
+        "execute",
+        "executeInClosestFrustum",
+        "hasFlag",
+        "if",
+        "lastDirtyTime",
+        "occlude",
+        "pickOnly",
+        "receiveShadows",
+        "return",
+        "setFlag",
+        "shallowClone"
+      ],
+      "consumedMembers": [
+        {
+          "name": "shallowClone",
+          "kind": "method",
+          "arity": 1
+        }
+      ],
+      "consumedBy": [
+        "Scene/Cesium3DTileBatchTable.js",
+        "Scene/ClassificationPrimitive.js",
+        "Scene/DebugInspector.js",
+        "Scene/DerivedCommand.js",
+        "Scene/GlobeTranslucencyState.js",
+        "Scene/GroundPolylinePrimitive.js",
+        "Scene/Model/ClassificationModelDrawCommand.js",
+        "Scene/Model/ModelDrawCommand.js",
+        "Scene/OIT.js",
+        "Scene/PointCloudEyeDomeLighting.js",
+        "Scene/ShadowMap.js",
+        "Scene/TranslucentTileClassification.js",
+        "Scene/Vector3DTileClampedPolylines.js",
+        "Scene/Vector3DTilePrimitive.js",
+        "Scene/buildVoxelDrawCommands.js"
+      ],
+      "defaultExport": "DrawCommand",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-9be7600b0a2b6687b9911f6e197c825619b0f2d71981278d58c937fccc5c077a"
+    },
+    {
+      "module": "Renderer/Framebuffer.js",
+      "exportedSymbols": [
+        "Framebuffer",
+        "_activeColorAttachments",
+        "_bind",
+        "_colorRenderbuffers",
+        "_colorTextures",
+        "_depthRenderbuffer",
+        "_depthStencilRenderbuffer",
+        "_depthStencilTexture",
+        "_depthTexture",
+        "_framebuffer",
+        "_getActiveColorAttachments",
+        "_gl",
+        "_stencilRenderbuffer",
+        "_unBind",
+        "attachRenderbuffer",
+        "attachTexture",
+        "bindDraw",
+        "bindRead",
+        "depthRenderbuffer",
+        "depthStencilRenderbuffer",
+        "depthStencilTexture",
+        "depthTexture",
+        "destroy",
+        "destroyAttachments",
+        "getColorRenderbuffer",
+        "getColorTexture",
+        "hasDepthAttachment",
+        "isDestroyed",
+        "numberOfColorAttachments",
+        "status",
+        "stencilRenderbuffer"
+      ],
+      "consumedMembers": [
+        {
+          "name": "_bind",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "_unBind",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "depthStencilTexture",
+          "kind": "accessor"
+        },
+        {
+          "name": "destroy",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "getColorTexture",
+          "kind": "method",
+          "arity": 1
+        },
+        {
+          "name": "isDestroyed",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "numberOfColorAttachments",
+          "kind": "accessor"
+        },
+        {
+          "name": "status",
+          "kind": "accessor"
+        }
+      ],
+      "consumedBy": [
+        "Scene/BrdfLutGenerator.js",
+        "Scene/DynamicEnvironmentMapManager.js",
+        "Scene/GlobeDepth.js",
+        "Scene/ImageryLayer.js",
+        "Scene/OIT.js",
+        "Scene/PickFramebuffer.js",
+        "Scene/PostProcessStage.js",
+        "Scene/ShadowMap.js",
+        "Scene/SunPostProcess.js"
+      ],
+      "defaultExport": "Framebuffer",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-4bd90f3356e08684f2e7797af532d3493781c2eaa810550f3edb52f4f2f83104"
+    },
+    {
+      "module": "Renderer/FramebufferManager.js",
+      "exportedSymbols": [
+        "FramebufferManager",
+        "_attachmentsDirty",
+        "_color",
+        "_colorAttachmentsLength",
+        "_colorRenderbuffer",
+        "_colorRenderbuffers",
+        "_colorTextures",
+        "_createColorAttachments",
+        "_createDepthAttachments",
+        "_depth",
+        "_depthRenderbuffer",
+        "_depthStencil",
+        "_depthStencilRenderbuffer",
+        "_depthStencilTexture",
+        "_depthTexture",
+        "_framebuffer",
+        "_height",
+        "_multisampleFramebuffer",
+        "_numSamples",
+        "_pixelDatatype",
+        "_pixelFormat",
+        "_supportsDepthTexture",
+        "_width",
+        "clear",
+        "destroy",
+        "destroyFramebuffer",
+        "framebuffer",
+        "getColorRenderbuffer",
+        "getColorTexture",
+        "getDepthRenderbuffer",
+        "getDepthStencilRenderbuffer",
+        "getDepthStencilTexture",
+        "getDepthTexture",
+        "isDirty",
+        "numSamples",
+        "prepareTextures",
+        "setColorRenderbuffer",
+        "setColorTexture",
+        "setDepthRenderbuffer",
+        "setDepthStencilRenderbuffer",
+        "setDepthStencilTexture",
+        "setDepthTexture",
+        "status",
+        "update"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "FramebufferManager",
+      "namedExports": [],
+      "kind": "adapt",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-655a003a4faff3834c7592eea6e97a02ce3535ad4e9cf09bd583f74d17f96aba"
+    },
+    {
+      "module": "Renderer/MultisampleFramebuffer.js",
+      "exportedSymbols": [
+        "MultisampleFramebuffer",
+        "_colorFramebuffer",
+        "_height",
+        "_renderFramebuffer",
+        "_width",
+        "blitFramebuffers",
+        "destroy",
+        "getColorFramebuffer",
+        "getRenderFramebuffer",
+        "isDestroyed"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "MultisampleFramebuffer",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-747d3f7d841e8fe2258bbac75ce59b71579e3e81f6cfaa643d512948d25f140f"
+    },
+    {
+      "module": "Renderer/PassState.js",
+      "exportedSymbols": [
+        "PassState",
+        "blendingEnabled",
+        "context",
+        "framebuffer",
+        "scissorTest",
+        "viewport"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "PassState",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-59015ecdd49431e344c9bd882e13f872c5904fd030184e1f07bd5a8d46220c98"
+    },
+    {
+      "module": "Renderer/PixelDatatype.js",
+      "exportedSymbols": [
+        "FLOAT",
+        "HALF_FLOAT",
+        "UNSIGNED_BYTE",
+        "UNSIGNED_INT",
+        "UNSIGNED_INT_24_8",
+        "UNSIGNED_SHORT",
+        "UNSIGNED_SHORT_4_4_4_4",
+        "UNSIGNED_SHORT_5_5_5_1",
+        "UNSIGNED_SHORT_5_6_5"
+      ],
+      "consumedMembers": [
+        {
+          "name": "FLOAT",
+          "kind": "property"
+        },
+        {
+          "name": "HALF_FLOAT",
+          "kind": "property"
+        },
+        {
+          "name": "UNSIGNED_BYTE",
+          "kind": "property"
+        },
+        {
+          "name": "UNSIGNED_INT",
+          "kind": "property"
+        },
+        {
+          "name": "UNSIGNED_INT_24_8",
+          "kind": "property"
+        },
+        {
+          "name": "UNSIGNED_SHORT",
+          "kind": "property"
+        }
+      ],
+      "consumedBy": [
+        "Core/PixelFormat.js",
+        "Core/VectorPipeline.js",
+        "Scene/AutoExposure.js",
+        "Scene/BatchTable.js",
+        "Scene/BatchTexture.js",
+        "Scene/BrdfLutGenerator.js",
+        "Scene/ClippingPlaneCollection.js",
+        "Scene/CloudCollection.js",
+        "Scene/DynamicEnvironmentMapManager.js",
+        "Scene/EdgeFramebuffer.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/GlobeDepth.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GlobeTranslucencyFramebuffer.js",
+        "Scene/InvertClassification.js",
+        "Scene/Megatexture.js",
+        "Scene/Model/TextureManager.js",
+        "Scene/Model/TextureUniform.js",
+        "Scene/OIT.js",
+        "Scene/PickFramebuffer.js",
+        "Scene/PlanarFillIdFramebuffer.js",
+        "Scene/PostProcessStage.js",
+        "Scene/PostProcessStageCollection.js",
+        "Scene/SceneFramebuffer.js",
+        "Scene/ShadowMap.js",
+        "Scene/SnapFramebuffer.js",
+        "Scene/SpecularEnvironmentCubeMap.js",
+        "Scene/Sun.js",
+        "Scene/TranslucentTileClassification.js",
+        "Scene/VoxelBoundsCollection.js",
+        "Scene/VoxelTraversal.js",
+        "Scene/createElevationBandMaterial.js",
+        "Scene/parseStructuralMetadata.js",
+        "Workers/transcodeKTX2.js"
+      ],
+      "defaultExport": "PixelDatatype",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-03fb41594b9a793a0cc34a41700591dce22a1e1532ff8e138ed7dd4274d7d508"
+    },
+    {
+      "module": "Renderer/RenderState.js",
+      "exportedSymbols": [
+        "RenderState",
+        "_applyFunctions",
+        "apply",
+        "applyBlending",
+        "applyBlendingColor",
+        "applyColorMask",
+        "applyCull",
+        "applyDepthMask",
+        "applyDepthRange",
+        "applyDepthTest",
+        "applyFrontFace",
+        "applyLineWidth",
+        "applyPolygonOffset",
+        "applySampleCoverage",
+        "applyScissorTest",
+        "applyStencilMask",
+        "applyStencilTest",
+        "applyViewport",
+        "blending",
+        "clearCache",
+        "colorMask",
+        "createFuncs",
+        "cull",
+        "depthMask",
+        "depthRange",
+        "depthTest",
+        "enableOrDisable",
+        "fromCache",
+        "frontFace",
+        "getCache",
+        "getState",
+        "id",
+        "lineWidth",
+        "partialApply",
+        "polygonOffset",
+        "removeFromCache",
+        "sampleCoverage",
+        "scissorTest",
+        "stencilMask",
+        "stencilTest",
+        "validateBlendEquation",
+        "validateBlendFunction",
+        "validateCullFace",
+        "validateDepthFunction",
+        "validateStencilFunction",
+        "validateStencilOperation",
+        "viewport"
+      ],
+      "consumedMembers": [
+        {
+          "name": "blending",
+          "kind": "field"
+        },
+        {
+          "name": "colorMask",
+          "kind": "field"
+        },
+        {
+          "name": "cull",
+          "kind": "field"
+        },
+        {
+          "name": "depthMask",
+          "kind": "field"
+        },
+        {
+          "name": "depthTest",
+          "kind": "field"
+        },
+        {
+          "name": "fromCache",
+          "kind": "static",
+          "arity": 1
+        },
+        {
+          "name": "getState",
+          "kind": "static",
+          "arity": 1
+        },
+        {
+          "name": "id",
+          "kind": "field"
+        },
+        {
+          "name": "polygonOffset",
+          "kind": "field"
+        },
+        {
+          "name": "removeFromCache",
+          "kind": "static",
+          "arity": 1
+        },
+        {
+          "name": "stencilMask",
+          "kind": "field"
+        },
+        {
+          "name": "stencilTest",
+          "kind": "field"
+        },
+        {
+          "name": "viewport",
+          "kind": "field"
+        }
+      ],
+      "consumedBy": [
+        "Scene/Appearance.js",
+        "Scene/BillboardCollection.js",
+        "Scene/BrdfLutGenerator.js",
+        "Scene/Cesium3DTileBatchTable.js",
+        "Scene/Cesium3DTileset.js",
+        "Scene/ClassificationPrimitive.js",
+        "Scene/CloudCollection.js",
+        "Scene/CubeMapPanorama.js",
+        "Scene/DepthPlane.js",
+        "Scene/DerivedCommand.js",
+        "Scene/EllipsoidPrimitive.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/GaussianSplatRenderResources.js",
+        "Scene/GlobeDepth.js",
+        "Scene/GlobeSurfaceTileProvider.js",
+        "Scene/GlobeTranslucencyFramebuffer.js",
+        "Scene/GlobeTranslucencyState.js",
+        "Scene/GroundPolylinePrimitive.js",
+        "Scene/InvertClassification.js",
+        "Scene/Model/ClassificationModelDrawCommand.js",
+        "Scene/Model/ModelDrawCommand.js",
+        "Scene/Model/ModelDrawCommands.js",
+        "Scene/Model/ModelRenderResources.js",
+        "Scene/OIT.js",
+        "Scene/PickDepth.js",
+        "Scene/PointCloud.js",
+        "Scene/PointCloudEyeDomeLighting.js",
+        "Scene/PointPrimitiveCollection.js",
+        "Scene/PolylineCollection.js",
+        "Scene/PostProcessStage.js",
+        "Scene/Primitive.js",
+        "Scene/Scene.js",
+        "Scene/ShadowMap.js",
+        "Scene/SkyAtmosphere.js",
+        "Scene/Sun.js",
+        "Scene/TranslucentTileClassification.js",
+        "Scene/Vector3DTileClampedPolylines.js",
+        "Scene/Vector3DTilePolylines.js",
+        "Scene/Vector3DTilePrimitive.js",
+        "Scene/ViewportQuad.js",
+        "Scene/buildVoxelDrawCommands.js",
+        "Scene/renderBufferPointCollection.js",
+        "Scene/renderBufferPolygonCollection.js",
+        "Scene/renderBufferPolylineCollection.js"
+      ],
+      "defaultExport": "RenderState",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-364148bd944b83c478bde65be187861899fd40182d276895284dfdf8fa398f5d"
+    },
+    {
+      "module": "Renderer/Renderbuffer.js",
+      "exportedSymbols": [
+        "Renderbuffer",
+        "_format",
+        "_getRenderbuffer",
+        "_gl",
+        "_height",
+        "_renderbuffer",
+        "_width",
+        "destroy",
+        "format",
+        "height",
+        "isDestroyed",
+        "width"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "Renderbuffer",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-3371aa5b16f85c2040f8f8edc98721451bad1f069f50db64f60c4d6520c72d11"
+    },
+    {
+      "module": "Renderer/Sampler.js",
+      "exportedSymbols": [
+        "NEAREST",
+        "Sampler",
+        "_magnificationFilter",
+        "_maximumAnisotropy",
+        "_minificationFilter",
+        "_wrapR",
+        "_wrapS",
+        "_wrapT",
+        "equals",
+        "magnificationFilter",
+        "maximumAnisotropy",
+        "minificationFilter",
+        "wrapR",
+        "wrapS",
+        "wrapT"
+      ],
+      "consumedMembers": [
+        {
+          "name": "NEAREST",
+          "kind": "static"
+        },
+        {
+          "name": "equals",
+          "kind": "static",
+          "arity": 2
+        }
+      ],
+      "consumedBy": [
+        "Core/VectorPipeline.js",
+        "Scene/BatchTable.js",
+        "Scene/BatchTexture.js",
+        "Scene/BrdfLutGenerator.js",
+        "Scene/ClippingPlaneCollection.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/Megatexture.js",
+        "Scene/PostProcessStage.js",
+        "Scene/ShadowMap.js",
+        "Scene/TranslucentTileClassification.js",
+        "Scene/VoxelBoundsCollection.js"
+      ],
+      "defaultExport": "Sampler",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-61ba3448e789d692f43f54e0942abaabaaf884a8f3d4edbc46d23d0d5af959dc"
+    },
+    {
+      "module": "Renderer/ShaderBuilder.js",
+      "exportedSymbols": [
+        "ShaderBuilder",
+        "_attributeLines",
+        "_attributeLocations",
+        "_fragmentShaderParts",
+        "_functions",
+        "_nextAttributeLocation",
+        "_positionAttributeLine",
+        "_structs",
+        "_vertexShaderParts",
+        "addAttribute",
+        "addDefine",
+        "addFragmentLines",
+        "addFunction",
+        "addFunctionLines",
+        "addStruct",
+        "addStructField",
+        "addUniform",
+        "addVarying",
+        "addVertexLines",
+        "attributeLocations",
+        "buildShaderProgram",
+        "clone",
+        "generateFunctionLines",
+        "generateStructLines",
+        "getAttributeLocationCount",
+        "setPositionAttribute"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "ShaderBuilder",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-1bda0d60dbbfeba143e0d4ff4eca1bd35dd6fbf52862b6e79652ce3b46996f09"
+    },
+    {
+      "module": "Renderer/ShaderCache.js",
+      "exportedSymbols": [
+        "ShaderCache",
+        "_context",
+        "_numberOfShaders",
+        "_shaderProgram",
+        "_shaders",
+        "_shadersToRelease",
+        "createDerivedShaderProgram",
+        "destroy",
+        "destroyReleasedShaderPrograms",
+        "destroyShader",
+        "getDerivedShaderProgram",
+        "getShaderProgram",
+        "isDestroyed",
+        "numberOfShaders",
+        "releaseShaderProgram",
+        "replaceDerivedShaderProgram",
+        "replaceShaderProgram",
+        "toSortedJson"
+      ],
+      "consumedMembers": [
+        {
+          "name": "createDerivedShaderProgram",
+          "kind": "method"
+        },
+        {
+          "name": "destroyReleasedShaderPrograms",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "getDerivedShaderProgram",
+          "kind": "method",
+          "arity": 2
+        }
+      ],
+      "consumedBy": [
+        "Scene/Cesium3DTileBatchTable.js",
+        "Scene/ClassificationPrimitive.js",
+        "Scene/DerivedCommand.js",
+        "Scene/GlobeTranslucencyState.js",
+        "Scene/GroundPolylinePrimitive.js",
+        "Scene/OIT.js",
+        "Scene/PointCloudEyeDomeLighting.js",
+        "Scene/Scene.js",
+        "Scene/ShadowMap.js",
+        "Scene/TranslucentTileClassification.js"
+      ],
+      "defaultExport": "ShaderCache",
+      "namedExports": [],
+      "kind": "adapt",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-e6b9a129d02c747d36c385c6ea5b54a0b4587d3c4d1d92828eafe7a7287727be"
+    },
+    {
+      "module": "Renderer/ShaderProgram.js",
+      "exportedSymbols": [
+        "ShaderProgram",
+        "_attributeLocations",
+        "_automaticUniforms",
+        "_bind",
+        "_cachedShader",
+        "_debugShaders",
+        "_duplicateUniformNames",
+        "_fragmentShaderSource",
+        "_fragmentShaderText",
+        "_gl",
+        "_logShaderCompilation",
+        "_manualUniforms",
+        "_numberOfVertexAttributes",
+        "_program",
+        "_setUniforms",
+        "_uniforms",
+        "_uniformsByName",
+        "_vertexAttributes",
+        "_vertexShaderSource",
+        "_vertexShaderText",
+        "allUniforms",
+        "createAndLinkProgram",
+        "destroy",
+        "extractUniforms",
+        "finalDestroy",
+        "findUniforms",
+        "findVertexAttributes",
+        "fragmentShaderSource",
+        "fromCache",
+        "handleUniformPrecisionMismatches",
+        "id",
+        "initialize",
+        "isDestroyed",
+        "maximumTextureUnitIndex",
+        "numberOfVertexAttributes",
+        "partitionUniforms",
+        "reinitialize",
+        "replaceCache",
+        "setSamplerUniforms",
+        "vertexAttributes",
+        "vertexShaderSource"
+      ],
+      "consumedMembers": [
+        {
+          "name": "_attributeLocations",
+          "kind": "field"
+        },
+        {
+          "name": "_bind",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "destroy",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "fragmentShaderSource",
+          "kind": "accessor"
+        },
+        {
+          "name": "fromCache",
+          "kind": "static"
+        },
+        {
+          "name": "id",
+          "kind": "field"
+        },
+        {
+          "name": "replaceCache",
+          "kind": "static"
+        },
+        {
+          "name": "vertexAttributes",
+          "kind": "accessor"
+        },
+        {
+          "name": "vertexShaderSource",
+          "kind": "accessor"
+        }
+      ],
+      "consumedBy": [
+        "Scene/AutoExposure.js",
+        "Scene/BatchTable.js",
+        "Scene/BillboardCollection.js",
+        "Scene/BrdfLutGenerator.js",
+        "Scene/Cesium3DTileBatchTable.js",
+        "Scene/ClassificationPrimitive.js",
+        "Scene/CloudCollection.js",
+        "Scene/CubeMapPanorama.js",
+        "Scene/DebugInspector.js",
+        "Scene/DepthPlane.js",
+        "Scene/DerivedCommand.js",
+        "Scene/DynamicEnvironmentMapManager.js",
+        "Scene/EllipsoidPrimitive.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/GlobeDepth.js",
+        "Scene/GlobeSurfaceShaderSet.js",
+        "Scene/GlobeTranslucencyState.js",
+        "Scene/GroundPolylinePrimitive.js",
+        "Scene/ImageryLayer.js",
+        "Scene/InvertClassification.js",
+        "Scene/OIT.js",
+        "Scene/PickDepth.js",
+        "Scene/PointCloud.js",
+        "Scene/PointCloudEyeDomeLighting.js",
+        "Scene/PointPrimitiveCollection.js",
+        "Scene/PolylineCollection.js",
+        "Scene/PostProcessStage.js",
+        "Scene/Primitive.js",
+        "Scene/ShadowMap.js",
+        "Scene/SkyAtmosphere.js",
+        "Scene/Sun.js",
+        "Scene/TranslucentTileClassification.js",
+        "Scene/Vector3DTileClampedPolylines.js",
+        "Scene/Vector3DTilePolylines.js",
+        "Scene/Vector3DTilePrimitive.js",
+        "Scene/ViewportQuad.js",
+        "Scene/VoxelPrimitive.js",
+        "Scene/buildVoxelDrawCommands.js",
+        "Scene/renderBufferPointCollection.js",
+        "Scene/renderBufferPolygonCollection.js",
+        "Scene/renderBufferPolylineCollection.js"
+      ],
+      "defaultExport": "ShaderProgram",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-961999e31c562f5a06834f065e1e843606073daac8797928dafafdf498ba42f4"
+    },
+    {
+      "module": "Renderer/ShaderSource.js",
+      "exportedSymbols": [
+        "ShaderSource",
+        "_czmBuiltinsAndUniforms",
+        "clone",
+        "combineShader",
+        "containsDefine",
+        "containsString",
+        "createCombinedFragmentShader",
+        "createCombinedVertexShader",
+        "createPickFragmentShaderSource",
+        "createPickVertexShaderSource",
+        "defines",
+        "findFirstString",
+        "findNormalVarying",
+        "findPositionVarying",
+        "generateDependencies",
+        "getBuiltinsAndAutomaticUniforms",
+        "getCacheKey",
+        "getDependencyNode",
+        "includeBuiltIns",
+        "pickColorQualifier",
+        "removeComments",
+        "replaceMain",
+        "sortDependencies",
+        "sources"
+      ],
+      "consumedMembers": [
+        {
+          "name": "createPickFragmentShaderSource",
+          "kind": "static"
+        },
+        {
+          "name": "createPickVertexShaderSource",
+          "kind": "static",
+          "arity": 1
+        },
+        {
+          "name": "findNormalVarying",
+          "kind": "static",
+          "arity": 1
+        },
+        {
+          "name": "findPositionVarying",
+          "kind": "static",
+          "arity": 1
+        },
+        {
+          "name": "replaceMain",
+          "kind": "static",
+          "arity": 2
+        }
+      ],
+      "consumedBy": [
+        "Scene/Cesium3DTileBatchTable.js",
+        "Scene/ClassificationPrimitive.js",
+        "Scene/DebugInspector.js",
+        "Scene/DerivedCommand.js",
+        "Scene/GlobeTranslucencyState.js",
+        "Scene/OIT.js",
+        "Scene/PointCloudEyeDomeLighting.js",
+        "Scene/Primitive.js",
+        "Scene/ShadowMapShader.js",
+        "Scene/Splitter.js",
+        "Scene/Vector3DTilePrimitive.js",
+        "Shaders/ShadowVolumeAppearanceFS.js"
+      ],
+      "defaultExport": "ShaderSource",
+      "namedExports": [],
+      "kind": "adapt-shader",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-5015797a1483941d5913ce33f9d92fefdacb1aa19bfbd00629ba4e3a4da5f0e7"
+    },
+    {
+      "module": "Renderer/SharedContext.js",
+      "exportedSymbols": [
+        "SharedContext",
+        "_autoDestroy",
+        "_canvas",
+        "_canvases",
+        "_context",
+        "createSceneContext",
+        "destroy",
+        "isDestroyed"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "SharedContext",
+      "namedExports": [],
+      "kind": "adapt",
+      "inManifest": true,
+      "digest": "sha256-51a748b4142e590c0293790d0a34b24fcd7348a08b9d22164733241ac1654551"
+    },
+    {
+      "module": "Renderer/Sync.js",
+      "exportedSymbols": [
+        "Sync",
+        "_gl",
+        "_sync",
+        "create",
+        "destroy",
+        "getStatus",
+        "isDestroyed",
+        "waitForSignal"
+      ],
+      "consumedMembers": [
+        {
+          "name": "create",
+          "kind": "static"
+        },
+        {
+          "name": "destroy",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "waitForSignal",
+          "kind": "method",
+          "arity": 1
+        }
+      ],
+      "consumedBy": [
+        "Scene/PickFramebuffer.js"
+      ],
+      "defaultExport": "Sync",
+      "namedExports": [],
+      "kind": "stub-not-implemented",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-f3430e547daa615850429059467fc60d4cde184c9266bf8b8a85e2bb1e82bd66"
+    },
+    {
+      "module": "Renderer/Texture.js",
+      "exportedSymbols": [
+        "Texture",
+        "_context",
+        "_dimensions",
+        "_flipY",
+        "_hasMipmap",
+        "_height",
+        "_id",
+        "_initialized",
+        "_internalFormat",
+        "_pixelDatatype",
+        "_pixelFormat",
+        "_preMultiplyAlpha",
+        "_sampler",
+        "_sizeInBytes",
+        "_texture",
+        "_textureFilterAnisotropic",
+        "_textureTarget",
+        "_width",
+        "copyFrom",
+        "copyFromFramebuffer",
+        "create",
+        "defaultColor",
+        "destroy",
+        "dimensions",
+        "flipY",
+        "fromFramebuffer",
+        "generateMipmap",
+        "height",
+        "id",
+        "isDestroyed",
+        "loadBufferSource",
+        "loadCompressedBufferSource",
+        "loadFramebufferSource",
+        "loadImageSource",
+        "loadNull",
+        "loadPartialBufferSource",
+        "loadPartialImageSource",
+        "nextMipSize",
+        "pixelDatatype",
+        "pixelFormat",
+        "preMultiplyAlpha",
+        "sampler",
+        "setupSampler",
+        "sizeInBytes",
+        "width"
+      ],
+      "consumedMembers": [
+        {
+          "name": "_height",
+          "kind": "field"
+        },
+        {
+          "name": "_id",
+          "kind": "field"
+        },
+        {
+          "name": "_width",
+          "kind": "field"
+        },
+        {
+          "name": "copyFrom",
+          "kind": "method",
+          "arity": 1
+        },
+        {
+          "name": "create",
+          "kind": "static"
+        },
+        {
+          "name": "destroy",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "dimensions",
+          "kind": "accessor"
+        },
+        {
+          "name": "generateMipmap",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "height",
+          "kind": "accessor"
+        },
+        {
+          "name": "id",
+          "kind": "accessor"
+        },
+        {
+          "name": "isDestroyed",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "pixelDatatype",
+          "kind": "accessor"
+        },
+        {
+          "name": "pixelFormat",
+          "kind": "accessor"
+        },
+        {
+          "name": "preMultiplyAlpha",
+          "kind": "accessor"
+        },
+        {
+          "name": "sampler",
+          "kind": "accessor"
+        },
+        {
+          "name": "sizeInBytes",
+          "kind": "accessor"
+        },
+        {
+          "name": "width",
+          "kind": "accessor"
+        }
+      ],
+      "consumedBy": [
+        "Scene/AutoExposure.js",
+        "Scene/ClippingPlaneCollection.js",
+        "Scene/DynamicEnvironmentMapManager.js",
+        "Scene/GaussianSplat3DTileContent.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GltfLoader.js",
+        "Scene/GltfLoaderUtil.js",
+        "Scene/GltfPipeline/removeUnusedElements.js",
+        "Scene/GltfPipeline/updateVersion.js",
+        "Scene/GltfTextureLoader.js",
+        "Scene/Imagery.js",
+        "Scene/ImageryLayer.js",
+        "Scene/InvertClassification.js",
+        "Scene/Material.js",
+        "Scene/Megatexture.js",
+        "Scene/Model/Model3DTileContent.js",
+        "Scene/Model/ModelStatistics.js",
+        "Scene/Model/TextureManager.js",
+        "Scene/PostProcessStage.js",
+        "Scene/ResourceCacheStatistics.js",
+        "Scene/VoxelBoundsCollection.js",
+        "Scene/VoxelTraversal.js",
+        "Scene/createElevationBandMaterial.js",
+        "Scene/parseStructuralMetadata.js"
+      ],
+      "defaultExport": "Texture",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-f6b8de91a05b9fb856d7335d009ba5e0a68dd2f6c3bef7f6d753b734d7ba17db"
+    },
+    {
+      "module": "Renderer/Texture3D.js",
+      "exportedSymbols": [
+        "Texture3D",
+        "_context",
+        "_depth",
+        "_dimensions",
+        "_flipY",
+        "_hasMipmap",
+        "_height",
+        "_id",
+        "_initialized",
+        "_internalFormat",
+        "_pixelDatatype",
+        "_pixelFormat",
+        "_preMultiplyAlpha",
+        "_sampler",
+        "_sizeInBytes",
+        "_texture",
+        "_textureFilterAnisotropic",
+        "_textureTarget",
+        "_width",
+        "copyFrom",
+        "create",
+        "depth",
+        "destroy",
+        "dimensions",
+        "flipY",
+        "generateMipmap",
+        "height",
+        "id",
+        "isDestroyed",
+        "loadBufferSource",
+        "loadNull",
+        "loadPartialBufferSource",
+        "nextMipSize",
+        "pixelDatatype",
+        "pixelFormat",
+        "preMultiplyAlpha",
+        "sampler",
+        "setupSampler",
+        "sizeInBytes",
+        "width"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "Texture3D",
+      "namedExports": [],
+      "kind": "stub-not-implemented",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-7dbc13a6abd9bd315220776a46cb44099b07625ad95578e77314c9bb7c233041"
+    },
+    {
+      "module": "Renderer/TextureAtlas.js",
+      "exportedSymbols": [
+        "AddImageRequest",
+        "TextureAtlas",
+        "_addImage",
+        "_borderWidthInPixels",
+        "_copyFromTexture",
+        "_copyImageToTexture",
+        "_guid",
+        "_imagesToAddQueue",
+        "_indexById",
+        "_indexPromiseById",
+        "_initialSize",
+        "_nextIndex",
+        "_pixelFormat",
+        "_processImageQueue",
+        "_rectangles",
+        "_resize",
+        "_sampler",
+        "_subRegions",
+        "_texture",
+        "_texturePacker",
+        "addImage",
+        "addImageSubRegion",
+        "borderWidthInPixels",
+        "computeTextureCoordinates",
+        "destroy",
+        "getCachedImageSubRegion",
+        "getImageIndex",
+        "guid",
+        "image",
+        "index",
+        "isDestroyed",
+        "numberOfImages",
+        "pixelFormat",
+        "rectangle",
+        "rectangles",
+        "reject",
+        "resolve",
+        "sampler",
+        "sizeInBytes",
+        "texture",
+        "update"
+      ],
+      "consumedMembers": [
+        {
+          "name": "guid",
+          "kind": "accessor"
+        },
+        {
+          "name": "texture",
+          "kind": "accessor"
+        },
+        {
+          "name": "update",
+          "kind": "method",
+          "arity": 1
+        }
+      ],
+      "consumedBy": [
+        "Scene/BillboardCollection.js"
+      ],
+      "defaultExport": "TextureAtlas",
+      "namedExports": [],
+      "kind": "stub-not-implemented",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-868f5b7f1be1c97f8192718d33e562be27fc0e0adb48853afb011da7d04f1467"
+    },
+    {
+      "module": "Renderer/TextureCache.js",
+      "exportedSymbols": [
+        "TextureCache",
+        "_numberOfTextures",
+        "_textures",
+        "_texturesToRelease",
+        "addTexture",
+        "destroy",
+        "destroyReleasedTextures",
+        "getTexture",
+        "isDestroyed",
+        "numberOfTextures"
+      ],
+      "consumedMembers": [
+        {
+          "name": "addTexture",
+          "kind": "method",
+          "arity": 2
+        },
+        {
+          "name": "destroyReleasedTextures",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "getTexture",
+          "kind": "method",
+          "arity": 1
+        }
+      ],
+      "consumedBy": [
+        "Scene/Scene.js",
+        "Scene/SpecularEnvironmentCubeMap.js"
+      ],
+      "defaultExport": "TextureCache",
+      "namedExports": [],
+      "kind": "adapt",
+      "inManifest": true,
+      "digest": "sha256-98231bcc33f85cf2dfec7b82855c242ae2dc2dce3a1a7ecddb2e3a7bb60b58f9"
+    },
+    {
+      "module": "Renderer/VertexArray.js",
+      "exportedSymbols": [
+        "VertexArray",
+        "_attributes",
+        "_bind",
+        "_context",
+        "_gl",
+        "_hasConstantAttributes",
+        "_hasInstancedAttributes",
+        "_indexBuffer",
+        "_numberOfVertices",
+        "_unBind",
+        "_vao",
+        "addAttribute",
+        "bind",
+        "computeAttributeSizeInBytes",
+        "computeNumberOfVertices",
+        "copyAttributeFromRange",
+        "copyIndexFromRange",
+        "destroy",
+        "fromGeometry",
+        "getAttribute",
+        "indexBuffer",
+        "interleaveAttributes",
+        "isDestroyed",
+        "numberOfAttributes",
+        "numberOfVertices",
+        "setConstantAttributes",
+        "setVertexAttribDivisor"
+      ],
+      "consumedMembers": [
+        {
+          "name": "_attributes",
+          "kind": "field"
+        },
+        {
+          "name": "copyAttributeFromRange",
+          "kind": "method"
+        },
+        {
+          "name": "copyIndexFromRange",
+          "kind": "method"
+        },
+        {
+          "name": "destroy",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "fromGeometry",
+          "kind": "static"
+        },
+        {
+          "name": "getAttribute",
+          "kind": "method",
+          "arity": 1
+        },
+        {
+          "name": "indexBuffer",
+          "kind": "accessor"
+        },
+        {
+          "name": "isDestroyed",
+          "kind": "method",
+          "arity": 0
+        },
+        {
+          "name": "numberOfAttributes",
+          "kind": "accessor"
+        }
+      ],
+      "consumedBy": [
+        "Scene/CubeMapPanorama.js",
+        "Scene/DepthPlane.js",
+        "Scene/EllipsoidPrimitive.js",
+        "Scene/GaussianSplatPrimitive.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GlobeSurfaceTileProvider.js",
+        "Scene/ImageryLayer.js",
+        "Scene/PointCloud.js",
+        "Scene/Primitive.js",
+        "Scene/SkyAtmosphere.js",
+        "Scene/Sun.js",
+        "Scene/renderBufferPointCollection.js",
+        "Scene/renderBufferPolygonCollection.js",
+        "Scene/renderBufferPolylineCollection.js"
+      ],
+      "defaultExport": "VertexArray",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-eee5f01642ce10cc0fc91219fdf72a45aaea0f9065a45be73cdbeeb46c118c94"
+    },
+    {
+      "module": "Renderer/VertexArrayFacade.js",
+      "exportedSymbols": [
+        "VertexArrayFacade",
+        "_allBuffers",
+        "_appendAttributes",
+        "_appendWriters",
+        "_context",
+        "_createArrayViews",
+        "_instanced",
+        "_precreated",
+        "_resize",
+        "_size",
+        "_verifyAttributes",
+        "_vertexSizeInBytes",
+        "commit",
+        "destroy",
+        "destroyVA",
+        "endSubCommits",
+        "isDestroyed",
+        "resize",
+        "subCommit",
+        "va",
+        "writers"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "VertexArrayFacade",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-05c725c1bed474b7adfcae97e83319347f05ff6d2e29dbe7809b81f4234fcf44"
+    },
+    {
+      "module": "Renderer/createUniform.js",
+      "exportedSymbols": [
+        "_gl",
+        "_location",
+        "_setSampler",
+        "_value",
+        "constructor",
+        "createUniform",
+        "name",
+        "set",
+        "textureUnitIndex",
+        "value"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "createUniform",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-2ac802969b3042919329e1189ede1c4742368c4944572486e54d3cb6d08d6d43"
+    },
+    {
+      "module": "Renderer/createUniformArray.js",
+      "exportedSymbols": [
+        "_gl",
+        "_location",
+        "_locations",
+        "_setSampler",
+        "_value",
+        "constructor",
+        "createUniformArray",
+        "name",
+        "set",
+        "textureUnitIndex",
+        "value"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "createUniformArray",
+      "namedExports": [],
+      "kind": "replace",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-b9ca19df875cd5f31f583fc059f57fba5762f1179a724fa16c9e74d9344a8519"
+    },
+    {
+      "module": "Renderer/loadCubeMap.js",
+      "exportedSymbols": [
+        "loadCubeMap"
+      ],
+      "consumedMembers": [],
+      "consumedBy": [],
+      "defaultExport": "loadCubeMap",
+      "namedExports": [],
+      "kind": "adapt",
+      "inManifest": true,
+      "declaredInTypes": true,
+      "digest": "sha256-62ab1e8a6fb0af7a154f1851cda96fe18a6500cd063f2b578ac6ec4ad0188efd"
+    }
+  ],
+  "digest": "sha256-7c399b40872cf55d0bd3edd29e0abfa0a068d0bfb7debfba0b702b1ccc29082e",
+  "notes": "Upgrade drill input (contract §6 step 2): a version bump regenerates this file and the diff is the adaptation list. `--check` fails when the committed baseline no longer matches the installed package."
+}

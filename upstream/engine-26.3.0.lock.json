@@ -23,5 +23,13 @@
       "entry": "dist/web-devel-onefile",
       "notes": "If used at all, MUST import dist/web-devel-onefile explicitly: the default Node entry was measured hanging for >120 s."
     }
+  },
+  "sourceSnapshot": {
+    "algorithm": "sha256",
+    "aggregate": "sha256-93bedf277d0546b992012ab4dcf214b576e410c75ae9f604849a78043b847bc7",
+    "fileCount": 1886,
+    "totalBytes": 19317680,
+    "recordedAt": "2026-09-18T21:07:03.822Z",
+    "notes": "Aggregate sha256 over `Source/**` (one line per module: POSIX relative path, NUL, per-file sha256). Verified by tools/scripts/verify-upstream-integrity.mjs; a single changed byte anywhere under Source/** fails the check. Recorded from the unmodified registry install of the pinned release."
   }
 }

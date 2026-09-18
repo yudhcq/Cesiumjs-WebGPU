@@ -21,6 +21,7 @@ import typescript from "@rollup/plugin-typescript";
 import { dts } from "rollup-plugin-dts";
 
 import { createEnginePatchPlugin } from "./tools/rollup-plugin-engine-patch.mjs";
+import { createBuildProvenancePlugin } from "./tools/rollup-plugin-build-provenance.mjs";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = path.join(ROOT, "packages", "cesium-webgpu");
@@ -28,6 +29,9 @@ const DEMO_ROOT = path.join(ROOT, "apps", "demo");
 const DECLARATIONS = path.join(PACKAGE_ROOT, "dist", "types", "src");
 
 const enginePatch = () => createEnginePatchPlugin({ quiet: true });
+
+/** Records which repository-owned modules enter each bundle (read by the build-layer audit). */
+const buildProvenance = (options) => createBuildProvenancePlugin({ quiet: true, ...options });
 
 /** The demo imports the package entry by name; resolve it to the package source entry. */
 const demoEntryAlias = () => ({
@@ -39,6 +43,7 @@ const demoEntryAlias = () => ({
 
 const packagePlugins = () => [
   enginePatch(),
+  buildProvenance({ label: "cesium-webgpu-package" }),
   nodeResolve({ exportConditions: ["import"] }),
   typescript({
     tsconfig: path.join(PACKAGE_ROOT, "tsconfig.json"),
@@ -86,6 +91,7 @@ export default [
     },
     plugins: [
       enginePatch(),
+      buildProvenance({ label: "demo" }),
       demoEntryAlias(),
       nodeResolve({ exportConditions: ["import"] }),
       typescript({

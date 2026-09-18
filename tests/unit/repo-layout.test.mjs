@@ -39,11 +39,22 @@ test("root package.json exposes the documented script entry points", () => {
 });
 
 test(".gitignore covers node_modules/, dist/ and the generated artifact directories", () => {
-  const required = ["node_modules/", "dist/", "artifacts/", "experiments/gates/out/", ".specify/feature.json"];
+  const lines = gitignore.split(/\r?\n/);
+  const required = ["node_modules/", "dist/", "artifacts/", ".specify/feature.json"];
   for (const entry of required) {
-    assert.ok(
-      gitignore.split(/\r?\n/).includes(entry),
-      `.gitignore MUST contain the exact ignore entry "${entry}"`,
-    );
+    assert.ok(lines.includes(entry), `.gitignore MUST contain the exact ignore entry "${entry}"`);
+  }
+
+  // The gate outputs are ignored by CONTENTS, not by directory: a bare `experiments/gates/out/`
+  // entry would exclude the directory itself and make the `!experiments/gates/out/g<N>.json`
+  // allowlist ineffective (git cannot re-include a file inside an excluded directory — the reason
+  // is written out in .gitignore itself). This assertion therefore pins the pattern form AND the
+  // allowlist that keeps the machine-checkable verdicts in the repository. It replaces the
+  // original `experiments/gates/out/` expectation, which the Phase-2 gate commit (b36e6a4)
+  // invalidated on purpose; see the T041 deviation record.
+  assert.ok(lines.includes("experiments/gates/out/*"), '.gitignore MUST ignore the gate output contents ("experiments/gates/out/*")');
+  assert.ok(!lines.includes("experiments/gates/out/"), "a bare directory entry would defeat the verdict allowlist below it");
+  for (const verdict of ["!experiments/gates/out/g[1-9].json", "!experiments/gates/out/g1-control-no-rewrite.json"]) {
+    assert.ok(lines.includes(verdict), `.gitignore MUST keep the committed gate verdict "${verdict}"`);
   }
 });

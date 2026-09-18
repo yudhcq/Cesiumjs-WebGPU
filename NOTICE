@@ -1,0 +1,83 @@
+cesium-webgpu
+Copyright 2026 the cesium-webgpu contributors
+
+This product includes software developed by CesiumJS Contributors (https://cesium.com/).
+本产品包含 CesiumJS Contributors 开发的软件。
+
+Upstream baseline
+-----------------
+Package:            @cesium/engine 26.3.0 (= cesium 1.145.0)
+License:            Apache-2.0
+Integrity (sha512): sha512-jtgOewm/IZoypmqpbeTlYhMOKhQg+XPwUXoYat84vhIU8l8SfVSEat4Lc/Y4Fb7ypi3z1YmElKjVYvoI5CH6Pw==
+Baseline record:    upstream/engine-26.3.0.lock.json
+Patch manifest:     packages/cesium-webgpu/backend-webgpu/manifest.json
+Upstream licence:   third_party/cesium-engine/LICENSE.md (verbatim copy, Copyright 2011-2024 CesiumJS Contributors)
+
+The upstream package is installed unmodified: no file under node_modules/@cesium/engine is ever
+edited by this repository. The modules listed below are replaced at BUILD TIME by a module-level
+alias plugin (tools/rollup-plugin-engine-patch.mjs); the list is one-to-one with the entries of the
+patch manifest, which is the machine-checked source of truth.
+
+Files reimplemented, adapted or stubbed by this product
+-------------------------------------------------------
+
+Reimplemented modules (WebGL call sites replaced, kind: replace) — 11 file(s)
+  Renderer/Context.js   [replace] FR-030, FR-031, FR-032
+  Renderer/Texture.js   [replace] FR-030
+  Renderer/ShaderProgram.js   [replace] FR-030, FR-031
+  Renderer/RenderState.js   [replace] FR-030
+  Renderer/Buffer.js   [replace] FR-030
+  Renderer/createUniform.js   [replace] FR-030
+  Renderer/createUniformArray.js   [replace] FR-030
+  Renderer/VertexArray.js   [replace] FR-030
+  Renderer/Framebuffer.js   [replace] FR-030
+  Renderer/Renderbuffer.js   [replace] FR-030
+  Renderer/MultisampleFramebuffer.js   [replace] FR-030
+
+Adapted modules (compile target parameterised, kind: adapt-shader) — 1 file(s)
+  Renderer/ShaderSource.js   [adapt-shader] FR-031
+
+Adapted modules (GL-resource semantics, kind: adapt) — 6 file(s)
+  Renderer/ShaderCache.js   [adapt] FR-030
+  Renderer/FramebufferManager.js   [adapt] FR-030
+  Renderer/ComputeEngine.js   [adapt] FR-033
+  Renderer/SharedContext.js   [adapt] FR-033
+  Renderer/TextureCache.js   [adapt] FR-030
+  Renderer/loadCubeMap.js   [adapt] FR-033
+
+Explicit-failure stubs (not implemented in this increment, kind: stub-not-implemented) — 5 file(s)
+  Renderer/Texture3D.js   [stub-not-implemented] FR-033
+  Renderer/CubeMap.js   [stub-not-implemented] FR-033
+  Renderer/CubeMapFace.js   [stub-not-implemented] FR-033
+  Renderer/TextureAtlas.js   [stub-not-implemented] FR-033
+  Renderer/Sync.js   [stub-not-implemented] FR-033
+
+Derived-file header convention
+------------------------------
+Every file that reimplements or adapts an upstream module MUST keep the original copyright
+header and add the note "Modified for WebGPU backend":
+
+    /**
+     * @license
+     * Copyright 2011-2024 CesiumJS Contributors
+     * SPDX-License-Identifier: Apache-2.0
+     *
+     * Modified for WebGPU backend: module-level replacement of `Source/Renderer/<File>.js` …
+     */
+
+Files that are new to this project (everything under backend-webgpu/webgpu/**) MUST carry
+`SPDX-License-Identifier: Apache-2.0` and state that they are not derived from an upstream file.
+tools/scripts/check-license-notice.mjs enforces both rules on every patch-layer file.
+
+Third-party dependencies
+------------------------
+The license gate reads the `license` field of every installed package and rejects GPL/AGPL,
+unknown and absent licenses; the full table is archived as artifacts/license-notice.json.
+Notable entries: @cesium/engine (Apache-2.0, pinned 26.3.0), @rollup/plugin-commonjs (MIT, 29.0.3,
+build-time only — see docs/gate-g1-conclusion.md F-1), yaml (ISC), rollup and the @rollup/plugin-*
+packages (MIT), typescript (Apache-2.0), @webgpu/types (BSD-3-Clause), playwright (Apache-2.0),
+rollup-plugin-dts (LGPL-3.0-only, build-time only — never shipped in the deliverable).
+
+Patents
+-------
+Upstream declares: Patents US9153063B2 US9865085B1 US10592242 (see third_party/cesium-engine/LICENSE.md).

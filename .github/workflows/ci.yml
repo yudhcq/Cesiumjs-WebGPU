@@ -1,0 +1,91 @@
+# CI skeleton (T039) — quality gates in the order fixed by the constitution.
+#
+# Phase 3 (W1) ships the serial offline gates only:
+#   install -> build -> typecheck -> unit -> audit (AU-1…AU-5)
+# The two-path contract/visual/benchmark jobs and the shader toolchain validation are added in W8
+# (tasks.md T131+); this file MUST NOT grow a job that renders the scene on both backends at once
+# (constitution v2.0.0, principle II: one backend at a time).
+#
+# Every step is a Node invocation: the repository's portability rule forbids shell-specific
+# tooling in the pipeline (tools/scripts/check-tools-portable.mjs scans this file).
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: offline gates (install / build / typecheck / unit / audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # 1) install — exact versions + integrity hashes from package-lock.json.
+      - name: install
+        run: npm ci
+
+      # 2) build — declarations, package bundles, demo bundle. The alias plugin applies the
+      #    module-level replacement and the provenance plugin records each bundle's module origin.
+      - name: build
+        run: npm run build
+
+      # 3) typecheck — TypeScript strict, no emit.
+      - name: typecheck
+        run: npm run typecheck
+
+      # 4) unit — the functional gates live here (manifest rules, audit rules, shader source map,
+      #    skeleton fail-loud behaviour, status model, workflow shape).
+      - name: unit
+        run: npm run test:unit
+
+      # 5) audit — AU-1…AU-5 of contracts/fork-patch-layer §4 and the license/NOTICE gate.
+      - name: audit upstream integrity (AU-2)
+        run: node tools/scripts/verify-upstream-integrity.mjs
+
+      - name: audit patch scope (AU-1, AU-3, AU-4)
+        run: node tools/audit-patch-scope.mjs
+
+      - name: audit build layer source (AU-4)
+        run: node tools/scripts/check-build-layer-source.mjs
+
+      - name: audit kept modules (AU-3)
+        run: node tools/scripts/gen-kept-hash.mjs --check
+
+      - name: audit interface manifest
+        run: node tools/gen-interface-manifest.mjs --check
+
+      - name: audit license and notice (AU-5)
+        run: node tools/scripts/check-license-notice.mjs
+
+      - name: upgrade drill (dry run)
+        run: node tools/upgrade-drill.mjs --dry-run
+
+      # CI artifacts — the audit and drill records are the authoritative evidence of "done"
+      # (constitution principle V). Paths registered for T041.
+      - name: upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-records
+          path: |
+            artifacts/upstream-integrity.json
+            artifacts/patch-scope-audit.json
+            artifacts/upgrade-drill.json
+            artifacts/build-layer-source.json
+            artifacts/arch-boundaries.json
+            artifacts/license-notice.json
+          if-no-files-found: error
