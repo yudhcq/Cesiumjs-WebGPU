@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yudhcq/Cesiumjs-WebGPU/specs/001-webgpu-terrain-mvp/contracts/mvp-estimate.schema.json",
+  "title": "MvpEstimate",
+  "description": "MVP 工期与 AI/Agent 消耗评估结论的机器可校验 schema。对应 spec.md FR-026~FR-029 与 SC-007。CI 中的文档契约测试依据本 schema 校验 specs/001-webgpu-terrain-mvp/mvp-estimate.v1.json。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "milestone", "version", "createdAt", "currency", "meteringBasis",
+    "workflows", "totals", "confirmedItems", "unconfirmedItems", "exclusions", "revisionPolicy"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "milestone": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "currency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "secondary", "fxRate", "fxSource", "fxDate"],
+      "properties": {
+        "primary": { "const": "CNY" },
+        "secondary": { "const": "USD" },
+        "fxRate": { "type": "number", "exclusiveMinimum": 0, "description": "1 USD = fxRate CNY" },
+        "fxSource": { "type": "string", "minLength": 1 },
+        "fxDate": { "type": "string", "format": "date" }
+      }
+    },
+    "meteringBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "includesHumanCost", "statement", "tokenMetering", "priceSources",
+        "includesCiCompute", "includesCloudGpu", "executionEnvironment", "selfHostedHardware"
+      ],
+      "properties": {
+        "includesHumanCost": {
+          "const": false,
+          "description": "MUST 为 false：人工成本不计入消耗区间（FR-027），且 statement 必须显式声明该口径。"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "必须显式包含“人工成本不计入”字样。"
+        },
+        "tokenMetering": { "const": "input-output-separate" },
+        "priceSources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item", "unitPrice", "unit", "currency", "source", "consultedAt"],
+            "properties": {
+              "item": { "type": "string", "minLength": 1 },
+              "unitPrice": { "type": "number", "minimum": 0 },
+              "unit": { "type": "string", "minLength": 1 },
+              "currency": { "enum": ["CNY", "USD"] },
+              "source": { "type": "string", "pattern": "^https?://" },
+              "consultedAt": { "type": "string", "format": "date" }
+            }
+          }
+        },
+        "includesCiCompute": { "type": "boolean" },
+        "includesCloudGpu": { "type": "boolean" },
+        "executionEnvironment": { "type": "string", "minLength": 1 },
+        "selfHostedHardware": {
+          "type": "string",
+          "minLength": 1,
+          "description": "本机/自托管硬件（电力与折旧）是否计入的显式说明。"
+        }
+      }
+    },
+    "workflows": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "timeDays", "agentTurns", "tokens", "modelCost", "computeCost", "assumptions"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^W[0-9]+$" },
+          "name": { "type": "string", "minLength": 1 },
+          "timeDays": {
+            "type": "object", "additionalProperties": false, "required": ["min", "max"],
+            "properties": { "min": { "type": "number", "exclusiveMinimum": 0 }, "max": { "type": "number", "exclusiveMinimum": 0 } }
+          },
+          "agentTurns": {
+            "type": "object", "additionalProperties": false, "required": ["min", "max"],
+            "properties": { "min": { "type": "integer", "minimum": 1 }, "max": { "type": "integer", "minimum": 1 } }
+          },
+          "tokens": {
+            "type": "object", "additionalProperties": false, "required": ["inputM", "outputM"],
+            "properties": {
+              "inputM": { "type": "object", "additionalProperties": false, "required": ["min", "max"], "properties": { "min": { "type": "number", "minimum": 0 }, "max": { "type": "number", "minimum": 0 } } },
+              "outputM": { "type": "object", "additionalProperties": false, "required": ["min", "max"], "properties": { "min": { "type": "number", "minimum": 0 }, "max": { "type": "number", "minimum": 0 } } }
+            }
+          },
+          "modelCost": { "$ref": "#/$defs/costRange" },
+          "computeCost": { "$ref": "#/$defs/costRange" },
+          "assumptions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timeDays", "agentTurns", "tokens", "cost"],
+      "properties": {
+        "timeDays": {
+          "type": "object", "additionalProperties": false, "required": ["min", "max"],
+          "properties": { "min": { "type": "number", "exclusiveMinimum": 0 }, "max": { "type": "number", "exclusiveMinimum": 0 } }
+        },
+        "calendarWeeks": {
+          "type": "object", "additionalProperties": false, "required": ["min", "max"],
+          "properties": { "min": { "type": "number", "exclusiveMinimum": 0 }, "max": { "type": "number", "exclusiveMinimum": 0 } }
+        },
+        "agentTurns": {
+          "type": "object", "additionalProperties": false, "required": ["min", "max"],
+          "properties": { "min": { "type": "integer", "minimum": 1 }, "max": { "type": "integer", "minimum": 1 } }
+        },
+        "tokens": {
+          "type": "object", "additionalProperties": false, "required": ["inputM", "outputM"],
+          "properties": {
+            "inputM": { "type": "object", "additionalProperties": false, "required": ["min", "max"], "properties": { "min": { "type": "number", "minimum": 0 }, "max": { "type": "number", "minimum": 0 } } },
+            "outputM": { "type": "object", "additionalProperties": false, "required": ["min", "max"], "properties": { "min": { "type": "number", "minimum": 0 }, "max": { "type": "number", "minimum": 0 } } }
+          }
+        },
+        "cost": { "$ref": "#/$defs/costRange" }
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "description", "cost"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "cost": { "$ref": "#/$defs/costRange" }
+        }
+      }
+    },
+    "planningValue": { "$ref": "#/$defs/costRange" },
+    "confirmedItems": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "unconfirmedItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "impactDirection", "impactMagnitude", "note"],
+        "properties": {
+          "item": { "type": "string", "minLength": 1 },
+          "impactDirection": { "enum": ["up", "down", "both"] },
+          "impactMagnitude": { "type": "string", "minLength": 1 },
+          "note": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "exclusions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "revisionPolicy": { "type": "string", "minLength": 1 },
+    "baselineGapNote": {
+      "type": "string",
+      "description": "无历史基线时，必须如实说明区间偏宽的原因。"
+    },
+    "actualsBackfill": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "首个增量实际交付后回填实际值与偏差说明（FR-028）。未交付时可为 null。",
+      "properties": {
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "timeDays": { "type": "number", "minimum": 0 },
+        "tokens": {
+          "type": "object", "additionalProperties": false, "required": ["inputM", "outputM"],
+          "properties": { "inputM": { "type": "number", "minimum": 0 }, "outputM": { "type": "number", "minimum": 0 } }
+        },
+        "cost": { "$ref": "#/$defs/costRange" },
+        "deviationNote": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "costRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cny", "usd"],
+      "properties": {
+        "cny": { "type": "object", "additionalProperties": false, "required": ["min", "max"], "properties": { "min": { "type": "number", "minimum": 0 }, "max": { "type": "number", "minimum": 0 } } },
+        "usd": { "type": "object", "additionalProperties": false, "required": ["min", "max"], "properties": { "min": { "type": "number", "minimum": 0 }, "max": { "type": "number", "minimum": 0 } } }
+      }
+    }
+  }
+}
