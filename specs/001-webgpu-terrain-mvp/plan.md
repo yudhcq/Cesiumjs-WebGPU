@@ -109,6 +109,12 @@
 - **新增（v2.0.0 要求）**：fork 层改动纳入 CI 校验——**补丁范围审计**（替换清单全部落在渲染后端层）与**升级演练验证结果** MUST 作为 CI 产物存档；本次另加"依赖完整性哈希"与"别名插件白名单穷举"两项断言。
 - 无 GPU 环境的降级策略与盲区显式记录（`docs/ci-degradation.md`：软件适配器≠GPU、Xvfb headed、无 `timestamp-query`、浏览器版本漂移改变像素等），并给出本地复现步骤。
 - 依赖与许可证检查纳入 CI（Apache-2.0、NOTICE、修改文件清单、地形数据署名非空）。
+- **CI 门禁顺序的偏离记录（Governance 要求）**：本方案的 CI 顺序为 `build → unit → audit(AU-1…AU-5) → shader(SH-3/4/7) → contract/visual/bench → 汇总`，
+  与 constitution「测试与验证策略」所列顺序（构建 → 单元与契约 → 视觉 → 基准 → 补丁范围审计 → 依赖与许可证检查）**字面不同**：
+  本方案把 **audit 前移到 contract/visual/bench 之前**。**偏离理由**：①AU-1…AU-5（补丁范围、依赖完整性、逻辑层零覆盖、接口一致性干跑、许可证）是**确定性静态门禁**，
+  成本低、失败定位明确，前置可最快阻断"越界改动"；②`contracts/verification-and-benchmark.md` §5 明确规定"**渲染类结论只有在 AU-1…AU-5 全部通过时才被认定为对该次提交成立**"，
+  即审计本就是渲染结论的前置条件，前移只是让门禁顺序与既有契约语义一致；③章程该句**未使用 MUST / NON-NEGOTIABLE 措辞**，且"任一失败阻断合入"的判定语义**不因顺序改变**。
+  该偏离在此显式记录以保持可追溯；若章程后续把该顺序改为强制条款，MUST 按章程顺序调整 CI。
 - **Gate 结论：PASS**。
 
 ### 附加技术约束
@@ -136,9 +142,10 @@ specs/001-webgpu-terrain-mvp/
 │   ├── terrain-source.md             # CustomHeightmapTerrainProvider 适配 + 固定数据集 + 署名
 │   ├── verification-and-benchmark.md # 双路径独立运行、容差、差异证据、基准与 CI 门禁
 │   └── mvp-estimate.schema.json      # 评估结论的机器可校验 schema（沿用，未改）
-├── mvp-estimate.md      # FR-026~029 / SC-007：工期与 AI/Agent 消耗（v2.0.0）
-├── mvp-estimate.v1.json # 同上的机器可校验副本
-└── tasks.md             # ⚠️ 阶段 3 产物：上一版基于被否决架构，**已失效，必须由 /speckit-tasks 重新生成**
+├── mvp-estimate.md      # FR-026~029 / SC-007：工期与 AI/Agent 消耗（**结论版本 v2.1.0**）
+├── mvp-estimate.v1.json # 同上的机器可校验副本（`"version": "2.1.0"`）
+├── tasks.md             # 阶段 3 产物：**已由 /speckit-tasks 依据本版 plan/contracts 整体重新生成**（147 任务 / 12 阶段；修复轮追加 `T098b`、`T148` 后共 **149 条**）
+└── analysis.md          # 阶段 3.5 校验报告（重新生成版，CRITICAL=0）+ 同批修复记录
 ```
 
 ### Source Code (repository root)
@@ -271,7 +278,7 @@ upstream/                               # engine-26.3.0.lock.json、interface-ma
 ## MVP 工期与 AI/Agent 消耗评估（FR-026~FR-029 / SC-007）
 
 完整结论见 [mvp-estimate.md](./mvp-estimate.md) 与机器可校验副本 [mvp-estimate.v1.json](./mvp-estimate.v1.json)
-（**结论版本 v2.0.0**；上一版 v1.0.0 对应被否决架构，**已失效**）。
+（**结论版本 v2.1.0**，与 `mvp-estimate.md:3` 及 `mvp-estimate.v1.json` 的 `"version": "2.1.0"` 一致；v1.0.0 对应已被否决的架构、v2.0.0 为其后的中间版本，两者均已失效）。
 
 | 项 | 结论 | 与 v1.0.0（已失效）的差异 |
 |---|---|---|
@@ -295,7 +302,7 @@ upstream/                               # engine-26.3.0.lock.json、interface-ma
 | **进入 fork 层**（模块级替换上游文件，取代纯公开 API 集成） | 公开接缝确实不存在：`Scene.context` `@private`；无法向 `CesiumWidget` 注入外部 canvas（且一个 canvas 只能有一种上下文类型）；`SharedContext` `@private`、不在 `index.d.ts`、内部仍构造 WebGL `Context`；资源类没有被替换的扩展点 | "双画布分层 + 遮住上游绘制"曾是最简单的替代——**被用户明确否决**，且违反原则 II（两条管线同时绘制同一场景、既有功能永远无法接入新后端） | 上游若出现官方渲染后端扩展点（如官方 WebGPU 后端或上下文注入接口），MUST 立即评估改走公开接缝并退役对应补丁 |
 | **fork 足迹扩到"着色器编译前端"**（`ShaderSource` 双发射目标 + 本项目新增的 WGSL 发射器/条件编译求值/WGSL 库/运行时片段镜像） | 上游把 `#define/#ifdef` 当文本交给 GL 驱动求值，**WebGPU 侧没有驱动代劳**；WGSL 也没有 GLSL 的宽松 varying 匹配（不匹配即管线创建硬失败）。要"只替换管线而不改逻辑层"，着色器编译这一环必须由后端自己完成 | **否决：纯转译路线**（`glslang→SPIR-V→naga→WGSL`）——实测原始 GLSL 6/6 失败、修补后片元 2/2 因 naga 崩溃、varying 名字丢失，**不可交付**；**否决：运行时浏览器内转译**（继承同样问题且无 SPIR-V→WGSL 后端）；**否决：为地形单独写 WGSL 旁路**（等于在逻辑层之外再挂一条绘制链，与"只替换管线"相悖） | ①WGSL 发射器与条件编译求值有真机样例（尖刺已提供 181+151 行 WGSL 与 harness）与逐变体管线校验；②若 `ShaderSource` 参数化被判定越界，启用尖刺退路三（WGSL 库与 `.glsl` 并存）并把可升级性损失写入 rebase 演练 |
 | **自建 WGSL uniform 布局生成器 + 绑定布局表** | WebGPU 没有 GL 驱动代劳的 uniform 反射；逻辑层通过 `command.uniformMap` 与 `AutomaticUniforms` 按**名字**提供值，必须在后端建立"名字 → 偏移/槽位"的一致映射 | "每个 uniform 一个 buffer/bind group"：绑定数与描述符数量爆炸（上游单个程序可用 uniform 上百个），且每命令多次 `setBindGroup` 显著抬高 CPU 开销 | `H-4` 通过后（布局生成器 + 单元测试 + 像素断言稳定），可评估进一步压缩为共享块 |
-| **切片 A 的临时能力降级 `depthTexture=false`** | 让"画布通道 + 地形绘制"先独立跑通，把离屏帧缓冲/MSAA 解析的风险与画布通道风险解耦，缩短首次可运行时间 | 一开始就实现全部帧缓冲路径：把两类失败模式（画布呈现 vs 离屏目标/解析）混在一起，首次可运行时间与定位成本显著上升 | **切片 B 完成后 MUST 翻转为 `true` 并重跑全量验证**；长期停留在降级态即视为 FR-030 未兑现（在 tasks.md 中登记为阻断项） |
+| **切片 A 的临时能力降级 `depthTexture=false`** | 让"画布通道 + 地形绘制"先独立跑通，把离屏帧缓冲/MSAA 解析的风险与画布通道风险解耦，缩短首次可运行时间 | 一开始就实现全部帧缓冲路径：把两类失败模式（画布呈现 vs 离屏目标/解析）混在一起，首次可运行时间与定位成本显著上升 | **切片 B 完成后 MUST 翻转为 `true` 并重跑全量验证**；长期停留在降级态即视为 FR-030 未兑现（在 tasks.md 中登记为阻断项 **`T098a` 功能翻转 + `T098b` 全量验证闭环**） |
 | **双软件适配器的 CI 矩阵（Xvfb+lavapipe / ANGLE+SwiftShader）** | 原则 III/V 要求两条后端路径各自独立验证，而默认 CI 无 GPU | 只跑一条路径或跳过 WebGPU：直接违反 SC-001/FR-011；用付费 GPU runner 替代：公共仓也始终计费（¥21.08/小时），成本不可接受 | 若出现免费的 CI GPU 环境，可简化为单环境两路径独立运行 |
 | **自维护上游内部模块类型声明**（`types/engine-internal.d.ts`） | 上游 `Source/**` 只有 2 个 `.d.ts`，而补丁层必须以 TS `strict` 消费上游内部模块 | 把补丁层降级为 JS（放弃 strict 与类型即文档）；或整仓 fork 并手写声明（成本更高） | 上游若发布逐模块类型声明，MUST 删除该文件并改为直接引用 |
 
@@ -329,12 +336,15 @@ upstream/                               # engine-26.3.0.lock.json、interface-ma
 
 **下一步（阶段 3 及以后）**：
 
-1. **⚠️ `tasks.md` 与 `analysis.md` 已失效**：二者基于被否决的"双画布分层"架构（其任务包含自建瓦片几何、
-   双画布合成、隐藏上游绘制等），MUST 由 `/speckit-tasks` 依据本版 plan 与 contracts **整体重新生成**，
-   再走 `/speckit-analyze`；**不得**在被否决的任务清单上做增量修补。
-2. 实现顺序按 G-1 → G-2 → G-4 → G-3 → G-5 → G-6 的门禁推进（G-7 与验证资产并行）；
-   切片 B 的 `depthTexture=true` 翻转是阻断项，未完成不得宣告 FR-030 达成。
+1. **`tasks.md` 与 `analysis.md` 已整体重新生成**：`tasks.md` 已由 `/speckit-tasks` 依据本版 plan 与 contracts
+   从零重写（147 任务 / 12 阶段，另经修复轮追加 `T098b` 与 `T148`，共 **149 条**）；`analysis.md` 已由 `/speckit-analyze` 整体重新生成
+   （CRITICAL = 0；4 项 HIGH 已按裁定修复，修复记录与复核结论见该报告）。
+   被否决的"双画布分层"任务清单**不得**作为退路保留或增量修补。
+2. 实现顺序按 G-1 → G-2 → G-4 → G-3 → G-5 → G-6 的门禁推进（G-7 与验证资产并行）。
+   **G-7 顺序（已修正为真实可满足）**：G-7 结论在 Phase 10 的 `T127` 落盘，由紧随其后的 **`T098b`** 消费；
+   切片 B 的**功能翻转**是 Phase 7 的 **`T098a`**（只依赖当阶段已有的单元/契约套件，不依赖 G-7 与 Phase 9/10 资产）。
+   `T098a` + `T098b` 共同构成阻断项，未同时完成不得宣告 FR-030 达成。
 3. **着色器尖刺已定案**（`experiments/shader-spike/REPORT.md`）：本版 plan/research/estimate 已按其结论更新
    （WGSL 发射器路线、W4 独立工作流 5–10 工作日、条件场景 S-V）。实施时 MUST 复用尖刺的真机 harness
    与 `port/globe-vs.wgsl`、`port/globe-fs.wgsl` 作为黄金样本；上游叶子转换的工具链版本
-   （`glslang 16.6.0`、`naga-cli 30.0.1`、`@webgpu/glslang 0.0.15` 的 `web-devel-onefile` 构建）MUST 锁定。
+   （`glslang 16.6.0`、`naga-cli 30.0.1`（`cargo install naga-cli --version 30.0.1 --locked`）、`@webgpu/glslang 0.0.15` 的 `web-devel-onefile` 构建）MUST 锁定。

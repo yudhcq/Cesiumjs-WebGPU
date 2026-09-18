@@ -37,7 +37,13 @@
 
 1. 每个 `upstreamModule` MUST 匹配 `^Renderer/[A-Za-z0-9_]+\.js$`（**补丁边界**）。
 2. 每个条目 MUST 有非空 `requirementRef` 与 `reason`（补丁最小性、可追溯到需求）。
-3. `kind` 取值：`replace`（WebGL 调用点重实现）、`adapt`（GL 资源语义适配）、`adapt-shader`（着色器编译目标参数化）。
+3. `kind` 取值（四类，`kind` 字段必须存在且参与断言）：
+   - `replace`（WebGL 调用点重实现）
+   - `adapt`（GL 资源语义适配）
+   - `adapt-shader`（着色器编译目标参数化）
+   - `stub-not-implemented`（**显式失败桩**：本切片不实现，调用即抛出可诊断错误。
+     本增量中 `Texture3D` / `CubeMap` / `CubeMapFace` / `TextureAtlas` / `Sync` 五者属此类，
+     计入"16 个必替换"总数；**`glCallSites > 0` 的断言只适用于 `replace`**，MUST NOT 施加于本类）。
 4. `keptModulesHash`：对 `Renderer/**` 中**未列入清单**的上游模块计算的内容哈希集合，用于发现"上游悄然改动我们仍依赖的文件"。
 5. 清单**只增不改**：删除条目 MUST 在 PR 中给出理由（例如上游提供了公开接缝）。
 

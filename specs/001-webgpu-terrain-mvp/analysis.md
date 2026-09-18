@@ -1,312 +1,423 @@
-# Specification Analysis Report — WebGPU 地形渲染 MVP（CesiumJS 1.145.0 外部模块）
+# Specification Analysis Report — WebGPU 渲染后端替换（受控 fork / 补丁层）
 
-**Feature**: `001-webgpu-terrain-mvp` | **阶段**: 3.5（`/speckit-analyze`，实现前最后一致性门禁）
-**Date**: 2026-09-18 | **分析范围**: `spec.md` / `plan.md` / `tasks.md` + `research.md` / `data-model.md` / `contracts/`（4 份）/ `quickstart.md` / `mvp-estimate.md` / `mvp-estimate.v1.json` / `.specify/memory/constitution.md`
-**只读声明**: 本阶段**未修改** `spec.md`、`plan.md`、`tasks.md` 或任何设计产物；本报告是唯一新增文件。
-**Hook 检查**: `.specify/extensions.yml` 不存在 → 未注册 `before_analyze` / `after_analyze` 钩子（静默跳过）。
-**前置命令**: `& '.specify\scripts\powershell\check-prerequisites.ps1' -Json -RequireSpec -RequireTasks -IncludeTasks`
-→ `{"FEATURE_DIR":"E:\\work\\CesiumjsWebGpu\\specs\\001-webgpu-terrain-mvp","AVAILABLE_DOCS":["research.md","data-model.md","contracts/","quickstart.md","tasks.md"]}`
-（`spec.md` / `plan.md` / `tasks.md` 三者齐备，前置条件满足；`git status --short` 为空、HEAD=`3ff57f7`。）
+**Feature**: `001-webgpu-terrain-mvp` | **分析日期**: 2026-09-19 | **阶段**: 3.5（speckit-analyze，**整体重生成**）
+**分析对象（最新版）**：`spec.md`（FR-001~FR-033 / SC-001~SC-010）、`plan.md`（渲染后端替换版）、`tasks.md`（初检 147 任务 → 修复后 **149 任务** / 12 阶段）、
+`research.md`、`data-model.md`、`contracts/**`（含新增 `fork-patch-layer.md`）、`mvp-estimate.md` + `.v1.json`、`quickstart.md`、
+`experiments/shader-spike/REPORT.md`、`.specify/memory/constitution.md` **v2.0.0**
+**基线命令**：`.specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireSpec -RequireTasks -IncludeTasks` → `FEATURE_DIR` 解析成功，
+`AVAILABLE_DOCS` = research.md / data-model.md / contracts/ / quickstart.md / tasks.md；`.specify/extensions.yml` 不存在 → 无 before/after_analyze 钩子。
 
----
-
-## 0. 结论摘要（先读这一段）
-
-| 项 | 结论 |
-|---|---|
-| **是否建议进入实现** | **否 —— 不建议按当前 `tasks.md` 直接进入阶段 4**。存在 3 项 CRITICAL，其中 2 项会导致按 phase 顺序执行时**无法达成 Phase 4/5 Checkpoint**，1 项与 constitution 原则 I（NON-NEGOTIABLE）冲突。修正量都不大（见 §7 建议动作），但必须先修。 |
-| CRITICAL / HIGH / MEDIUM / LOW | **3 / 7 / 15 / 7**（共 32 条，未超 50 条上限） |
-| 未覆盖的 FR / SC | **0 / 0**（29 条 FR 与 9 条 SC 在 ID 级 100% 有任务承接） |
-| 子句级覆盖缺口 | **3 处**（FR-004 第二子句、FR-029 第三子句、FR-019/FR-025 仅流程承接） |
-| 契约级缺口 | **1 处**（契约 §1 公开导出 `listDatasets`/`getDatasetManifest` 无任务承接） |
-| `[P]` 标注核对 | 30 个 `[P]` 中：**3 个硬违规**（T011/T013/T023）、**5 个前提可疑**（T020/T024/T027/T038/T068）、22 个成立 |
-| Out of Scope 泄漏 | **无**（详见 §6） |
-| CI 可执行性 | 可行，但有 4 处需修（pwsh 前提过时、YAML 自检不可行、缺 Playwright 安装步、CI 步骤 [3] 前置依赖未落地） |
-| 建议下一步 | 先做 §7 的 3 项 CRITICAL 修正（建议以 `speckit-converge` 或人工编辑 `tasks.md` 追认），再进入 `/speckit-implement` |
+> **本报告作废并覆盖上一版 `analysis.md`**：上一版针对已被用户否决的"双画布分层 + 隐藏上游绘制"架构，**整体失效**（spec Clarifications Q3/Q4）。
+> 本版按 `speckit-analyze` 格式重新生成，**全部结论均给出文件 + 行号 + 原文片段**；不确定项标 **待确认**。
 
 ---
 
-## 1. CRITICAL 发现（阻塞项）
+## 0. 结论摘要（Verdict）
 
-### C-01 [CRITICAL] `T005` / 退路 V2 依赖上游 `@private` 内部语义，与 constitution 原则 I（NON-NEGOTIABLE）冲突，且 plan 未按 Governance 要求论证例外
+| 项 | 结论（初检） | 结论（**修复后**，见 §9） |
+|---|---|---|
+| **是否建议进入实现** | ✅ **建议进入实现**（无 CRITICAL）；4 项 HIGH 须在对应阶段开工前修正 | ✅ **建议进入实现**——31 条发现**全部处置**（30 条已修 + `A3` 并入 T119 修复），无残留 CRITICAL/HIGH |
+| **CRITICAL 计数** | **0** | **0** |
+| **HIGH 计数** | **4**（`V1` FR-019 零覆盖、`D1` 帧缓冲实现重复、`I1` G-7 顺序不可满足、`I2` T098 前置链不完整） | **0**（`V1`→T148；`D1`→T061/T062 唯一 owner；`I1`/`I2`→拆 `T098a`/`T098b`） |
+| **MEDIUM / LOW 计数** | 20 / 7（合计 31 条，未超 50 条上限） | 20 / 7 **均已处置**（编辑修复 + `A3` 并入 T119 + `D3`/`I14` 标注澄清） |
+| **未覆盖 FR 数** | **1 条零覆盖（FR-019）**；**1 条仅隐式覆盖（FR-029）** | **0**——FR-019 由 **T148** 显式承接；FR-029 由 T128 新增断言 **(g)** 显式覆盖；FR-001~FR-033 **33/33** 有任务承接 |
+| **未覆盖 SC 数** | **0**（SC-001~SC-010 全部有任务承接） | **0**（不变） |
+| 修复轮次 | — | **2026-09-19 应用**：经入口 Agent 逐条裁定后修改 `tasks.md`（+`T098b`/`T148`）与 `plan.md`（C1/I9/I10）；`spec.md` 与 `constitution.md` **零改动**（证据见 §9.4） |
+| 原则 I（受控 fork） | **未发现违规**；补丁层治理五件套（机器可审计边界 / `keptModulesHash` / 依赖完整性 / NOTICE 署名 / rebase 演练）**齐备** |
+| 原则 II（二选一） | **未发现任何"同帧对比 / 两层合成 / 叠加校验 / 让上游绘制不可见"任务**，全部相关表述均为禁令；仅**标注一致性**有 1 处 MEDIUM 问题（`I11`） |
+| 未测风险 H-6 / H-7 / H-10 | **全部有三件套式承接**（G-6 / T025 / T079；G-6 / T026 / T058；T035 + T036 + T133） |
 
-- **证据**
-  - `constitution.md:5-9`：原则 I —— 「禁止依赖非公开（私有/下划线前缀）内部 API」「一切扩展必须通过 CesiumJS 公开 API、官方扩展点与外部模块适配层完成」。
-  - `research.md:15-16`：本项目自定的公开性判据下，`DrawCommand` 明确属于 `@private` 类（原文：「`@cesium/engine` 的包入口会导出全部模块（含 `Context`、`DrawCommand` 等 `@private` 类）……"能被 import" **不等于**"是公开 API"」）。
-  - `research.md:65`：`Scene.frameState` 为 `@private`（列在 §1.2 黑名单）。
-  - `tasks.md:80`（T005）：要求「自实现 `Primitive` 放入 `scene.primitives`，在 `update(frameState)` 中扫描 `frameState.commandList`，按 `DrawCommand` 的**公开字段** … 反推本帧被绘制的瓦片集合；**先核实并记录** `DrawCommand.owner` 的实际语义」。
-  - `plan.md:337`（G-2 失败退路）与 `research.md:432`（H-2 退路）：把 V2 作为既定备选方案。
-  - `plan.md:314-325`（Complexity Tracking）：4 项取舍中**没有** V2 这一项，即未记录「违反原则的例外」。
-  - `constitution.md:105`（Governance）：「违反原则的例外与额外复杂度必须在 plan 或 PR 中显式论证，并记录被否决的替代方案及理由」。
-  - 防线缺口：A1–A5（`data-model.md:465-471`、`tasks.md:123`）只扫描 `src/**`、`apps/demo/src/**` 与 `dist/index.d.ts`；A4 的规则是「`from "cesium"` 后访问 `\._[a-zA-Z]`」——**不含下划线的 `DrawCommand` / `FrameState` 命名导入不会被 A4 捕获**；`research.md` §1.2 黑名单也未列 `DrawCommand`/`FrameState`，因此 `T024` 的 `public-api-allowlist.ts` 黑名单很可能同样漏掉它们。
-- **影响**：G-2 若判定不等价（`tasks.md:81-82` 明确可能发生），W1 的"绘制集合"实现输入将依赖非公开内部语义；CI 的手段（A1–A5、T024、T072 的许可证/结构检查）都无法阻断，原则 I 的保护会在实现期静默失效。属**条件性 CRITICAL**：仅在 V2 被选中时激活，但 plan/tasks 已把它写成既定退路，故必须在实现前收敛。
-- **建议动作（三选一，须在 T005 执行前定稿）**
-  1. 在 `plan.md` Complexity Tracking 增列 V2 一行（按 Governance 要求给出例外论证 + 被否决的更简方案），并把 V2 限定为**诊断专用、不进入交付包、不 import 上游类型（仅结构化鸭子类型读取，且不依赖 `owner` 语义）**；
-  2. 或把 `tasks.md` T005 改为「**仅评估** V2 可行性；结论为不可用时直接记录 `V2 不可用`，禁止以 `owner` 反推瓦片」，并把 `DrawCommand`/`FrameState` 写入 `research.md` §1.2 黑名单与 T024 数组；
-  3. 或删除 V2，为 G-2 另定一条**不触碰非公开 API** 的退路（例如放宽"静止态等价"判据的取值范围，改由 `T006` 的统计区间与上游公开的 `globe.tileLoadProgressEvent`/`tilesLoaded` 组合判定），并在 `plan.md:336-338` 表格中同步更新。
-
-### C-02 [CRITICAL] Phase 3（声明为阻塞 phase）内 `T023 [P]` 的并行前提不成立：与 `T021` 同文件、与 `T022` 共享测试文件
-
-- **证据**
-  - `tasks.md:119`（T021）：创建 `packages/cesium-webgpu/src/core/tile-registry.ts`，**未标 `[P]`**。
-  - `tasks.md:121`（T023）：开头即写「**在 T021 的模块内**实现绘制集合截断规则」，自检为「`node --test tests/unit/tile-registry.test.mjs` 中的 drawSet 用例……全绿」。
-  - `tasks.md:120`（T022）：创建并拥有 `tests/unit/tile-registry.test.mjs`。
-  - `tasks.md:304`（Parallel Opportunities）：「**Phase 3**：T016、T017、T018、T020、T023、T024 可并行（不同文件）」——与上面三条直接矛盾（T023 既非"不同文件"，也非"无未完成依赖"）。
-  - `tasks.md:112`：Phase 3 被标注为「**⚠️ CRITICAL**：本 phase 完成前，不得开始 Phase 4 的任何实现任务」——即该 phase 本身是串行门禁，`[P]` 误标的风险被放大。
-  - `tasks.md:22` / `:357`：`[P]` 的定义是「不同文件、无未完成依赖」。
-- **影响**：若入口 Agent 按 `tasks.md:304/357` 并行派发 Phase 3 的 6 个 `[P]` 任务，T023 会在 `tile-registry.ts` 尚不存在时启动，并与 T022 并发写同一个测试文件 → 依赖倒置 + 同文件覆盖（工作丢失/相互冲突的实现）。这直接违反本 phase 的阻塞语义。
-- **建议动作**：把 T023 的 `[P]` 去掉，并在描述中显式写「依赖 T021、T022（同文件：`core/tile-registry.ts` 与 `tests/unit/tile-registry.test.mjs`）」；同时从 `tasks.md:304` 的并行清单中移除 T023（改为「T023 依赖 T021/T022，串行」）。
-
-### C-03 [CRITICAL] 阶段依赖倒置：Phase 4/5 的验证任务依赖 Phase 5/6 才产出的资产，与「Phase 4/5 Checkpoint 可独立验收」自相矛盾
-
-- **证据**
-  - `tasks.md:136`（Phase 4 Independent Test）：「`npm run test:contract …` 与 `npm run test:visual` 在 `webgpu` 路径下通过……不依赖 US2/US3 的探测与 CI 资产」；`tasks.md:167`：「**Checkpoint**：US1 可独立验收」。
-  - `tasks.md:161`（T042）：测试流程要求「加载**演示页**」——而演示页由 `tasks.md:186`（T051，**Phase 5**）创建。
-  - `tasks.md:162`（T043）：「逐像素比较（容差来自 `tolerances/tol-v1.json`）」+「失败时产出 `…/{capture,reference,diff}.png`、`stats.json`、`evidence.json`」——`tol-v1.json` 由 `tasks.md:208`（T059，**Phase 6**）创建、`tasks.md:211`（T062）标定；差异图/统计由 `tasks.md:206-207`（T057/T058，**Phase 6**）创建。
-  - `tasks.md:163-164`（T044/T045）：断言依赖 `FrameStats` 序列与 `nonBackgroundRatio`/`uniqueColorCount`/深度统计 → `T057`（Phase 6）。
-  - `tasks.md:190-191`（T052/T053，Phase 5）：断言 `nonBackgroundRatio>0.15`、`uniqueColorCount≥64`、以及**"声明区间"**（`T061`，**Phase 6**）。
-  - `tasks.md:288`（Phase Dependencies）：仅声明「Phase 9 依赖全部前序 phase」，未声明 Phase 4 依赖 Phase 6。
-- **影响**：按 `tasks.md` 的 phase 顺序执行时，Phase 4/5 的验证任务**无法在各自 phase 内通过**，`tasks.md:334`（"STOP and VALIDATE：US1 与 US2 的 Checkpoint 独立通过 → 这是最小可演示单元"）不可达；MVP 最小可演示单元实际被推迟到 W3 之后，与 `MVP First` 策略（`tasks.md:328-335`）冲突。
-- **建议动作（二选一）**
-  1. 把验证基建前移：将 T056–T059（`harness.ts`/`capture.ts`+`stats.ts`/`compare.ts`/`tolerances/tol-v1.json`）从 Phase 6 移入 Phase 3（Foundational）或 Phase 4 开头，并在 Phase Dependencies 中补一条「Phase 4 依赖 T056–T059」；
-  2. 或保留现结构但在 `tasks.md` 的 Dependency 段显式登记跨 phase 前置（「T042 依赖 T051」「T043/T045 依赖 T057–T059」「T052/T053 依赖 T057/T061」），并把 Phase 4/5 的 Checkpoint 判据改为"仅契约就绪 + 统计内联实现"，把像素回归结论留给 Phase 6。
+**因不存在 CRITICAL，本报告不写"不建议进入实现"**。初检的 4 项 HIGH 已按入口 Agent 的逐条裁定全部修复：
+`V1` 由新增 **T148**（`CONTRIBUTING.md` 硬规则 + PR 模板必填 + CI 断言）承接；
+`D1` 明确 `Framebuffer` 系**唯一 owner = T061/T062**（T097 只消费，MUST NOT 重复实现）；
+`I1`/`I2` 把切片 B 拆为 **`T098a`（Phase 7 功能翻转，不依赖 G-7、不依赖 Phase 9/10 资产）** 与 **`T098b`（Phase 10 全量验证闭环，紧随 G-7 结论 T127 之后）**，
+使"G-7 早于切片 B 全量验证"在阶段序下**真实可满足**，并删除了原有"若顺序冲突，以 T098 优先处理"这类兜底文字。逐条改法与复核见 §9。
 
 ---
 
-## 2. 发现清单（HIGH / MEDIUM / LOW）
+## 1. 逐项核对结论（对应派发清单检查项 1–12）
+
+### 检查项 1：FR/SC 覆盖（**最关键**）
+
+**实测计数**：`spec.md` 中 **FR-001…FR-033 共 33 条**、**SC-001…SC-010 共 10 条**（按 `**(FR-\d+)**` / `**(SC-\d+)**` 逐行实测：FR 33、SC 10，编号连续无缺号）。
+
+- ✅ **SC 覆盖 10/10**：每条 SC 均可在 `tasks.md` 找到承接任务（见 §3 覆盖表）。
+- ✅ **FR 覆盖 32/33**：31 条有显式任务 + FR-029 由 schema 校验隐式覆盖 + **FR-019 零覆盖**。
+- ❌ **未被任何任务覆盖者：`FR-019`**（详见 `V1`）。`tasks.md` 全文 **0 次**命中字符串 `FR-019`，且全文 **0 次**出现"优化"二字
+  （`Select-String -Pattern '优化'` → 0 hits），即"基线 vs 优化后对比"这一 FR 既无实现任务、也无规则/门禁任务。
+- ⚠️ **仅隐式覆盖者：`FR-029`**（详见 `V2`）。
+
+### 检查项 2：原则 I 对齐（受控 fork）
+
+**结论：未发现违反"MUST NOT 改逻辑层语义"的任务；补丁层治理五项齐备。**
+
+- 逐条检查涉及 `Scene` / `Globe` / `QuadtreePrimitive` / `Camera` / 图层 / `DrawCommand` 的任务：
+  - `tasks.md:47-48`：「`Scene` / `Globe` / `QuadtreePrimitive` / `Camera` / 图层 / `DrawCommand` 的代码与语义**一行不改**（SC-010）」——禁令式。
+  - `tasks.md:175`（T032）把 `DrawCommand.js`/`ClearCommand.js`/`Pass.js`/`PassState.js`/`UniformState.js`/`AutomaticUniforms.js`/`Sampler.js`/`PixelDatatype.js`/`BufferUsage.js`/`VertexArrayFacade.js` 列入**"保持不变"集合**（`keptModulesHash` 断言）。
+  - `tasks.md:254`（T074）：「**MUST NOT** 通过改 `Core/PerspectiveFrustum.js` 或 `Renderer/UniformState.js`（保留文件）实现」。
+  - `tasks.md:177`（T034）：反例断言"人为注入一个 `Scene/Scene.js` 覆盖 → 失败"。
+  - `Scene.js` 的 2 处命中（`tasks.md:126`、`tasks.md:177`）分别是 G-1 断言"上游 `Scene.js` 对 `Context.js` 的相对导入被正确改写"与 T034 的反例，**均非修改逻辑层**。
+- 治理五件套核对：
+  | 治理项 | 任务 | 证据行 |
+  |---|---|---|
+  | 边界机器可审计 | T006（A1–A11 规则）/ T033（`PatchScopeAudit`）/ T034（构建产物审计）/ T140（总门禁） | 90 / 176 / 177 / 394 |
+  | `keptModulesHash` | T032 生成 + T059 / T074 / T081 断言 | 175 / 226 / 254 / 261 |
+  | 依赖完整性 | T003（钉版 + lock）/ T030（哈希校验 + 篡改反例）/ T141（终局证明） | 87 / 173 / 395 |
+  | NOTICE 署名 | T040（NOTICE 清单 == manifest 集合）/ T133 / T138 | 183 / 377 / 382 |
+  | rebase 演练 | T036（干跑，离线常跑）/ T133（两种模式 + 三项齐备判据）/ T141 | 179 / 377 / 395 |
+- 仅 1 条 LOW 提示（`I15`）：T015/T017 读取 `scene._context` 断言属测试观测，不构成"借私有 API 绕过逻辑层"，但未写明该限定。
+
+### 检查项 3：原则 II 对齐（二选一，不同时运行）
+
+**结论：全清单不存在任何"同帧对比 / 两层合成 / 叠加校验 / 让上游绘制不可见"类任务。**
+
+- `同帧`（4 hits）/`逐帧合成`（2 hits）全部为禁令或"不存在该入口"断言：`tasks.md:43`、`tasks.md:97`、`tasks.md:325`。
+- `叠加`（6 hits）全部为否定式：`tasks.md:43`、`tasks.md:97`、`tasks.md:300`（"回退是销毁重建而非叠加"）、`tasks.md:308`（"MUST NOT 以 CSS/画布叠加掩盖旧路径"）。
+- `不可见` → **0 hits**（"让上游绘制不可见"在最新 tasks 中已彻底消失）。
+- `双画布`（2 hits）仅出现在 `tasks.md:17-18` 的**整体重新生成声明**里，用于声明旧方案作废。
+- 跨后端比较一律"分别采集 + 离线比较"：`tasks.md:202`（T047）、`tasks.md:311`（T106）、`tasks.md:469-472`（并行示例）。
+- ⚠️ `〖二选一〗` 标注**语义正确、覆盖不齐**（`I11`）：全文 23 处（任务级 18 处 + 阶段级 Independent Test 4 处 + 约定说明 1 处），
+  但 **T093 / T098 / T107 / T117 声明"两路径…串行"却无标注**，而 **T058 仅运行单一后端却标注了**。
+
+### 检查项 4：门禁顺序
+
+- ✅ **G-1→G-2→G-4→G-3→G-5→G-6 全部早于对应实现任务**：全部位于 `Phase 2`（`tasks.md:103-161`），实现任务自 `Phase 3`（`tasks.md:164` 起）。顺序与 plan 一致（`plan.md:335`「G-1 → G-2 → G-4 → G-3 → G-5 → G-6 的门禁推进（G-7 与验证资产并行）」），
+  阶段内标题顺序亦为 G-1(L124)→G-2(L128)→G-4(L133)→G-3(L138)→G-5(L143)→G-6(L149)→G-7(L155)。
+- ✅ **每道门禁均有"未通过则 STOP"处置**：T015–T029 共 15 个门禁任务，**15/15 含 STOP 字样**
+  （逐行实测；T014 为门禁产物判定器工具任务，非门禁本身，无 STOP 属正常），另有阶段级 ⛔ 块 `tasks.md:109-111`。
+- ❌ **G-7 的例外有显式顺序约束，但该约束在阶段序下不可满足**（`I1`）：
+  `tasks.md:116-117`「G-7 的任务（T028–T029）须与 Phase 9/10 的验证资产与 CI 配方（T108–T126）并行推进，但结论 **MUST 在切片 B 的 `depthTexture=true` 翻转（T098）之前落盘**」，
+  而 T098 在 **Phase 7**（`tasks.md:291`）、T108–T126 在 **Phase 9/10**（`tasks.md:325-355`）、G-7 结论正式落盘点 T127 在 **Phase 10**（`tasks.md:356`）。
+
+### 检查项 5：`[P]` 前提逐个复核
+
+**实测：任务级 `[P]` 标注恰好 15 处** —— `T002,T005,T006,T007,T011,T012,T013,T037,T038,T039,T040,T140,T141,T142,T143`
+（另有 T004/T010/T034/T044/T053/T098/T147 含"**不标 [P]**"字样，非标注本身）。
+
+- ✅ **无同文件冲突**：逐对核对产出路径互斥（tsconfig 三份 / `types/engine-internal.d.ts` / `check-arch-boundaries.mjs` / `check-tools-portable.mjs` /
+  `apps/demo/**` / `src/index.ts`+`api/types.ts` / `tests/support/backend-runner.mjs`+`src/verify/stats.mjs` / `backend-webgpu/**` /
+  `src/status/**`+`src/api/errors.ts`+`diagnostics.ts` / `ci.yml` / `LICENSE`+`NOTICE`+`check-license-notice.mjs` /
+  `docs/sc010-evidence.md`+`sc010-evidence.test.mjs` / `check-skips.mjs`+`check-skips.test.mjs`），且 15 个任务的自检测试文件互不重复。
+- ✅ **与未完成依赖无冲突**：T037（补丁层骨架）与 T031 清单仅有"文件存在性"这一处前向依赖（见 `U5`，已单列）；T039（CI 骨架）与 T040（许可证）无文件交集。
+- ⚠️ **阶段级并行分组与个体标注不自洽**（`I14`）+ **两处分组自相矛盾/与真实依赖冲突**（`I3`、`I5`）；T031 自检存在前向依赖（`U5`），T033 自检引用后置任务（`I12`）。
+
+### 检查项 6：验证成对与分层
+
+- ✅ **每个渲染特性与自动化验证成对**：W2 后端核心 → T047（契约）、W3 资源层 → T064（契约）、W4 着色器 → T078/T079/T080、W5 地形 → T091~T096，
+  且配对为"紧邻排列"（`tasks.md:435`）。
+- ✅ **不存在"仅凭肉眼确认"的任务**：`tasks.md:506`「本清单中**不存在**任何"仅凭肉眼确认"的任务」；唯一的手动记录（T107，`tasks.md:312`）被明文限定为
+  「（**作为证据链接**，不作为判据）」。
+- ⚠️ **分层标注不完整**（`U1`）：`tasks.md:23` 要求"验证任务 MUST 指明所在**层**"，但**30 个任务未标 `层=`**（含 4 个 US3 验证资产任务 T108/T109/T111/T113）。
+- ⚠️ 4 个 `--suite=` 标识符没有对应产出文件（`U2`）。
+
+### 检查项 7：未测风险的承接
+
+| 风险 | 承接任务 | 验证方式 | 结论 |
+|---|---|---|---|
+| **H-6** 变体规模与编译缓存 | G-6（T025）、T079（SH-6 门禁） | 运行时 `ShaderProgram` 实例数 + 编译耗时直方图落盘，超阈值失败 | ✅ 有任务与验证方式（但阈值自证，见 `A1`） |
+| **H-7** 精度与纹理 Y 翻转 | G-6（T026）、T058、T027（逐来源差异声明） | 两路径分别采集 + 离线像素 diff + 高程数值比对 + 四角纹素回读断言 | ✅ 齐备（`tasks.md:152/153/225`） |
+| **H-10** 上游 Renderer 接口无公开契约 | **T035（接口清单）+ T036（升级演练）+ T133（`docs/rebase-runbook.md`）** | `InterfaceManifest` 漂移 → `--check` 失败；演练"补丁范围审计 + 接口一致性 + 全量验证"三项齐备 | ✅ **三件套齐备**（`tasks.md:178/179/377`，Notes 复述于 `tasks.md:509`） |
+
+### 检查项 8：评估交付
+
+- ✅ **各有任务**：CI 契约测试 = **T128**（`tasks.md:372`，断言 (a) `includesHumanCost === false`、(b) `statement` 含"人工成本不计入"、(c) `workflows` ≥5 且含 W1–W9、
+  (d) `priceSources[].source` 匹配 `^https?://` 且 `consultedAt` 为日期、(e) CNY 主 + USD 副且含汇率来源与日期、(f) `actualsBackfill` 结构合法）；
+  回填机制 = **T129**（版本递增 + 保留历史 + `--dry-run`）；偏差说明 = **T130**；schema 见 `contracts/mvp-estimate.schema.json`。
+- ✅ **数字一致性核对（无自相矛盾）**：`20.0 – 41.5 工作日` 见 `mvp-estimate.md:43` 与 `plan.md:278`；`S1 ¥260 – ¥670（$38 – $99）` 见 `mvp-estimate.md:123/128` 与 `plan.md:281`；
+  token `¥8.46 – ¥264.36` / 算力 `¥0 – ¥400` 见 `mvp-estimate.md:112/145/206-207` 与 `plan.md:279-280`。
+  `tasks.md` **未复述**这组数字（`41.5`/`260`/`670` 命中 0 次），因此不存在数字冲突；唯一被引用的数字是 T082 的"**2–4 人月**"（`tasks.md:262`）与 T025 的"mvp-estimate §5 待确认项 1"，
+  二者分别对应 `mvp-estimate.md:174`（`+2–4 人月（外推，未逐家族实测）`）与 `mvp-estimate.md:171`（待确认项 1 = 变体数量与编译缓存），**一致**。
+- ⚠️ **版本号不一致**（`I9`）：`plan.md:274` 写"结论版本 **v2.0.0**"，而 `mvp-estimate.md:3` 为"结论版本 v2.1.0"、`mvp-estimate.v1.json:4` 为 `"version": "2.1.0"`、`tasks.md:369` 亦为"v2.1.0"。
+- ⚠️ **FR-029 显式断言缺失**（`V2`）。
+
+### 检查项 9：Out of Scope 泄漏
+
+**结论：无泄漏。** 关键词命中全部落在禁令/边界/收尾核对语境：
+
+- `影像/模型/三维瓦片/大气/阴影/后处理/粒子/矢量/移动端` → `tasks.md:60-61`（全局约定 7 的 MUST NOT 清单）、`tasks.md:261`（T081：模型/体素/高斯泼溅 **以 `category:"not-implemented"` 显式失败**）、`tasks.md:401`（T147 收尾核对）。
+- `319` / `244` → 仅 `tasks.md:242`（W4 Goal"**明确属本增量之外**"）、`tasks.md:262`（T082 范围声明）、`tasks.md:510`（Notes"**明确不计入本增量**"）——**"319 个 `.glsl` 全库转译"未被错误纳入本增量**。
+- `后处理` 的另 2 处命中（`tasks.md:282`、`tasks.md:333`）为 MVP 场景配置约束（"无后处理"），属范围收窄而非扩张。
+
+### 检查项 10：CI 可执行性
+
+- ✅ **无 `pwsh` / PowerShell 语法 / `grep` / 本机绝对路径进入自检**：`tasks.md:38-40` 明文禁止，`tasks.md:91`（T007）机器校验；
+  全文 grep `pwsh|powershell|actionlint|[A-Za-z]:\\` 仅 3 处命中，全部是**禁令文本本身**（L39/L40/L91）；**无 actionlint 依赖**。
+- ✅ **着色器工具链写法正确**：`tasks.md:52-53` 与 `tasks.md:349`（T120）= `glslang 16.6.0` **官方 Linux 预编译包** + `cargo install naga-cli --locked`（**naga 无预编译二进制**，
+  且 MUST NOT 写"下载 naga 二进制"），`naga --input-kind wgsl <file>`（`tasks.md:260`）与尖刺实测命令一致（`experiments/shader-spike/REPORT.md:355`）。
+- ⚠️ **YAML 解析器未登记依赖**（`U3`）：T039/T118/T126 要求"用 YAML 解析断言"，但 T004 的 `devDependencies` 锁定清单（`tasks.md:88`）不含任何 YAML 库。
+- ⚠️ **naga 版本未真正锁定**（`I8`）。
+- ⚠️ **CI 缺 Playwright 浏览器安装步骤**（`U4`）。
+- ⚠️ **一次性转换流程依赖 `pwsh`**（`U6`）：`quickstart.md:147` 使用 `pwsh -File …run-path-a.ps1`，而 T007 只扫 `tools/**`、`.github/**`、`package.json`（`tasks.md:91`），不扫 `quickstart.md`/`docs/**`。
+- ⏳ **待确认**（`A3`）：CI 用 Playwright 自带 Chromium（`quickstart.md:30-31`），尖刺真机基线为 Chrome ≥153（`REPORT.md:358`），该 Chromium 是否满足 lavapipe 配方未在任务中断言（G-7/T028 会实测）。
+
+### 检查项 11：交叉引用完整性
+
+- ✅ **无悬空引用**（对以下标识符逐一定位到定义处）：
+  `A1–A11` → `data-model.md:378-388`（11 条齐全）；`C-1–C-7` → `contracts/render-path-api.md:91-97`；`TS-1–TS-5` → `contracts/terrain-source.md:78-82`；
+  `SH-1–SH-7` → `contracts/verification-and-benchmark.md:46-52`；`R1–R9` → `contracts/fork-patch-layer.md:78-86`；`AU-1–AU-5` → `contracts/verification-and-benchmark.md:58-62`；
+  `data-model §1.1–§11` 全部存在（`data-model.md:20-374`）；§10 的 ①–④ 状态机条目存在（`data-model.md:356/361/365/369`，对应 T046 引用的"§10③"、T051 引用的"§10④"）。
+- ⚠️ 两处引用不精确/重叠：`I13`（T040 追溯指向 `fork-patch-layer §7（AU-5）`，AU-5 实际定义在 verification-and-benchmark §5）、`I6`（T053/T081 对 ShaderBuilder 职责重叠）。
+- ⚠️ 依赖引用的顺序问题：`I1`、`I2`、`I3`、`I4`、`I5`、`I12`、`U5`。
+
+### 检查项 12：阻断项
+
+- ✅ **T098 已正确标注为阻断项**：`tasks.md:291` 末尾 `⛔ **阻断项**`，Notes 复述于 `tasks.md:511`「未完成不得宣告 FR-030 达成」，并在 plan `Complexity Tracking` 的退出条件中复述（`plan.md:298`）。
+- ✅ **T053 / T081 未被标为阻断项——这是正确的**（二者是"切片 C 显式 `not-implemented`"边界任务，不是阻断项）；但二者存在**前置链缺口**：
+  `I7`（manifest 无 `kind:"stub-not-implemented"`，`CubeMap`/`CubeMapFace`/`Texture3D`/`TextureAtlas`/`Sync` 被归入"16 个必替换"却只交付失败桩）。
+- ❌ **T098 的前置依赖链不完整**（`I2`）：其"全量验证（单元 + 契约 + 视觉 + 基准）"引用了 Phase 9/10 才建立的资产。
+
+---
+
+## 2. 发现汇总表
+
+> **处置状态见 §9（修复记录）**：本表为**初检结论**的忠实记录；每条发现的修复位置与改法在 §9.1 逐条列出，复核结论在 §9.2/§9.3。
+> 除 `A3`（并入 T119 修复）外，其余 30 条均经文本编辑修复；`spec.md` 与 `constitution.md` 未被修改。
 
 | ID | 类别 | 严重度 | 位置 | 摘要 | 建议动作 |
-|---|---|---|---|---|---|
-| H-01 | `[P]`/依赖 | HIGH | `tasks.md:94,97,99,303`；`tasks.md:95` | **T011 `[P]` 与 T008/T013 `[P]` 同文件且依赖倒置**：T008 创建根 `package.json`、T013 创建三个子包 `package.json`，T011 却要"安装并锁定根与子包 devDependencies/peerDependencies"并生成 `package-lock.json` → 必须在这两个文件存在之后执行，且三者会互相覆盖 `package.json`。T009 `[P]` 的自检 `npx tsc -p tsconfig.base.json --noEmit` 同样需要 T011 先装 `typescript`。`tasks.md:303` 仍称「T008、T009、T010、T011、T013 可并行（不同文件）」 | 改为：T008 → T013 → T011 串行（或 T011 表述为"仅执行 `npm install` 并由 T008/T013 负责声明依赖"，并把 T009 自检改为 `node --test`/脚本化检查）。同步修 `tasks.md:303` |
-| H-02 | 覆盖缺口（契约级） | HIGH | `contracts/render-path-api.md:17`；`plan.md:208`；`tasks.md:157` | 契约 §1 规定主入口导出 `listDatasets` / `getDatasetManifest`（来源 `./api/datasets.js`），`plan.md` 结构含 `src/api/datasets.ts`，但 **`tasks.md` 全文无 `datasets.ts`**；而 T041 的自检要求「`index.ts` 只导出契约 §1 列出的符号」→ T041 按字面无法达成 | 在 T041 的文件清单中加入 `src/api/datasets.ts` 并补单元测试；或从契约 §1 与 `plan.md` 结构中删除这两个导出（需同步改契约，属设计变更） |
-| H-03 | 判据/产物矛盾 | HIGH | `tasks.md:264`；`mvp-estimate.md:54-58,83-89`；`mvp-estimate.v1.json:41-123` | T076 断言⑦「每个工作流的 `modelCost` 可由 `tokens × priceSources` 复算（**≤1% 舍入误差**）」。按 `mvp-estimate.md` §3.1 的记录模型（min=100% flash/空闲/命中 0.92；max=80% flash+20% v4-pro/高峰/命中 0.75）**本机实测复算**：W1–W6 的 max 全部吻合（偏差 ≤0.03%），min 端 **W5/W6 偏差 1.52%**（复算 ¥0.2538 vs 记录 ¥0.25），超过 1% 阈值 → 按字面实现该 CI 门禁必然失败 | 二选一并写进 tasks：① 阈值改为「绝对误差 ≤¥0.01 或相对 ≤2%（记录为 2 位小数舍入）」；② 在 T076 中固化复算模型常量（命中率/时段/模型配比），并把 W5/W6 记录值改为 0.26 或 0.2538（后者需同步改 `mvp-estimate.md` §3.3 并按 `revisionPolicy` 递增版本） |
-| H-04 | `[P]` 前提 | HIGH | `tasks.md:118,143,117,305,318` | **T020/T027 `[P]` 无未完成依赖的前提不成立**：T020 是 T019 的测试、T027 是 T026 的测试，自检均要求"全绿"（即实现已存在）；`tasks.md:304` 自己承认「T019/T021 被同 phase 的测试与生产模块依赖，不标 `[P]`」——同一逻辑未施加于 T020/T027。另：**T027 `[P]` 未出现在 Phase 4 的并行清单**（`tasks.md:305` 与 `:318` 只列 T026/T033/T034/T036/T038/T040 六个），标注与清单互相不一致 | T020/T027 去掉 `[P]`（改为「依赖 T019/T026」）；或保留 `[P]` 但把定义改为"可并行编写、不可并行自检"并同步 `tasks.md:22/357` 的定义；同时把 T027 补入或明确排除于 Phase 4 并行清单 |
-| H-05 | 交叉引用/阶段序 | HIGH | `tasks.md:162` vs `:208,211,165` | T043 显式引用 Phase 6 的 `tolerances/tol-v1.json`（T059/T062），并写「US3-IS 的前置：在 **T047** 正式做对照实验」——对照实验实际是 **T046**（缺陷注入）与 **T062**（容差标定），T047 是能力探测任务，交叉引用错误 | 修正为 T046/T062；把容差引用改为"Phase 4 使用内联初值，Phase 6 收敛到 `tol-v1.json`"或在 Dependency 段登记 T043→T059 |
-| H-06 | CI/阶段序 | HIGH | `tasks.md:228` vs `:257` | T067 的 CI 步骤 `[3] unit（含 A1–A5 与**评估文档契约**）`引用 T076（**Phase 9**）的 `tests/unit/mvp-estimate-contract.test.mjs`：CI 自 T067 落地到 T076 完成之间不可能全绿，与 FR-021/FR-022/FR-025「每次提交三绿、主干始终可运行」冲突 | 在 T067 明确「评估文档契约测试于 T076 落地后并入步骤 [3]」，或把 T076 提前到 Phase 7 之前（其依赖仅 `mvp-estimate*.json` 与 schema，均已存在） |
-| H-07 | 不可实现的断言（待确认） | HIGH | `tasks.md:161(b),191(b),192(a)`；`contracts/render-path-api.md:85-121` | T042 断言 `scene.drawingBufferWidth/Height`、T053 断言 `globe.show===true` 与 `baseColor`、T054 用 `device.destroy()` 触发 `GPUDevice.lost`——但契约 §3 的 `TerrainSceneHandle` **不暴露** `scene`/`globe`/`device`，而 A5（`tasks.md:123`）禁止演示页直接引用 `cesium` → 三条断言按字面不可实现 | 待确认设计意图后择一：① 在契约中新增**测试专用**诊断访问器（如 `handle.diagnostics.upstreamObjects`，标注非稳定 API）；② 改为经 `captureFrame().width/height`、`handle.path`、`handle.events.pathChange` 等等价公开断言；③ 明确允许 Playwright 通过 `./escape-hatch` 子路径注入脚本并写入契约 |
-| M-01 | 术语漂移 | MEDIUM | `plan.md:105,130,137,147,151` vs `contracts/verification-and-benchmark.md:124-133`、`tasks.md:228` | plan 引用「CI 步骤 [8]」「[7]」「步骤 [1]–[8]」，而契约 §6 与 T067 只定义 **[1]–[6]**（许可证检查 = [6]） | 统一为 [1]–[6]；plan.md 的 5 处引用同步改号 |
-| M-02 | 二义 | MEDIUM | `tasks.md:257`；`plan.md:49`；`tasks.md:244` | T076「自实现所需子集校验器，**或引入 `ajv`** 作为 devDependency 并在 PR 说明」是二选一，未定稿。（结论：**ajv 非必需**；若引入，devDependency **不违反** `plan.md:49`「无**运行时**第三方依赖」，且 MIT 在 T072 允许集合内） | 定稿为"自实现子集校验器"，并列出支持的 JSON Schema 关键字（type/required/const/enum/pattern/minItems/items/properties/additionalProperties/minimum/exclusiveMinimum + date/date-time 正则显式实现）；若要引入 ajv，则精确锁版本、只进 `devDependencies`、并在 T011 的清单与 T072 的允许集合中同步登记 |
-| M-03 | 不可执行的完成判据 | MEDIUM | `tasks.md:147,149,151,153,155,156,157,182,210` | 多个自检把文件参数写成了中文占位符：`grep -nE "…" **该文件**`（T031/T033/T035/T039/T040/T041/T047）、`grep -n "declaredDifferences" **证据文件**`（T061）；T037 的「`grep` 断言数量匹配」无具体命令 | 把占位符替换为真实路径（如 `packages/cesium-webgpu/src/adapters/cesium/camera.ts`），T037 给出可执行命令；否则"完成判据"不可复现，且 `grep` 报 "No such file" 时非零退出会被误读为"无命中" |
-| M-04 | 自检风格/可移植性 | MEDIUM | `tasks.md:100,191,228,229,230` vs `:123` | 自检混用 shell 与 PowerShell：T014 `grep -r "pwsh" package.json tools/ .github/ 2>$null`（`2>$null` 是 PowerShell 语法，`grep` 需宿主机 PATH；本机为 Git 版 grep，CI 为 GNU grep，二者皆非 Node）；而 T025 明确要求扫描器"零第三方依赖、**不使用** shell 命令" | 统一为 Node 脚本自检（`node tools/scripts/check-no-pwsh.mjs`）或在 tasks 中注明"需 Git Bash/GNU grep"；保持 T025 的零依赖风格一致 |
-| M-05 | 环境前提过时 | MEDIUM | `tasks.md:36-38,100,229,246` | 全局约束 1 写「**本机无 `pwsh`（PowerShell 7）**」——**本机实测已安装 pwsh 7.6.6**（`C:\Users\Administrator\AppData\Local\Microsoft\WindowsApps\pwsh.exe`），Windows PowerShell 5.1 亦在；T014/T068/T074 与 README 的"禁止 `pwsh` 假设的说明"基于该错误前提 | 改写为「CI 步骤 MUST NOT 依赖 `pwsh`（ubuntu-latest 无 PowerShell）；本机 PowerShell 5.1/7 均可用，脚本优先 Node 以确保跨平台一致」；README 不必声明"禁止 pwsh"，改为"脚本不依赖 PowerShell 版本" |
-| M-06 | 自检不可行 | MEDIUM | `tasks.md:228` | T067 自检「本地用 `actionlint`（若可用）或 `node -e` 的 YAML 解析校验语法」：本机实测 **PATH 中无 `actionlint`**；Node 22 无内置 YAML 解析器，而计划禁止第三方运行时依赖 → 该自检大概率空转（"若可用"使其可被跳过） | 改为：`npx --yes actionlint`（需联网，须注明）或新增一个精确版本的 YAML 解析 devDependency；否则把自检改为"由 GitHub Actions 实跑一次 workflow 作为语法证据"并明确记录 |
-| M-07 | 缺步骤 | MEDIUM | `tasks.md:228` vs `contracts/verification-and-benchmark.md:144-150` | 契约 §7 的前置命令含 `npx playwright install --with-deps chromium`（第 147 行），T067 只列了系统包 `mesa-vulkan-drivers xvfb libvulkan1`，未列 Playwright 浏览器安装 → 步骤 [5] 两个 job 很可能因缺浏览器失败 | 在 T067 的步骤中补 `npx playwright install --with-deps chromium`（Playwright 版本已由 T011 固定） |
-| M-08 | 构建依赖缺口（待确认） | MEDIUM | `tasks.md:97,98,186`；`plan.md:45-46` | T012/T051 需用 Rollup 打包**引用 `cesium`（bare specifier，peer dep）**的演示页，但 T011 的精确 devDependencies 清单与 `plan.md` 的构建依赖列表均**无 `@rollup/plugin-node-resolve`**（也未提 import map/CDN 方案）→ 演示页与主包产物可能无法解析 `cesium` | 待确认：在 T011 加入 `@rollup/plugin-node-resolve`（精确版本），或明确演示页使用 import map 指向 CDN/本地 vendor 的 `cesium`；两者都需在 `plan.md` 的构建链中同步 |
-| M-09 | 子句级覆盖 | MEDIUM | `spec.md:131`（FR-004 第 2 句）；`tasks.md:144,147,148,120` | FR-004「MUST 以**可观察方式区分"数据不可用"与"渲染失败"**两种状态」只有实现（T028/T031/T032 上报 `TileError.category`）与 `no-data` 几何断言（T022），**没有任何任务断言两种状态在可观察层面可区分**（如 `events.error` 的类别、诊断文案或 `path/manifest` 层判定） | 在 T022 或 T032 的自检中增加断言：同一固定数据集下注入「瓦片缺失（no-data）」与「解码失败」两类输入，分别产出可区分的事件/类别（并写入 `docs/architecture.md` 的状态表） |
-| M-10 | 子句级覆盖 | MEDIUM | `spec.md:171`（FR-029 第 3 句）；`tasks.md:257-265`；`contracts/mvp-estimate.schema.json:162`；`mvp-estimate.v1.json:210-216` | FR-029「凭据类地形服务已明确后置……**MUST NOT 作为本增量的消耗项计入**」在产物中已正确落地（`exclusions` 第 2 条），但 T076 的 7 条断言**不含 `exclusions`**，schema 也只要求 `exclusions` 非空数组 → 该约束无 CI 保护 | 在 T076 增加第 8 条断言：`exclusions` 中存在同时含「凭据/令牌」与「不计入」语义的条目（关键字匹配，与 ④ 的写法一致） |
-| M-11 | 数据模型漂移 | MEDIUM | `data-model.md:419-446` vs `contracts/mvp-estimate.schema.json:29-131`、`mvp-estimate.v1.json:36-39,46,127` | `data-model.md` §8 的 `MvpEstimate` TS 接口缺 schema 中的必填/既有字段：`meteringBasis.selfHostedHardware`（schema:34 必填、:67-71 定义）、`workflows[].agentTurns`（schema:80）、`totals.agentTurns`（schema:108）、`scenarios`/`planningValue`/`baselineGapNote`/`actualsBackfill`（schema:132-182，JSON 中均存在） | 以 `mvp-estimate.schema.json` 为准回写 `data-model.md` §8 的接口（设计产物同步；不改 spec） |
-| M-12 | 断言粒度 | MEDIUM | `tasks.md:123,125-126,112` | A1–A5 五项架构边界断言全部集中在**单个任务 T025**，而 Phase 3 Checkpoint 与 A1–A5「能阻断违规实现」完全依赖它；单点失败会导致五项保护同时缺失，也无法按断言独立验收 | 拆为 T025a–T025e（或至少在 T025 内列出五项分项自检与各自的反例 fixture 路径），使 Checkpoint 可按断言逐项核对 |
-| M-13 | 跳过 vs 断言 | MEDIUM | `tasks.md:192` vs `:360`、`constitution.md:95` | T054 允许在某分支无法稳定注入时标 `test.fixme`（Playwright 记为 expected-failure/skip，**CI 呈绿**），而 `tasks.md:360` 与 constitution 测试策略要求「禁止以条件跳过代替断言」「跳过必须附理由、禁止长期无条件跳过」→ 形成"绿色但未断言 FR-003 分支"的缺口 | 保留 `test.fixme` 但附加**到期条件**（关联 issue + 复核日期 + `docs/ci-degradation.md` 中的盲区编号），并由 T081 在交付复核中逐条确认；或改为 `test.fail()` 使之必须真实失败才通过 |
-| M-14 | 命令漂移 | MEDIUM | `quickstart.md:7,153` vs `tasks.md:100,267` | quickstart §5.4 的 `npm run verify:real-gpu` 无任何任务创建（T014 的脚本清单不含它，T078 也未新增该脚本）；quickstart 第 7 行自注"命令为计划形态"，故非阻塞，但 T081 的收尾复核需覆盖 | 在 T078 的产出中加入 `npm run verify:real-gpu` 的脚本映射（或把 quickstart §5.4 改为 `npm run test:visual`/`npm run bench` 的真实命令） |
-| M-15 | 结构↔任务不一致 | MEDIUM | `plan.md:218,233,249` vs `tasks.md` 全文 | `plan.md` 的文件结构中，`terrain/terrarium.ts`（被 T026 并入 `heightmap.ts`）、`adapters/cesium/globe-surface.ts`、`tests/bench/**` 均**无任务承接**；反之 `verify-harness/src/cross-path.ts`（T061）、`regression.ts`（T065）不在 plan 结构中 | 以 tasks 为准回写 `plan.md` 的 Source Code 结构（或明确 `globe-surface.ts` 的职责并入 T035/T034）；`tests/bench/**` 若确实需要则在 T063 的产出中显式声明 |
-| L-01 | 引用不全 | LOW | `tasks.md:11` vs `research.md:436` | tasks 前置说明写「H-1…H-9」，research 另含 **H-5b**（Re:Earth/Mapterhorn 许可待确认） | 改为「H-1…H-9 + H-5b」 |
-| L-02 | 扩展名漂移 | LOW | `contracts/render-path-api.md:26` vs `tasks.md:123` | 契约写 `tests/unit/architecture-boundary.test.ts`，tasks 为 `.mjs` | 统一为 `.mjs`（Node 22 `node:test` 无 TS 运行时） |
-| L-03 | 未定义类型 | LOW | `contracts/render-path-api.md:101-105,139` | 契约使用 `EventSource<T>`，但 `data-model.md` 与契约 §1 的导出清单均未定义该类型 | 在契约中给出 `EventSource<T>` 的最小定义（或改用 `Event<T>` 等既有类型） |
-| L-04 | 入口无源文件 | LOW | `tasks.md:98` vs `plan.md:187-257` | T012 声明 `./escape-hatch` 入口，但 plan 结构无对应源文件、无专门任务描述其导出内容（契约 §1 要求导出 `Viewer`/`CesiumWidget`/`Scene`） | 在 T012 描述中补 `src/escape-hatch.ts` 的产出与导出清单 |
-| L-05 | 字段清单不全 | LOW | `tasks.md:224` vs `data-model.md:370-371` | T063 的 `BenchmarkRecord` 字段清单未列 `warmupFrames`/`sampleFrames`（data-model §7 有此二字段，且 FR-017 要求"固定预热与采样次数"） | 在 T063 的字段清单中补上二者 |
-| L-06 | 本机信息入产物 | LOW | `tasks.md:28,97,246` | `E:\work\CesiumjsWebGpu` 绝对路径写入 Path Conventions；本机代理 `HTTPS_PROXY=http://127.0.0.1:7890` 在 T011 与**公开 README**（T074）中出现 | 绝对路径改为"仓库根（工作区根）"；代理说明移入本地开发笔记/`.env.example`，不写入公开 README |
-| L-07 | 外部依赖（须上报用户） | LOW | `tasks.md:231,267` | T070（G-3）需在 GitHub Actions 托管 runner 实跑（`origin` 已配置为 `git@github.com:yudhcq/Cesiumjs-WebGPU.git`，但需推送与 Actions 权限）；T078 夜间真实 GPU 作业需付费 runner 或自托管 GPU → 按 `AGENTS.md` §5 属"需要凭据/外部账号/付费资源"，须由用户授权 | 在进入 Phase 7 前向用户确认：仓库推送与 Actions 可用性、GPU 执行方案（`mvp-estimate.md` §5 待确认项 1 已列出价差） |
+|----|------|--------|------|------|----------|
+| **V1** | Coverage | **HIGH** | `spec.md:180` vs `tasks.md`（全文 0 命中） | `FR-019`（优化必须先有基线并附对比、无对比不得合入）**无任何任务承接** | 二选一：①在 T132 `CONTRIBUTING.md` 增加"优化提交必须附基线 vs 优化后实测对比 + CI 断言"；②若本增量确定不含优化任务，在 spec/plan 显式标注"N/A 及理由"（涉及需求解释，须入口 Agent 决策） |
+| **D1** | Duplication | **HIGH** | `tasks.md:228-229`、`tasks.md:234` vs `tasks.md:290` | 帧缓冲附件化实现（`Framebuffer`/`Renderbuffer`/`MultisampleFramebuffer`/`FramebufferManager`）在 W3（T061/T062）与切片 B（T097）**重复归属** | 明确 T061/T062 = W3 实现（Phase 5 检查点已宣告完成），T097 收敛为"离屏深度纹理 + 视口四边形 + 翻转前置"，删除重复表述 |
+| **I1** | Inconsistency | **HIGH** | `tasks.md:116-117`、`:160`、`:356` vs `:291` | G-7 结论 MUST 早于 T098，但其落盘点 T127 在 Phase 10、T098 在 Phase 7 → **顺序不可满足** | 把 G-7 结论落盘拆为独立任务并置于 Phase 7 之前；或把 T098 移到 Phase 10 之后（与 `I2` 一并处置） |
+| **I2** | Inconsistency | **HIGH** | `tasks.md:291` vs `:328/:329/:350/:352` | T098 要求重跑"单元+契约+视觉+基准"，但参考帧机制 T111、容差记录 T112、基准采集 T121、回归门槛 T123 均在其后 → **阻断项前置链不完整** | 拆 T098 为 T098a（Phase 7：翻转 + 单元/契约回归）与 T098b（Phase 10 后：全量验证 + 产物归档），或整体后移 T098 |
+| V2 | Coverage | MEDIUM | `tasks.md:372` vs `contracts/mvp-estimate.schema.json:147-161` | `FR-029` 仅经"整体 schema 校验"隐式覆盖，T128 显式断言 (a)–(f) **不含** `confirmedItems`/`unconfirmedItems` 的存在性、`impactDirection`、`impactMagnitude` | T128 增加断言 (g)：`unconfirmedItems[].{item,impactDirection∈{up,down,both},impactMagnitude,note}` 齐备且 `confirmedItems` 非空 |
+| C1 | Constitution | MEDIUM（**待确认**，严格解读可升 CRITICAL） | `constitution.md:153-154` vs `tasks.md:347`、`contracts/verification-and-benchmark.md:81-88` | 章程门禁顺序为"…视觉回归→基准→**补丁范围审计→依赖与许可证**"，实现产物把 audit 前移到 contract/visual/bench **之前**（plan/contracts/tasks 三者自洽但与章程字面顺序不同，且 plan 的 Constitution Check 未记录该偏离理由） | 在 `plan.md` 原则 V 的 Constitution Check 显式记录排序理由（快速确定性门禁前置 + AU-1…AU-5 为渲染结论的前置条件，见 verification 契约 L64），或逐字改为章程顺序；**严重度待入口 Agent 裁定**（章程该句未使用 MUST/NON-NEGOTIABLE 措辞，且不改变"任一失败阻断合入"的判定语义） |
+| C2 | Constitution | MEDIUM | `tasks.md:145-153`、`:437` vs `constitution.md:114-121` | G-5/G-6 的通过判据只能在本机真机产生（`T022`"本机无头 Chrome 153"、`T078`"CI 无 GPU 时按 T080 降级"），与 `tasks.md:437`"证据**只认 CI 产物**：本地通过不等于通过"存在张力；盲区与降级已记录，但**门禁结论如何作为 CI 产物存证/复现未规定** | 在 T126 的 CI 上传清单中补 `experiments/gates/out/*.json`（当前只列 `artifacts/shader-verify/**`），并要求门禁结果均带本机复现步骤（T134 已部分覆盖） |
+| D2 | Duplication | MEDIUM | `tasks.md:199` vs `tasks.md:290` | `createViewportQuadCommand` 同时归属 T044（`Context` 命令分派）与 T097（切片 B） | 指定唯一归属：T044 提供 API，T097 只消费 |
+| D3 | Duplication | LOW | `tasks.md:97` vs `:325/:326` | T013（脚手架"最小版"+`src/verify/stats.mjs`）与 T108/T109（脚手架"产品化"+`src/verify/**`）对同一文件存在两段所有权 | 在 T013/T108/T109 之间显式标注"增量边界"（T013 只建 API 面，T108/T109 只做产品化），避免同一文件被两次"定稿" |
+| A1 | Ambiguity | MEDIUM | `tasks.md:151` | T025 的判定阈值自证：「断言落在声明预算内（预算值与依据写入结论）」——阈值由被判定对象自己定义，**判定前不可机器判定** | 在 plan/research 中先给出变体数与编译耗时的量化预算（可由 `mvp-estimate.md:171` 的 +1–3 工作日推导），T025 只引用该值 |
+| A2 | Ambiguity | LOW | `tasks.md:262` | T082 追溯写作「`→ FR-026/FR-027 附近范围界定`」，"附近"使追溯不可机器校验 | 改为精确需求键（如 `→ FR-026（工作流拆分：着色器覆盖范围声明）`） |
+| A3 | Ambiguity | LOW（**待确认**） | `quickstart.md:30-31` vs `REPORT.md:358` | CI 使用 Playwright 自带 Chromium，尖刺真机基线为 Chrome ≥153；该 Chromium 是否满足 `--enable-unsafe-webgpu` + lavapipe 配方**未在任务中断言** | 在 T028/T119 增加"记录并断言 Chromium 主版本 ≥ 尖刺基线"的步骤；结论以 G-7 实测为准 |
+| U1 | Underspecification | MEDIUM | `tasks.md:23` vs `:325/:326/:328/:330`（另 26 处） | 约定"验证任务 MUST 指明所在层"，但 **30 个任务未标 `层=`**，其中 4 个是 US3 验证资产任务（T108/T109/T111/T113） | 为 T108/T109/T111/T113 补 `层=单元`/`层=契约`；T146 验收矩阵增加"层字段非空"断言 |
+| U2 | Underspecification | MEDIUM | `tasks.md:396`（`stability:leak`）、`:259`（`bench:shader-variants`）、`:225`（`visual:texture-origin`）、`:198/:199/:205`（`smoke:*`） | 4 组 `--suite=` 标识符在**任何任务中都没有对应 spec 文件产出**，自检命令无从执行 | 在对应任务中写明产出文件（`tests/benchmark/…`、`tests/visual/…`、`tests/contract/…`） |
+| U3 | Underspecification | MEDIUM | `tasks.md:88` vs `:182/:347/:355` | 4 处自检要求"用 YAML 解析断言"，但 T004 的 devDependencies 锁定清单**无任何 YAML 解析器**（且 T128 明示倾向零新增依赖） | 显式登记 YAML 解析依赖，或自实现最小 YAML 子集读取器并在 T039/T118/T126 自检中引用 |
+| U4 | Underspecification | MEDIUM | `tasks.md:347-348` vs `quickstart.md:121` | CI 工作流任务（T118/T119）**未列出** `npx playwright install --with-deps chromium`（仅 quickstart §6 出现，靠 T136 实跑才发现） | 把浏览器安装步骤纳入 T118/T119 的 `ci.yml` 与其 YAML 断言 |
+| U5 | Underspecification | MEDIUM | `tasks.md:174`（T031 自检）vs `tasks.md:180`（T037） | T031 自检断言"`localFile` **存在**"，但清单指向的替换文件由**后置**任务 T037 创建 → 自检前向依赖 | T031 只断言清单结构（路径形态、`requirementRef` 非空、`glCallSites>0`），文件存在性断言移交 T041 或 T037 之后 |
+| U6 | Underspecification | MEDIUM | `quickstart.md:147` vs `tasks.md:91` | 一次性转换流程使用 `pwsh -File …run-path-a.ps1`（Windows-only），而 T007 可移植性检查**不扫** `quickstart.md`/`docs/**`（T136 的实跑范围为 §2–§6，不含 §7，故未直接阻塞） | 补 Node 等价脚本，或在 quickstart §7 显式标注 Windows-only + Linux 等价命令；把 `quickstart.md`/`docs/**` 纳入 T007 扫描面 |
+| I3 | Inconsistency | MEDIUM | `tasks.md:446` | Phase 5 并行分组**自相矛盾**：`T059` 同时出现在"可并行"列表与"`T057/T059` 与 `T061/T062` 串行"两处 | 修正为"T055/T056/T059/T060 可并行；T057 与 T061/T062 串行" |
+| I4 | Inconsistency | MEDIUM | `tasks.md:447` vs `:249-254` | Phase 6 依赖链 `T069→T070→T074→T073` 与任务正文顺序及真实依赖不符（T074 的深度范围修正在发射器 T073 之内进行） | 改为 `T069→T070→T073→T074` |
+| I5 | Inconsistency | MEDIUM | `tasks.md:448` vs `:279/:282` | Phase 7 声明"T086–T090 可并行"，但 T089（`createTerrainScene`）消费 T086 的适配层（`src/terrain/source.ts`） | 改为 `T086 →（T087,T088,T090）并行 → T089`，或补注"接口先定稿" |
+| I6 | Inconsistency | MEDIUM | `tasks.md:208`（T053）vs `:261`（T081） | 两者都声明"`ShaderBuilder` → `not-implemented`"，**职责重叠** | 由 T081 独占 ShaderBuilder 边界；T053 收敛为 `Context` 面（`readPixels`/`Sync`/`CubeMap`/`Texture3D`/`TextureAtlas`/`ComputeEngine`） |
+| I7 | Inconsistency | MEDIUM | `tasks.md:174`（T031）vs `:208`（T053） | manifest 把 `CubeMap`/`CubeMapFace`/`Texture3D`/`TextureAtlas`/`Sync` 归入"**16 个必替换**（`replace`，需 `glCallSites>0`）"，而 T053 只交付**显式失败桩** → "必替换"与实际交付语义不一致，且 manifest 无 `kind` 区分 | manifest 增加 `kind:"stub-not-implemented"`，把 16 项拆为"功能实现"与"显式失败桩"两组，审计脚本按 `kind` 断言 |
+| I8 | Inconsistency | MEDIUM | `tasks.md:52-53`/`:87`/`:349` vs `contracts/fork-patch-layer.md:85` | 声明 `naga-cli **30.0.1**` 锁定，但安装命令 `cargo install naga-cli --locked` **不带 `--version`**（`--locked` 只锁依赖图，不锁自身版本）→ CI 无法保证版本 | 改为 `cargo install naga-cli --version 30.0.1 --locked`，并在 T120 的 YAML 断言中断言版本号 |
+| I9 | Inconsistency | MEDIUM | `plan.md:274` vs `mvp-estimate.md:3`、`mvp-estimate.v1.json:4`、`tasks.md:369` | plan 称评估"结论版本 **v2.0.0**"，实际为 **v2.1.0** | 由入口 Agent 同步 `plan.md:274`（阶段子代理只读） |
+| I10 | Inconsistency | MEDIUM | `plan.md:141`、`:332-334` vs `tasks.md:8` | plan 仍声明"`tasks.md` … ⚠️ 上一版基于被否决架构，**已失效，必须重新生成**"，而 `tasks.md` 已是 147 任务的重生成版 | 由入口 Agent 同步 `plan.md`（同 I9 一并处理） |
+| I11 | Inconsistency | MEDIUM | `tasks.md:286`/`:291`/`:312`/`:334`（漏标）；`:225`（过度标注） | `〖二选一〗` 标注不一致：T093（明确两条后端串行）、T098（"两路径全量套件串行"）、T107、T117（"两路径 … 套件串行"）**无标注**；而 T058 仅运行 `--backend=webgpu` 一条路径却标注 | 为 T093/T098/T107/T117 补 `〖二选一〗`；T058 或改为两路径、或移除标注，使标注规则可机器校验 |
+| I12 | Inconsistency | LOW | `tasks.md:176`（T033 自检） | 自检写"在 `T031–T034` 完成后以 0 退出"，引用了**后置**任务 T034 | 改为"T031–T033 完成后"，T034 作为独立门禁单独判定 |
+| I13 | Inconsistency | LOW | `tasks.md:183`（T040 追溯）vs `contracts/verification-and-benchmark.md:58-62` | 追溯写作"`contracts/fork-patch-layer §7（AU-5）`"，而 AU-5 定义在 verification-and-benchmark §5（AU 表），fork-patch-layer §7 只讲许可证与署名 | 修正 T040 追溯目标为 `contracts/verification-and-benchmark §5（AU-5）+ fork-patch-layer §7` |
+| I14 | Inconsistency | LOW | `tasks.md:443-451` vs 15 处 `[P]` | 阶段级"可并行"声明多数**未落到** `[P]` 标注（Phase 5/6/7/9/10/11 的并行任务无 `[P]`），两类标注口径不统一 | 统一口径：要么为阶段级并行任务补 `[P]`，要么删除阶段级并行声明（保留"无文件交集"说明） |
+| I15 | Inconsistency | LOW | `tasks.md:126`、`:131` | T015 断言 `scene._context`、T017 引用 `@private` 语义，未声明"仅用于门禁断言、**不得进入实现路径**"（当前写法本身不构成原则 I 违规） | 在两任务中补一句限定语，避免实现阶段误用私有成员 |
 
 ---
 
-## 3. `[P]` 标注逐组核对（对应派发提示第 1、2 项）
+## 3. Coverage 汇总表
 
-**总数核对**：`tasks.md` 中 `^- \[ \] T\d+ \[P\]` 命中 **30** 条（与派发提示一致）。
+图例：`✔` 有任务承接；`△` 仅隐式覆盖；`✘` 零覆盖。
 
-| Phase | `[P]` 任务 | 核对结论（文件 / 依赖） |
+| Requirement | Has Task? | Task IDs（`tasks.md` 行号） | Notes |
+|---|---|---|---|
+| FR-001 地形连续表面 | ✔ | T050(205), T089(282), T091(284), T094(287) | 契约 + 视觉成对 |
+| FR-002 相机交互无 >1s 卡顿 | ✔ | T095(288) | 契约，双路径串行 |
+| FR-003 设备丢失恢复 | ✔ | T051(206), T096(289), T103(308) | 整体切换语义 |
+| FR-004 数据源（免登录 + 本地固定集） | ✔ | T084(277), T086(279), T088(281) | TS-1…TS-5 契约对应 |
+| FR-005 初始化期探测/≤2s/整体回退 | ✔ | T016(130), T042(197), T099(304), T100(305), T101(306), T107(312) | G-2 门禁前置 |
+| FR-006 兜底 + 不同时运行 | ✔ | T051(206), T100(305), T102(307), T103(308), T107(312) | A7 可执行判据 |
+| FR-007 配置选择 + 调用方无分支 | ✔ | T006(90), T011(95), T012(96), T089(282), T105(310), T140(394) | A1/A2/A5 |
+| FR-008 两路径一致行为 | ✔ | T064(231), T106(311) | `declaredDifferences` |
+| FR-009 可观察提示 | ✔ | T038(181), T104(309), T107(312), T137(381) | |
+| FR-010 每特性自动化验证 | ✔ | T078(258), T092(285), T093(286), T109(326), T110(327), T111(328), T117(334) | 无"肉眼确认"任务 |
+| FR-011 两路径分别执行 | ✔ | T013(97), T047(202), T064(231), T078(258), T091(284), T102(307), T108(325), T115(332) | A7 + 脚手架面断言 |
+| FR-012 固定条件 | ✔ | T087(280), T115(332), T116(333) | |
+| FR-013 差异证据 | ✔ | T092(285), T109(326), T113(330) | |
+| FR-014 容差可追溯 | ✔ | T027(153), T092(285), T112(329) | 反例：阈值放宽无理由 → 失败 |
+| FR-015 多瓦片 + 兜底覆盖 | ✔ | T085(278), T091(284), T111(328) | |
+| FR-016 几何缺陷数值化 | ✔ | T093(286), T110(327), T117(334) | |
+| FR-017 基准三指标 | ✔ | T063(230), T110(327), T121(350), T127(356) | |
+| FR-018 量化回归门槛 | ✔ | T123(352) | 人造劣化必失败 |
+| **FR-019 优化先基线 + 对比** | **✔（修复后）** | **T148**（`CONTRIBUTING.md` 硬规则 + `.github/PULL_REQUEST_TEMPLATE.md` 必填项 + `tools/scripts/check-optimization-baseline.mjs` CI 断言）；T132 同节协同、T138 自检、T146 验收映射 | 初检为 ✘ 零覆盖（见 V1）；修复后**显式承接** |
+| FR-020 基准存档为历史序列 | ✔ | T122(351) | |
+| FR-021 每次提交 CI 三件套 | ✔ | T029(158), T039(182), T118(347), T139(393) | |
+| FR-022 CI 产物为权威依据 | ✔ | T039(182), T118(347), T126(355), T139(393), T145(399) | |
+| FR-023 降级策略与盲区 | ✔ | T028(157), T038(181), T080(260), T104(309), T114(331), T119(348), T124(353), T134(378) | |
+| FR-024 开源交付 + 许可证检查 | ✔ | T004(88), T040(183), T085(278), T131(375), T132(376), T135(379), T137(381), T138(382) | |
+| FR-025 主干可构建/可运行/可回退 | ✔ | T127(356), T142(396), T144(398) | |
+| FR-026 评估按工作流拆分 | ✔ | T128(372, 断言 c：`workflows` ≥5 且含 W1–W9), T082(262) | 与 `mvp-estimate.md:34-42` 的 W1–W9 对应 |
+| FR-027 区间 + 口径 + 人工成本不计入 | ✔ | T128(372, 断言 a/b/d/e) | |
+| FR-028 版本化 + 回填 + 复用为基线 | ✔ | T128(372), T129(373), T130(374) | |
+| **FR-029 已确认/待确认项区分** | **✔（修复后）** | T128 新增显式断言 **(g)**（`confirmedItems` 非空 + `unconfirmedItems[].{item,impactDirection,impactMagnitude,note}` 齐备） | 初检仅靠整体 schema 校验隐式覆盖（见 V2） |
+| FR-030 后端由 WebGPU 实现 | ✔ | T017(131), T021(141), T031(174), T043(198), T044(199), T045(200), T046(201), T049(204), T054(209), T055–T063(222–230), T098(291), T146(400) | 阻断项 T098 |
+| FR-031 逻辑层语义不变 | ✔ | T031(174), T067(247), T075(255), T086(279), T141(395) | A9 + `keptModulesHash` |
+| FR-032 受控 fork / 可 rebase | ✔ | T003(87), T015(126), T030(173), T031(174), T033(176), T035(178), T041(184), T133(377), T141(395) | |
+| FR-033 既有功能不需逐功能重写 | ✔ | T037(180), T053(208), T146(400) | `not-implemented` 边界 |
+| SC-001 双路径各自通过断言（多瓦片） | ✔ | T091(284), T098(291), T106(311), T116(333), T136(380), T146(400) | |
+| SC-002 高程特征一致 | ✔ | T092(285), T094(287) | |
+| SC-003 不支持时 ≤2s 整体回退 | ✔ | T101(306), T107(312), T136(380) | |
+| SC-004 交互 3s 无 >1s 卡顿 | ✔ | T095(288), T096(289) | |
+| SC-005 流水线 ≤20 分钟 | ✔ | T029(158), T118(347), T127(356), T139(393) | |
+| SC-006 基准各自独立运行 | ✔ | T121(350), T122(351), T123(352), T127(356) | |
+| SC-007 评估结论交付 | ✔ | T128(372), T138(382) | |
+| SC-008 无硬性期限 + 偏差说明 | ✔ | T130(374), T138(382) | |
+| SC-009 证据可追溯 | ✔ | T092(285), T111(328), T113(330), T117(334) | |
+| SC-010 绘制 100% WebGPU + 逻辑层零改动 | ✔ | T006(90), T033(176), T034(177), T041(184), T044(199), T054(209), T136(380), T140(394), T141(395), T146(400) | **终局证明 T141** |
+
+---
+
+## 4. Constitution 对齐问题
+
+| 原则 | 核对结论 | 证据 |
 |---|---|---|
-| 1 门禁 | T004, T005 | ✅ 不同文件（`g2-drawset.ts` vs `g2-observer.ts`）；但 T005 内容触发 **C-01**（原则 I） |
-| 2 Setup | T008, T009, T010, T011, T013 | ❌ **T011 与 T008/T013 同文件且依赖倒置**（H-01）；T009 自检依赖 T011 安装的 `typescript`（H-01）；T010/T013/T008 相互独立 ✅。`tasks.md:303` 的"不同文件"表述不成立 |
-| 3 Foundational | T016, T017, T018, T020, T023, T024 | ❌ **T023 与 T021 同文件、与 T022 同测试文件**（C-02）；⚠️ T020 是 T019 的测试而 T019 明确不标 `[P]`（H-04）；⚠️ T024 只写"`node --test` 中新增断言用例"未指明测试文件，可能与 T025 的 `architecture-boundary.test.mjs` 或其它文件冲突（待确认）。T016/T017/T018 ✅ |
-| 4 US1 | T026, T027, T033, T034, T036, T038, T040 | ⚠️ T027 是 T026 的测试（H-04，且未列入 `tasks.md:305/318` 的并行清单）；⚠️ T038 的实质断言被推迟到 T042（`tasks.md:154`），本任务自检仅 `tsc`（LOW 级欠验证）；T026/T033/T034/T036/T040 ✅ 不同文件且无未完成依赖 |
-| 5 US2 | T051 | ✅（依赖 Phase 4 的 T041/T012，phase 顺序满足） |
-| 6 US3 | T057, T058 | ✅ 不同文件（`capture.ts`+`stats.ts` vs `compare.ts`），各自带单元测试 |
-| 7 US4 | T064, T068 | ⚠️ T068 创建 `tools/ci-flags.mjs` 作为"CI 与本地共用"的标志真值源，而 T067（未标 `[P]`）写 `ci.yml`、T069 要求"三处一致" → 二者并行时配置归属不清（中风险，建议 T068 先于或与 T067 串行）。T064 ✅ |
-| 8 US5 | T073, T074, T075 | ✅ 不同文件（`CONTRIBUTING.md` / `README.md`+`docs/architecture.md` / `.github/pull_request_template.md`） |
-| 9 Polish | T078, T079 | ✅ 不同文件 |
+| **I 受控 fork（NON-NEGOTIABLE）** | ✅ 无违规。改动面被限制为 `Source/Renderer/**`（`data-model.md:380` A3 规则 + `tasks.md:176` T033 审计 + `tasks.md:177` T034 构建产物审计）；逻辑层零覆盖有反例测试；`ShaderSource` 双发射被显式论证为"着色器编译"（`plan.md:70`）且 GLSL 视图不变由 A9 断言（`data-model.md:386` + `tasks.md:247` T067） | 见 §1 检查项 2；`plan.md:62-73` 的逐条合规表 |
+| **II 二选一，不同时运行（NON-NEGOTIABLE）** | ✅ 无违规。无第二个画布/合成器/遮挡手段；A7 使"同会话双路径"用例必须失败（`tasks.md:307` T102 / `tasks.md:332` T115）；回退为整体销毁重建（`tasks.md:206` T051 / `tasks.md:308` T103） | 见 §1 检查项 3 |
+| **III 可验证渲染** | ✅ 满足。每特性成对验证 + 层标注（30 处缺标注见 `U1`，属标注完整性而非缺验证）；无"肉眼确认"任务 | `tasks.md:21-24`、`:506` |
+| **IV 性能以数据驱动** | ✅ 满足基本条款（基线先行、门槛量化、两路径独立会话）；**`FR-019` 的"优化提交必须附对比"无任务承接**（`V1`） | `tasks.md:350-353`、`:121` |
+| **V CI 为唯一事实来源** | ⚠️ 两处张力：①CI 门禁顺序与章程字面顺序不同（`C1`，待裁定）；②G-5/G-6 真机门禁证据只能本地产生、CI 仅降级为 naga 模块校验，缺"结论如何作为 CI 产物存证"的规定（`C2`）；其余（产物上传、补丁审计与演练归档、降级盲区记录、许可证检查）齐备 | `constitution.md:112-124`、`:153-155`；`tasks.md:347`、`:355`、`:437`；`contracts/verification-and-benchmark.md:81-94` |
+| 附加技术约束 | ✅ TS strict（T002）/ Rollup（T009）/ ESM + `.d.ts`（T009）/ Node ≥22（T001）/ 受控 fork 形态 + 可追溯基线（T003、T030）/ 开源交付（T040、T131、T132、T135） | `tasks.md:86/93/87/173/183` |
+| 测试与验证策略 | ✅ 分层（单元/契约/视觉/基准 + 架构边界）/ 双后端参数化且各自独立运行 / 视觉差异图产物 / 基准存档 / 跳过测试治理（T143）/ 逻辑层不改由审计与演练支撑 | `tasks.md:325-355`、`:397`、`:176-179` |
 
-**第 2 项（Phase 4 内 T031–T041 串行链 vs plan 依赖序）结论**：
-- 该区间内的 `[P]` 为 T033/T034/T036/T038/T040，**均为不同文件且不依赖 T031/T032/T035/T037/T039/T041** → **无被误标 `[P]`**（唯一保留意见是 T038 的断言落在 T042，见上表）。
-- 串行链本身与 `tasks.md:305` 的依赖声明一致：`T026/T028 → T031`、`T034 → T035`、`T036/T038 → T037`、`T023/T037 → T039`、`T031–T040 → T041`。
-- 但 `tasks.md:321` 的"串行链"写成 `T026/T028 → T029 → T030 → T031 → T032 → T035 → T037 → T039 → T041`，**漏掉了 T034（T035 的前置）与 T036/T038（T037 的前置）**，且把无依赖关系的 T031→T032 写成串行（过度串行，无害）。
-- `tasks.md:292` 的 **Critical Path 漏掉 T004/T005**，而 T006 明确依赖二者（`tasks.md:81`）；亦跳过 T065（T067 的前置，`tasks.md:308`）。属文档级依赖序错误，建议修正以免评审与排期误用。
+**Constitution 违规（CRITICAL）**：**无**。`C1` 按"章程该句未使用 MUST/NON-NEGOTIABLE 措辞、且不改变合入判定语义"判为 MEDIUM，**严重度待确认**（若入口 Agent 认定该句为强制顺序，则应升级为 CRITICAL 并在实现前修正 CI 顺序）。
 
 ---
 
-## 4. 覆盖率逐条核对（对应派发提示第 4 项）
+## 5. Unmapped Tasks（无需求映射的任务）
 
-**方法**：以 `spec.md` 中的显式 ID 为主键（实测 `spec.md` 中 `FR-###` = **29** 条、`SC-###` = **9** 条），对 `tasks.md` 全文做 ID 引用 + 语义映射双重核对。
+**无完全无映射的任务**：初检的 147 个任务（修复后 149）中，除检查点/收尾类（T041、T054、T065、T083、T107、T117、T127、T138、T139、T145、T147）外，
+均带 `→` 需求追溯或明确的契约/数据模型锚点（如 `→ data-model §4.2`、`→ contracts/fork-patch-layer §3`）。
+检查点类任务的追溯指向阶段 Goal/Independent Test，属正常形态。
 
-### 4.1 功能需求（FR）
-
-| 需求 | 有任务？ | 承接任务 | 备注 |
-|---|---|---|---|
-| FR-001 新路径渲染地形 | ✅ | T023, T036, T037, T039, T042, T043, T045 | |
-| FR-002 相机交互 / 无 >1s 卡顿 | ✅ | T021, T039, T044 | |
-| FR-003 设备丢失恢复 | ✅ | T021, T050, T054 | T054 的分支覆盖见 M-13 |
-| FR-004 加载瓦片 + 区分两态 + 免登录 + 本地固定数据集 | ⚠️ 部分 | T026, T027, T028, T029, T030, T031, T032, T022 | 第二子句（可观察区分）无断言 → **M-09** |
-| FR-005 能力探测 ≤2s + 自动回退 | ✅ | T001, T047, T048, T049, T052 | |
-| FR-006 兜底路径恒可用 | ✅ | T040, T049, T053 | |
-| FR-007 配置选择路径 / 集成方无分支 | ✅ | T025(A5), T041, T051, T055 | |
-| FR-008 双路径一致 + 声明差异 + 断言 | ✅ | T006, T023, T053, T055, T061 | |
-| FR-009 回退可观察提示 | ✅ | T049, T051, T052 | |
-| FR-010 每特性附自动化验证 | ✅ | T042–T046, T056–T058, T060, T062 | |
-| FR-011 双路径分别执行 | ✅ | T042, T052, T056, T061 | |
-| FR-012 固定相机/时间/种子/视口/像素比/数据集 | ✅ | T030, T042, T056, T059, T060 | |
-| FR-013 差异证据归档 | ✅ | T043, T058, T067 | |
-| FR-014 容差可追溯、禁止宽松判据 | ✅ | T043, T058, T059, T062 | |
-| FR-015 多瓦片 + 兜底路径覆盖 | ✅ | T030, T042, T045, T053 | |
-| FR-016 几何缺陷数值化断言 | ✅ | T019, T020, T022, T045, T046 | |
-| FR-017 基准三指标 + 环境标注 | ✅ | T017, T018, T037, T063, T064 | |
-| FR-018 量化回归门槛 | ✅ | T059, T065 | |
-| FR-019 优化先基线 + 对比 | ⚠️ 流程承接 | T073①, T075 | 无自动化检查（PR 模板 + CONTRIBUTING 承载），可接受但应承认其为流程门禁 |
-| FR-020 基准历史序列存档 | ✅ | T063, T066, T067, T078 | |
-| FR-021 每次提交 CI 三绿 | ✅ | T067 | 与 H-06 相关 |
-| FR-022 产物为权威依据 | ✅ | T067, T068, T075 | |
-| FR-023 降级策略与盲区 + 本地复现 | ✅ | T069, T070, T078 | |
-| FR-024 开源形态 + 许可证检查入 CI | ✅ | T011, T067[6], T071, T072, T073, T074 | |
-| FR-025 主干可构建/可运行/可回退 | ⚠️ 流程承接 | T067, T073⑧, T034(C-8) | 无"revert 可运行"的自动化证据；建议在 T081 中补一条复核项 |
-| FR-026 评估结论按工作流拆分 | ✅ | T076（产物已存在：`mvp-estimate.md`/`.v1.json`） | |
-| FR-027 区间 + 口径 + 人工成本不计入 | ✅ | T076①②⑤⑦ | 判据阈值问题见 H-03 |
-| FR-028 版本化 + 基线复用 + 实际值回填 | ✅ | T073⑦, T077, T078, T081(e) | |
-| FR-029 已确认/待确认 + 凭据类不计入 | ⚠️ 部分 | T076⑥（+③） | 第三子句无断言 → **M-10** |
-
-### 4.2 成功判据（SC）
-
-| 判据 | 有任务？ | 承接任务 | 备注 |
-|---|---|---|---|
-| SC-001 双路径 + 多瓦片断言 | ✅ | T042, T045 | |
-| SC-002 高程特征可观察（统计断言） | ✅ | T030, T043, T057 | |
-| SC-003 ≤2s 回退且无错误 | ✅ | T052, T047, T048 | |
-| SC-004 交互 3s 无卡顿 + 定格帧断言 | ✅ | T044, T054 | |
-| SC-005 CI ≤20 分钟且双路径 | ✅ | T067, T068, T070 | |
-| SC-006 两路径各 ≥1 条可比基准 | ✅ | T066 | |
-| SC-007 交付工期与 AI/Agent 消耗结论 | ✅ | T076 | H-03 影响其 CI 可判定性 |
-| SC-008 无硬期限 + 偏差说明 | ✅ | T077, T081(e) | |
-| SC-009 合入前均有可追溯证据 | ✅ | T043, T060, T073②, T081 | |
-
-**结论**：**未被任何任务覆盖的 FR = 0，SC = 0**；另有 **3 处子句级缺口**（FR-004 第二子句 / FR-029 第三子句 / FR-019·FR-025 仅流程承接）与 **1 处契约级缺口**（`listDatasets`/`getDatasetManifest`，H-02）。
+**弱映射（追溯不精确）**：T082（`→ FR-026/FR-027 附近范围界定`，见 `A2`）、T040（追溯目标错位，见 `I13`）。
 
 ---
 
-## 5. Constitution 对齐（对应派发提示第 5 项）
+## 6. Metrics
 
-| 原则 | 任务承接 | 断言 | 结论 |
-|---|---|---|---|
-| I 上游兼容优先（NON-NEGOTIABLE） | T003, T015, T024, T031, T032, T072, T079, T080 | A3, A4（T025）；`public-api-allowlist`（T024） | ⚠️ 承接充分，但 **C-01**：V2 观察器引入 `DrawCommand`/`FrameState` 依赖，A4 无法捕获（不含下划线），plan 未按 `constitution.md:105` 论证例外 |
-| II 渐进式接管 | T016, T040, T041, T047–T055 | A1, A2, A5（T025） | ✅ 承接充分（含"兜底路径本身必须有测试覆盖"→ T053） |
-| III 可验证渲染 | T042–T046, T056–T062 | 双路径参数化（T042/T043/T045/T052/T055/T061）；禁止 skip（T045/T056） | ⚠️ M-13：T054 的 `test.fixme` 与"禁止以条件跳过代替断言"存在张力；其余充分 |
-| IV 性能以数据驱动 | T018, T059, T063–T066, T073①, T075 | 门槛 `thresholds.source` 必填（T059/T065）；无基线不合入（T073/T075） | ✅ 承接充分（门槛为流程 + CI 双重） |
-| V CI 为唯一事实来源 | T067–T070, T072, T075, T078 | 单工作流串行门禁（T067）；降级盲区 10 条（T069） | ⚠️ M-01（步骤编号不一致）、H-06（步骤 [3] 前置未落地）、M-07（缺浏览器安装） |
-| 附加技术约束（TS strict / Rollup / ESM+.d.ts / Node≥22 / 外部模块 / LICENSE+CONTRIBUTING+README） | T008–T014, T071, T073, T074 | T009/T012 自检；T011 peerDependencies | ✅ 承接充分（M-08 的 Rollup 解析依赖缺口） |
-| 测试与质量门禁顺序（构建→单元与契约→视觉→基准→许可证） | T067 | —— | ⚠️ 步骤 [5] 把 contract+visual+bench 合并为"两个并行 job（按路径）"，**未写明 job 内三者的先后顺序**；建议在 T067 中显式写 `contract → visual → bench` 以满足章程的顺序要求（LOW–MEDIUM） |
-| 门禁顺序 / 跳过测试规则 | T067, T045, T056, T054 | —— | 见 M-13 |
-
-**结论**：5 条原则均有任务与断言承接，无"某原则完全无承接"的情形；原则 I 的冲突是**局部机制级**（C-01），不是整体缺失。
-
----
-
-## 6. Out of Scope 泄漏核对（对应派发提示第 6 项）
-
-**结论：无泄漏。**
-
-- 被排除项（三维瓦片、glTF/模型、影像图层、大气与光照特效、阴影、后处理、粒子、矢量与标注、移动端/低端设备适配、生产级流式调度、凭据类地形服务、通用计算加速、上游不存在的特性、正式发版节奏）在 `tasks.md` 中仅出现于两处**合规语境**：
-  - `tasks.md:47-48`：全局约束 6 的**禁止清单本身**；
-  - `tasks.md:247`：T075 的 PR 模板要求勾选"**未引入**三维瓦片/模型/影像/大气/阴影/后处理/粒子/矢量标注/移动端"。
-- 边界项判读：`tasks.md:74`（T002）出现"只有背景/**天空**"，语义是"证明上游地形不可见、只剩上游画布的天空/背景"，不是实现大气/天空特性；`tasks.md:144`（T028）的 `grep -nE "token|key=|signature"` 是**反向**断言（证明 URL 不含令牌），与"凭据类服务后置"一致；`tasks.md:267`（T078）出现"真实 GPU/费用"属 FR-017/FR-023/FR-028 范围内。
-- 另注：`mvp-estimate.v1.json:215` 的 `exclusions` 把"后续增量（三维瓦片、模型、影像、大气、阴影、后处理等）"列为**排除项**，语义正确（不计入本增量消耗），非泄漏。
-
----
-
-## 7. CI 可执行性核对（对应派发提示第 7 项）
-
-| 检查项 | 结论 | 证据 |
+| 指标 | 值 | 说明 |
 |---|---|---|
-| 是否依赖 `pwsh` | ✅ 不依赖（CI 侧正确）；❌ 但**前提描述过时** | `tasks.md:36-38`（禁止 pwsh）、`tasks.md:228`（T067 不得调用 pwsh）；本机实测 **pwsh 7.6.6 已安装** → M-05 |
-| Windows 专有路径 | ⚠️ 仅文档级 | `tasks.md:28` 的 `E:\work\CesiumjsWebGpu`（无命令使用它）；无其它 `C:\`/盘符引用 → L-06 |
-| 本机绝对路径 / 代理 | ⚠️ | `tasks.md:97` 的 `HTTPS_PROXY=http://127.0.0.1:7890`（本机自检用）、`tasks.md:246`（要求写入公开 README）→ L-06 |
-| 命令可在 ubuntu-latest 运行 | ✅ 主体可行 | T067 使用 `xvfb-run -a` + Mesa lavapipe/ANGLE-SwiftShader 标志，与 `contracts/verification-and-benchmark.md:152-160` 的已核实配方逐项一致；禁用标志（`--disable-vulkan-surface`、WebGPU 下的 `--enable-unsafe-swiftshader`、`--headless=new`）均已显式禁止 |
-| 缺少必要步骤 | ⚠️ | 契约 §7 前置含 `npx playwright install --with-deps chromium`（`contracts/verification-and-benchmark.md:147`），T067 未列 → M-07 |
-| 自检可执行性 | ❌ 部分不可执行 | actionlint 未安装（实测 PATH 无）+ `node -e` 无 YAML 解析 → M-06；中文占位符 `该文件`/`证据文件` → M-03；`grep` 依赖宿主机 PATH 与 shell 语法混用 → M-04 |
-| 前置产物时间序 | ❌ | CI 步骤 [3] 引用 Phase 9 才创建的评估文档契约测试 → H-06 |
-| 外部账号/付费资源 | ⚠️ 须用户授权 | T070 需 Actions 实跑（`origin` 已配置）；T078 需付费 GPU runner/自托管 → L-07（`AGENTS.md` §5 须上报） |
-| 耗时目标可验证性 | ✅ | T070 实测两次 + 总耗时写入 `docs/ci-degradation.md`，对应 SC-005 |
+| Total Functional Requirements | **33**（FR-001…FR-033） | 实测计数（含新增 FR-030~FR-033） |
+| Total Success Criteria | **10**（SC-001…SC-010） | 实测计数（含新增 SC-010） |
+| 需 buildable work 的 SC | 10/10 | SC-007 需评估契约与回填机制，SC-008 需偏差说明机制，均有任务 |
+| Total Tasks | 初检 **147** → 修复后 **149**（12 阶段） | 实测 `- [ ] T###` 计数；新增 `T098b`（切片 B 全量验证）与 `T148`（FR-019 治理），`T098` 拆分为 `T098a` |
+| FR 覆盖率（显式任务） | 初检 **31/33 = 93.9%** → 修复后 **33/33 = 100%** | FR-019 由 T148 承接、FR-029 由 T128 断言 (g) 承接 |
+| FR 覆盖率（含隐式） | 初检 **32/33 = 97.0%** → 修复后 **33/33 = 100%** | — |
+| SC 覆盖率 | **10/10 = 100%** | 修复前后一致 |
+| 未覆盖 FR | 初检 **1**（FR-019） → 修复后 **0** | `V1` |
+| 未覆盖 SC | **0** | |
+| Ambiguity Count | **3**（A1、A2、A3） | 其中 A3 标"待确认" |
+| Duplication Count | **3**（D1、D2、D3） | |
+| Constitution Alignment Issues | **2**（C1、C2），**0 CRITICAL** | C1 严重度待裁定 |
+| Critical Issues Count | 初检 **0** → 修复后 **0** | 无 |
+| High Issues Count | 初检 **4** → 修复后 **0** | V1、D1、I1、I2（均已修复，见 §9） |
+| Medium / Low | **20 / 7**（31 条全部已处置） | 30 条编辑修复 + `A3` 并入 T119 |
+| `[P]` 标注数 | **15**（修复后仍 15，集合不变） | 逐个复核无同文件冲突 |
+| `〖二选一〗` 标注 | 初检 23 处 token（任务级 18）→ 修复后 **27 处 token = 任务级 22 + 阶段级 4 + 规则说明 1** | 补标 T093/T098a/T098b/T107/T117；去除 T058 的过度标注（I11） |
+| 缺 `层=` 标注的任务数 | 初检 **30** → 修复后 **0** | 含 4 个 US3 验证资产任务（U1） |
 
 ---
 
-## 8. 其他检测（重复 / 二义 / 欠定义 / 术语漂移 / 未映射任务）
+## 7. Next Actions
 
-- **重复（2 处，均为有意分阶段但需标注）**：
-  1. `computeDrawSet` 在 T004（门禁原型，`experiments/gates/g2-drawset.ts`）与 T023（生产版本，`core/tile-registry.ts`）各实现一次——tasks 已声明"语义一致 + 复用测试向量"，建议在 T023 中显式标注"**以 T004 为规格、不得语义分叉**"，并把 T004 的原型标记为可删除。
-  2. `tests/visual/terrain-reference.spec.mjs` 与 `terrain-multitile-seam.spec.mjs` 在 T043/T045 与 T060 各出现一次（T060 声明"在 T043/T045 基础上收敛"）——建议把 T060 标注为**重构/收敛任务**（不新增覆盖），以免被统计为"两次实现"。
-- **二义（5 处）**：M-02（T076 校验器二选一）、M-03（占位符命令）、M-06（"若可用"式自检）、H-03（⑦ 的误差口径未定义相对/绝对）、M-08（演示页 `cesium` 解析方式未定）。
-- **欠定义（4 处）**：H-07（测试如何访问 `scene`/`globe`/`device`）、M-09（FR-004 的第二态如何"可观察"）、H-04（[P] 是否允许"并行编写、串行自检"）、T038 的缓存断言被推迟到 T042（`tasks.md:154`）。
-- **术语/编号漂移（4 处）**：M-01（plan 的 CI 步骤 [7]/[8]）、M-11（data-model §8 vs schema）、M-15（plan 结构 vs tasks 文件）、L-02（`.ts` vs `.mjs`）。
-- **未映射到 FR/SC 的任务（3 个，可接受）**：T010（WGSL 内联插件，构建链）、T014（跨平台脚本编排，全局约束 1/4）、T080（上游升级演练，原则 I）。三者都映射到 constitution 的附加技术约束或原则，不是"无主任务"。
-- **Ambiguity Count = 5｜Duplication Count = 2｜Critical = 3**。
-
----
-
-## 9. Metrics
-
-| 指标 | 值 |
-|---|---|
-| Total Functional Requirements | **29**（`spec.md` 实测） |
-| Total Success Criteria | **9**（`spec.md` 实测） |
-| Total Tasks | **81**（`tasks.md` 实测；`[P]` = 30） |
-| Coverage %（ID 级） | **100%**（FR 29/29，SC 9/9） |
-| 完全未覆盖 FR/SC | **0** |
-| 子句级覆盖缺口 | **3**（FR-004、FR-029、FR-019/FR-025） |
-| 契约级覆盖缺口 | **1**（H-02） |
-| CRITICAL | **3**（C-01、C-02、C-03） |
-| HIGH | **7**（H-01…H-07） |
-| MEDIUM | **15**（M-01…M-15） |
-| LOW | **7**（L-01…L-07） |
-| 发现总数 | **32**（未超 50 条上限，无溢出汇总项） |
-| `[P]` 硬违规 | **3**（T011、T013、T023） |
-| `[P]` 前提可疑 | **5**（T020、T024、T027、T038、T068） |
-| 需用户授权的外部依赖 | **2**（T070 GitHub Actions 实跑、T078 付费/自托管 GPU；L-07） |
+1. **必须先修（HIGH，进入实现前或对应阶段开工前）**
+   - `V1`：为 `FR-019` 补承接任务（T132 增加"优化提交必须附基线对比"规则 + 断言），或在 spec/plan 显式声明 N/A 及理由（需入口 Agent 决策，因涉及需求解释）。
+   - `I1` + `I2`（**Phase 7 之前必须解决**）：拆分/后移 `T098`，并让 G-7 结论落盘早于切片 B 翻转；否则"阻断项"在门禁语义上无法闭环。
+   - `D1`：明确 `Framebuffer`/`Renderbuffer`/`MultisampleFramebuffer`/`FramebufferManager` 的唯一归属（T061/T062 vs T097）。
+2. **建议同批修（MEDIUM，成本低、可机器判定）**
+   - `V2`（T128 增断言 g）、`I8`（naga 版本 `--version 30.0.1`）、`U3`（YAML 解析依赖）、`U4`（CI 装浏览器）、`U2`（补 4 组 suite 文件路径）、`U1`（补 4 个 US3 任务层标注）、`I11`（补齐/去除 `〖二选一〗`）、`I3`/`I4`/`I5`（并行分组与依赖链文字）、`I6`/`I7`（manifest `kind` + T053/T081 分工）、`U5`（T031 自检收敛）、`A1`（T025 预算先量化）。
+3. **需入口 Agent 执行的文档同步（本阶段只读，不得改）**
+   - `I9`（`plan.md:274` → v2.1.0）、`I10`（`plan.md:141`/`:332-334` 删除"tasks.md 已失效"表述）、`C1`（在 plan 的原则 V Constitution Check 记录 CI 门禁排序理由或调整顺序）、`C2`（T126 上传清单补 `experiments/gates/out/*.json`）。
+4. **命令建议**
+   - 修 `tasks.md` 文本类问题：手工编辑对应行（`speckit-converge` 仅用于补漏任务，本报告的问题多为措辞/依赖不适用）。
+   - 若 `I1`/`I2` 通过"后移 T098 + 新增 T098b"解决，属任务增补 → 走 `/speckit-converge`（或由 `speckit-tasks` 重新生成受影响 phase）。
+   - 修改范围/成功判据（`V1` 的 N/A 判定）→ 需上报用户，走 `/speckit-specify` 或 `/speckit-clarify`。
 
 ---
 
-## 10. 下一步（Next Actions）
+## 8. Remediation（可选，需显式批准）
 
-**必须先做（阻塞实现）**
-
-1. **C-01**：在 `plan.md` Complexity Tracking 增列 V2 的例外论证 **或** 修改 `tasks.md` T005 使其不依赖 `DrawCommand`/`FrameState` 语义（并同步 `research.md` §1.2 黑名单与 T024 数组）。
-2. **C-02**：删除 T023 的 `[P]` 并修正 `tasks.md:304` 的 Phase 3 并行清单（T023 串行于 T021/T022）。
-3. **C-03**：二选一 —— 把 T056–T059 前移到 Phase 3/Phase 4 开头；**或**在 `tasks.md` 的 Dependencies 段显式登记 `T042→T051`、`T043/T045→T057–T059`、`T052/T053→T057/T061` 并把 Phase 4/5 Checkpoint 判据改为"契约就绪 + 内联统计"。
-
-**随后做（不阻塞但影响首轮执行效率）**
-
-4. H-01（Phase 2 串行序 `T008 → T013 → T011`）、H-02（补 `api/datasets.ts` 任务）、H-03（定稿 T076⑦ 的误差口径）、H-04（T020/T027 去 `[P]` 并统一 Phase 4 并行清单）、H-06（CI 步骤 [3] 与 T076 的时序）、H-07（测试访问路径的契约决定，需用户/入口 Agent 决策）。
-5. M-01/M-05/M-06/M-07（CI 文档与自检可执行性）、M-09/M-10（补两条 FR 子句断言）。
-6. L-07：进入 Phase 7 前向用户确认 GitHub Actions 可用性与 GPU 执行方案（属 `AGENTS.md` §5 的上报事项）。
-
-**推荐命令（本阶段无法与用户对话，故只给建议、不执行）**
-
-- 任务清单修订：`/speckit-converge`（追加/改写任务与依赖标注，最适合 C-02/C-03/H-01/H-04）
-- 若需改动设计（契约/数据模型/plan）：`/speckit-plan`
-- 若需改动成功判据或范围：`/speckit-specify`（本轮**未发现**需要改 spec 的情形）
-- 复核通过后：`/speckit-implement`
+如需，我可以为**前 4 项 HIGH + 前 8 项 MEDIUM** 逐条给出可复制的替换文本（含 `tasks.md` 精确行号与改写后的整段），
+**但不会自动应用**（`speckit-analyze` 为只读阶段；`analysis.md` 是本阶段唯一可写文件）。
+请指明要修的范围与目标文件，或授权在下一轮由 `/speckit-converge` 追加/修订任务。
 
 ---
 
-## 11. 修复建议（Remediation，供审批后执行；本阶段未应用任何改动）
+## 9. 修复记录与修复后复核（Remediation Log & Post-Fix Re-check）
 
-> 按 `speckit-analyze` 的规定，以下仅为**建议清单**，需用户/入口 Agent 明确批准后才会执行。
+**修复轮次**：2026-09-19，经入口 Agent 逐条裁定后应用。**写入面**：`tasks.md`、`plan.md`、`analysis.md`；
+`spec.md` 与 `constitution.md` **零改动**（证据见 §9.4）。未执行 `git commit`。
 
-1. `tasks.md:121`：`- [ ] T023 [P] [US1]` → `- [ ] T023 [US1]`，并在描述末尾追加「依赖 T021/T022（同文件：`core/tile-registry.ts`、`tests/unit/tile-registry.test.mjs`）」。
-2. `tasks.md:304`：「T016、T017、T018、T020、T023、T024 可并行」→「T016、T017、T018 可并行；T020 依赖 T019；T023 依赖 T021/T022；T024 独立（需指定测试文件）」。
-3. `tasks.md:303`：「T008、T009、T010、T011、T013 可并行」→「T008 → T013 → T011 串行；T009、T010 可与 T008 并行（T009 自检需 T011 已安装 `typescript`，可改为脚本检查）」。
-4. `tasks.md:264`：断言⑦ → 「每个工作流的 `modelCost` 可由 `tokens × priceSources` 按其声明的计价模型（记录于 `mvp-estimate.md` §3.1：低端=flash/空闲/命中 0.92；高端=80% flash+20% v4-pro/高峰/命中 0.75）复算，**绝对误差 ≤ ¥0.01 或相对误差 ≤ 2%**」。
-5. `tasks.md:80`（T005）：追加「结论为 V2 不可用时 MUST 记录并停止；**禁止** import 上游 `@private` 类型（`DrawCommand`/`FrameState`）或依赖其字段语义」，并把 `DrawCommand`/`FrameState` 加入 `tasks.md:122`（T024）的黑名单来源与 `research.md` §1.2。
-6. `tasks.md:157`（T041）：文件清单加入 `src/api/datasets.ts`（导出 `listDatasets`/`getDatasetManifest`），并在 T042 或新增单元测试中断言其可用。
-7. `tasks.md:228`（T067）：补 `npx playwright install --with-deps chromium`；步骤 [5] 写明 job 内顺序 `contract → visual → bench`；步骤 [3] 注明"评估文档契约测试于 T076 落地后并入"；自检改为可执行命令（`npx --yes actionlint` 或 YAML 断言脚本）。
-8. `tasks.md:36-38`（全局约束 1）：改为「CI（ubuntu-latest）MUST NOT 依赖 `pwsh`；本机 PowerShell 5.1 与 7 均可用，脚本优先 Node 以保证 Windows/CI 行为一致」，并同步 T014/T068/T074 的措辞。
-9. `data-model.md` §8：按 `contracts/mvp-estimate.schema.json` 补齐 `selfHostedHardware`、`agentTurns`、`scenarios`、`planningValue`、`baselineGapNote`、`actualsBackfill`。
-10. `plan.md:105/130/137/147/151`：CI 步骤编号统一为 `[1]–[6]`；`plan.md` 的 Source Code 结构与 tasks 的实际文件清单对齐（`terrarium.ts`/`globe-surface.ts`/`tests/bench/**` vs `cross-path.ts`/`regression.ts`）。
+### 9.1 逐条修复（文件 / 行号 / 改成了什么）
+
+> 行号为**修复后**的 `tasks.md` / `plan.md` 行号（用 `Select-String` 实测）。
+
+| ID | 文件 | 行号（修复后） | 改成了什么 |
+|---|---|---|---|
+| **V1** | `tasks.md` | **L398**（新增任务行，紧邻 T132=L397）；联动 L404(T138)、L422(T146)、L540(Notes)、L521(Implementation Strategy) | 新增 **`T148 [US5]（层=单元）FR-019 治理承接：优化提交的基线强制`**——(a) `CONTRIBUTING.md` 新增"性能优化提交规则"小节（与 T132 同文件同节）；(b) `.github/PULL_REQUEST_TEMPLATE.md` 必填"性能优化基线对比"（`baseline-ref`/`after-ref`/指标口径/差值）；(c) `tools/scripts/check-optimization-baseline.mjs` + CI 断言：命中优化特征却缺对比数据 → **拒绝合入**；自检 `tests/unit/optimization-baseline-rule.test.mjs`（3 组用例）+ `--self-test`。T132 追溯补 `FR-019（协同 T148）`；T138 自检命令增至六条；T146 验收映射加入 FR-019 |
+| **D1** | `tasks.md` | **L243(T061)**、**L244(T062)**、**L305(T097)** | T061 增"**唯一 owner**：`Framebuffer`/`Renderbuffer`/`MultisampleFramebuffer` 附件化实现由 T061 交付，T062 交付 `FramebufferManager` 编排；**T097 只消费，MUST NOT 重复实现**"；T097 改为"**范围收窄**：只交付离屏深度纹理 + 深度拷贝路径（`GlobeDepth` 接线）" |
+| **I1** | `tasks.md` | **L128–L133**（Phase 2 G-7 说明）、**L175**（Phase 2 Checkpoint）、**L375**(T127)、**L442–L443**（Dependencies）、**L539/L541**（Notes） | G-7 顺序改为"结论在 **T127**（Phase 10）落盘，**唯一消费点 = T098b**（紧随其后）"；删除原"若顺序冲突，以 T098 优先处理"兜底文字；Phase 2 Checkpoint 同步。**理由（二选一：调整 T098 依赖）**：把"全量验证 + G-7 消费"从 Phase 7 移出——前移 G-7 到 Phase 7 会让其判定缺少 CI 配方输入，故只能通过拆分切片 B 使顺序可满足 |
+| **I2** | `tasks.md` | **L306(T098a)**、**L377（新增 T098b）**、**L308**（Phase 7 Checkpoint）、**L362–L364**（Phase 10 说明）、**L379**（W8 Checkpoint）、**L474–L477**（Parallel）、**L507/L512/L520** | `T098` → **`T098a`（前半：功能翻转，只重跑本阶段单元+契约套件，不依赖 G-7 与 Phase 9/10 资产）**；新增 **`T098b`（后半：全量验证闭环 + G-7 消费，置于 Phase 10 末尾）**，标注 T098a+T098b 共同构成阻断项。**理由（二选一：拆 T098a/T098b）**：`T111/T112/T121/T123` 产物必须先行，整体后移会使 Phase 7 缺少可验证的翻转节点 |
+| **D2** | `tasks.md` | **L214(T044)**、**L305(T097)** | T097 收敛为"`createViewportQuadCommand` **消费路径**（API 归 T044）" |
+| **V2** | `tasks.md` | **L393(T128)** | 断言清单新增 **(g)**：`confirmedItems` 非空且每项非空字符串；`unconfirmedItems[].{item, impactDirection∈{up,down,both}, impactMagnitude, note}` 齐备——**不得只依赖整体 schema 校验** |
+| **C1** | `plan.md` | **L112** | 在「原则 V — CI 为唯一事实来源」的 Constitution Check 中新增"**CI 门禁顺序的偏离记录**"：记录本方案把 `audit(AU-1…AU-5)` 前移到 `contract/visual/bench` 之前，并给出三条理由（确定性静态门禁前置可最快阻断越界改动；`contracts/verification-and-benchmark.md` §5 本就规定渲染类结论以 AU-1…AU-5 全通过为前提；章程该句未用 MUST/NON-NEGOTIABLE 且"任一失败阻断合入"语义不变），并声明若章程改为强制则 MUST 按章程调整 |
+| **C2** | `tasks.md` | **L374(T126)**、**L460**（Within Each Phase 铁律） | 原"证据**只认 CI 产物**"改为**证据口径**：真机门禁证据（`experiments/gates/out/*.json`、`artifacts/shader-verify/**`）**由本机真机产生并随仓库入库**，CI 负责归档与一致性断言（无 GPU 时 = naga 模块级校验，盲区见 T134）；渲染/基准结论仍只认 CI 产物。T126 上传清单新增 `experiments/gates/out/*.json` 与 `artifacts/slice-b-full-validation.json`（七类 → 九类） |
+| **U1** | `tasks.md` | 30 处：L212/L213/L214/L216/L218/L220/L222/L223/L224/L247/L264/L277/L278/L292/L306/L327/L340/L341/L343/L345/L349/L375/L394/L395/L396/L397/L399/L400/L401/L404 | 为 30 个 US 任务补 `层=`：T042/T043/T044/T046/T048/T050/T052=单元；T053=单元+架构边界；T054=架构边界；T065=单元+架构边界；T069=单元；T082=单元；T083=单元+视觉；T084=单元；T098a=单元+契约；T098b=视觉+基准；T107=契约+架构边界；T108=契约+架构边界；T109=单元；T111=契约；T113=单元；T117=视觉+架构边界；T127=基准+单元；T129/T130/T131/T132/T133/T134/T135/T138=单元 |
+| **U2** | `tasks.md` | **L76–L97**（Path Conventions 新增映射表）；**L240**(T058)、**L274**(T079)、**L418**(T142)、L212–L220(smoke) | 新增 **`--suite=` → 文件映射表**（27 个 suite 全覆盖，含 `stability:leak`→`tests/benchmark/stability-leak.spec.mjs`、`bench:shader-variants`→`tests/benchmark/shader-variants.spec.mjs`、`visual:texture-origin`→`tests/visual/texture-origin.spec.mjs`、`smoke:*`→`tests/contract/smoke-*.spec.mjs`），并要求新增 suite 时同步补表、由 T145 校验 |
+| **U3** | `tasks.md` | **L101**(T004)、**L197**(T039)、**L366**(T118)、**L368**(T120)、**L374**(T126) | 选型：**补 devDependency `yaml`**（而非自实现解析器）——理由：CI 工作流断言需可靠 YAML 解析，自实现子集对 GitHub Actions 的块/流式/多行标量不稳健；`yaml` 为 ISC 许可、零传递依赖，满足许可证门禁。T004 锁定清单加入 `yaml` 并要求精确版本；T039/T118/T120/T126 的"YAML 解析"改为"用 T004 锁定的 `yaml` 解析" |
+| **U4** | `tasks.md` | **L366**(T118) | CI 步骤链改为 `install（npm ci + npx playwright install --with-deps chromium）→ build → typecheck → …`，并在 T118 的 YAML 断言中要求"该步骤存在" |
+| **U5** | `tasks.md` | **L189**(T031 自检) | 删除 T031 自检中的 `localFile` **存在性**断言（前向依赖 T037），改由 T041 在 T037 落地后校验；T031 只断言清单结构（路径正则、`requirementRef` 非空、`kind` 取值、`replace` 类 `glCallSites>0`） |
+| **U6** | `tasks.md`（复核）/`quickstart.md`（**未授权，未改**） | `tasks.md` L39–L40、L104（T007 扫描面） | 复核：T007 只扫 `tools/**`、`.github/**`、`package.json`，`quickstart.md:147` 的 `pwsh -File …run-path-a.ps1` **不在扫描面内**且 T136 实跑范围为 §2–§6（不含 §7）→ 不阻塞。**残留**：`quickstart.md:147` 仍为 Windows-only、`:35` 仍为未锁版本的 `cargo install naga-cli --locked`（该文件不在本轮授权写入面，见 §9.4 待办） |
+| **I3** | `tasks.md` | **L474** | Phase 5 分组改为"T055/T056/T059/T060 可并行；**T057 与 T061/T062 串行**"（T059 不再同时出现在并行与串行两处） |
+| **I4** | `tasks.md` | **L475** | Phase 6 链路改为 **`T069→T070→T073→T074`**（T074 的深度范围修正在发射器 T073 之内进行） |
+| **I5** | `tasks.md` | **L476** | Phase 7 改为 **`T086 →（T087,T088,T090）可并行 → T089`**（T089 消费 T086 的适配层） |
+| **I6** | `tasks.md` | **L223**(T053)、**L276**(T081) | T053 标题改为"切片 C 桩与显式失败（`Context` 面 + manifest 中 5 个 `stub-not-implemented` 模块；**`ShaderBuilder` 边界不属本任务，见 T081**）"，`ShaderBuilder` 从 T053 的清单移除，由 T081 独占 |
+| **I7** | `tasks.md` | **L189**(T031 标题与自检)、**L223**(T053 自检) | manifest 语义明确化：**16 = 11 个 `kind:"replace"`（功能实现）+ 5 个 `kind:"stub-not-implemented"`**（`Texture3D`/`CubeMap`/`CubeMapFace`/`TextureAtlas`/`Sync`，切片 C 边界，只交付显式失败桩）；`kind ∈ {replace, adapt-shader, stub-not-implemented}` 进入断言，`glCallSites>0` 仅适用于 `replace` 类；T053 自检断言五项桩的 `kind` 与 T031 清单一致 |
+| **I8** | `tasks.md` | **L54**（全局约定 4）、**L368**(T120) | 安装命令改为 **`cargo install naga-cli --version 30.0.1 --locked`**，并注明"`--locked` 只锁依赖图，版本 MUST 由 `--version` 显式锁定"；T120 的 YAML 断言改为"缺 `--version 30.0.1` 即失败" |
+| **I9** | `plan.md` | **L145**、**L281** | `mvp-estimate.md` 行标注改为"**结论版本 v2.1.0**"、json 行补 `"version": "2.1.0"`；正文行改为"结论版本 **v2.1.0**，与 `mvp-estimate.md:3` 及 `mvp-estimate.v1.json` 一致；v1.0.0 对应已被否决的架构、v2.0.0 为其后的中间版本，两者均已失效" |
+| **I10** | `plan.md` | **L141–L147**（Project Structure）、**L339–L346**（下一步） | 文件清单改为"`tasks.md`：**已由 /speckit-tasks 依据本版 plan/contracts 整体重新生成**（147 任务 / 12 阶段）"，并新增 `analysis.md` 条目；"下一步"第 1 条改为"**`tasks.md` 与 `analysis.md` 已整体重新生成**…（CRITICAL = 0；4 项 HIGH 已按裁定修复）"；第 2 条补 G-7 顺序与 `T098a`/`T098b` 阻断项定义；第 3 条补 naga 锁版命令 |
+| **I11** | `tasks.md` | **L46**（标注规则）、**L240**(T058)、**L301**(T093)、**L306**(T098a)、**L327**(T107)、**L349**(T117)、**L377**(T098b) | 全局约定 2 新增**可机器核验的标注规则**（两路径相关 MUST 标、单后端 MUST NOT 标）；补标 **T093/T098a/T098b/T107/T117**；**去除 T058 的过度标注**（改为"本任务只运行单一后端…不使用标记"） |
+| **I12** | `tasks.md` | **L191**(T033) | 自检改为"在 **T031–T033** 完成后以 0 退出（T034 是独立的构建产物审计，不参与本任务完成判据）" |
+| **I13** | `tasks.md` | **L198**(T040) | 追溯改为 `→ FR-024, contracts/fork-patch-layer §7, contracts/verification-and-benchmark §5（AU-5）` |
+| **I14** | `tasks.md` | **L468** | Parallel Opportunities 增"**标注口径（I14 澄清）**：阶段级'可并行'仅为文件交集建议；**权威标注是个体任务的 `[P]`**；冲突时以任务正文与 `[P]` 为准"；并在 Phase 3/9-10/11 三条中补 T035→T036、T098b 串行、T132/T148 同文件约束 |
+| **I15** | `tasks.md` | **L141**(T015)、**L146**(T017) | 两任务补"**私有成员限定**：`scene._context` / `@private` 语义仅用于门禁断言，**MUST NOT 进入实现路径**" |
+| **A1** | `tasks.md` | **L166**(T025) | 预算改为**测量前预先落盘** `experiments/gates/g6-variants/budget.json`（来源：`mvp-estimate.md` §5 待确认项 1），判定脚本读取该文件、**MUST NOT 由本次测量反推阈值**；自检增"`budget.json` 存在且 `recordedAt` 早于 `g6-variants.json`" |
+| **A2** | `tasks.md` | **L277**(T082) | 追溯由"`FR-026/FR-027 附近范围界定`"改为精确键"`→ FR-026（工作流拆分：着色器覆盖范围）+ FR-027（口径声明）`" |
+| **A3** | `tasks.md` | **L367**(T119) | 并入 **U4** 修复：T119 增"**浏览器版本（A3）**：CI 用 Playwright 自带 Chromium，MUST 记录其主版本并断言 **≥ 尖刺真机基线 Chrome 153**；不满足即 STOP 上报，MUST NOT 静默降级配方"，并进入该任务自检断言 |
+| **D3** | `tasks.md` | **L110**(T013) | T013 增"**增量边界**：只定稿 API 面与最小实现；`backend-runner.mjs` 产品化归 T108、`src/verify/**` 完整资产包归 T109，二者 MUST NOT 重写已定稿接口" |
+
+### 9.2 修复后自检结论
+
+| 复核项 | 命令/方法 | 结果 |
+|---|---|---|
+| **FR-019 是否已有覆盖** | `Select-String -Pattern 'FR-019'` → **7 处命中**（L391 T148、L397 T148 自检、L398 T148 追溯、L404 T138、L422 T146、L521 Notes、L540 T132）；`-Pattern '优化'` 命中 T148 正文 | ✅ **有显式任务承接（T148）**，初检的"0 命中"已消除 |
+| **FR 覆盖** | 逐 FR 扫描 `tasks.md` | ✅ **33/33**（FR-029 由 T128 (g) 显式断言） |
+| **SC 覆盖** | 同上 | ✅ **10/10** |
+| **CRITICAL / HIGH 计数** | 按 §2 表逐条核对修复 | ✅ **CRITICAL = 0 / HIGH = 0**（4 项 HIGH 全部落地；MEDIUM 20 + LOW 7 全部处置） |
+| **`[P]` 复核** | 正则 `^\s*-\s\[\s\]\sT\d{3}[ab]?\s+(\[US\d\]\s+)?\[P\]` | ✅ **15 处，集合与修复前一致**（T002,T005,T006,T007,T011,T012,T013,T037,T038,T039,T040,T140,T141,T142,T143）；无同文件冲突，且 `T148` 与 `T132` 标注为**同文件串行**而非并行 |
+| **`〖二选一〗` 复核** | 同上正则 + 逐任务语义核对 | ✅ 任务级 **22 处**（T026,T047,T051,T064,T087,T091,T092,T093,T094,T095,T096,T098a,T098b,T101,T103,T106,T107,T117,T121,T136,T137,T142），阶段级 4 处 + 规则说明 1 处 = 全文 27 处 token；**漏标 4 处已补、过度标注 1 处已去除**；标注规则已写入全局约定 2 供机器核验 |
+| **任务编号纪律** | 逐行提取任务 ID | ✅ **149 个唯一 ID**；既有 ID 未重排，新增为 `T098b`（拆分）与 `T148`（追加） |
+| **节点引用完整性** | `Select-String -Pattern 'T098a|T098b|T148'` | ✅ `T098a` 9 处、`T098b` 22 处、`T148` 7 处，均在 `tasks.md` / `plan.md` 内自洽（Phase 2 说明、检查点、Dependencies、Parallel、Implementation Strategy、Notes 全部同步） |
+| **CI 可执行性复检** | `Select-String -Pattern 'pwsh|powershell'` | ✅ `tasks.md` 仅 L39/L40（禁令文本）与 L104（T007 扫描器自身）命中，**无自检依赖 `pwsh`**；`grep`/绝对路径 0 命中；无 `actionlint` 依赖 |
+
+### 9.3 修复后仍存在的残留（**需入口 Agent 决策或另行授权**）
+
+| 项 | 位置 | 说明 |
+|---|---|---|
+| R1 | `quickstart.md:35` | 仍写 `cargo install naga-cli --locked`（未带 `--version 30.0.1`），与 `tasks.md:54/368` 及 `contracts/fork-patch-layer.md:85` 的锁版要求不一致；`quickstart.md` 不在本轮授权写入面 |
+| R2 | `quickstart.md:147` | 一次性转换流程仍为 `pwsh -File experiments/shader-spike/scripts/run-path-a.ps1`（Windows-only），且 `tasks.md` 的 T007 可移植性检查不扫 `quickstart.md`/`docs/**` |
+| R3 | `contracts/fork-patch-layer.md:22-43`（§2 替换清单） | manifest 的 `kind` 语义（`replace` / `adapt-shader` / `stub-not-implemented`）已在 `tasks.md:189/223` 明确，但契约 §2 的 kind 枚举未同步；契约不在本轮授权写入面 |
+| R4 | `docs/ci-degradation.md`（尚未创建） | C2 的证据口径需在该文档（T134）中同步复述；T134 已在其范围内 |
+
+### 9.4 零改动证据
+
+```
+$ git diff --stat
+ specs/001-webgpu-terrain-mvp/analysis.md | 544 ++++++++++++++++---------------
+ specs/001-webgpu-terrain-mvp/plan.md     |  32 +-
+ specs/001-webgpu-terrain-mvp/tasks.md    | 194 ++++++-----
+ 3 files changed, 419 insertions(+), 351 deletions(-)
+```
+
+- ✅ `spec.md`、`.specify/memory/constitution.md`**均未出现在 diff 中**（零改动）；
+  `research.md`、`data-model.md`、`contracts/**`、`mvp-estimate.*`、`quickstart.md` 同样零改动。
+- ✅ 未执行 `git commit` / `git push`（工作区保持未提交状态）。
 
 ---
 
-*本报告由阶段 3.5（`speckit-analyze`，只读）生成。所有结论均标注文件与行号，未经验证的事项标注为"待确认"。*
+*本报告由阶段 3.5（`speckit-analyze`）重新生成，并在入口 Agent 逐条裁定后完成同批修复的复核记录（§9）。
+`spec.md` 与 `constitution.md` 全程未被修改；未执行 `git commit`。*

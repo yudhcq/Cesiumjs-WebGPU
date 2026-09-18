@@ -32,7 +32,8 @@
 - **CI 系统包（Ubuntu/Debian，均免费）**：`mesa-vulkan-drivers xvfb libvulkan1`。
 - **着色器转换工具链（仅一次性转换与 CI 校验，不进入运行时）**：
   - `glslang 16.6.0`：Khronos 官方预编译包（`glslang-16.6.0-linux-x86_64-release.zip`）；
-  - `naga-cli 30.0.1`：**无预编译二进制** → `cargo install naga-cli --locked`（CI 缓存 `~/.cargo`）；
+  - `naga-cli 30.0.1`：**无预编译二进制** → `cargo install naga-cli --version 30.0.1 --locked`（CI 缓存 `~/.cargo`）；
+    **版本 MUST 显式锁定**（缺 `--version 30.0.1` 即视为失败，与 `tasks.md` 的 CI 断言一致）；
   - `@webgpu/glslang 0.0.15`：若使用，MUST 显式引 `dist/web-devel-onefile`（默认 Node 入口实测挂死 >120 s）。
 - **上游依赖**：`@cesium/engine@26.3.0`（= `cesium@1.145.0`），精确版本 + 完整性哈希（见 `upstream/engine-26.3.0.lock.json`）。
 
@@ -144,7 +145,12 @@ CI 顺序见 [contracts/verification-and-benchmark.md](./contracts/verification-
 # 1) 取"真正送进编译器的 GLSL"（跑上游拼装逻辑；尖刺脚本已可复用）
 node experiments/shader-spike/scripts/extract-cesium-glsl.mjs
 # 2) 路径 A 出草稿（glslang → SPIR-V → naga → WGSL）
+#    ⚠️ `run-path-a.ps1` 是**尖刺期的 Windows-only 编排脚本**，仅用于一次性转换草稿；
+#    它 MUST NOT 成为 CI 或任何自检的前提（CI 目标为 Linux + bash）。
+#    Windows（尖刺留存）：
 pwsh -File experiments/shader-spike/scripts/run-path-a.ps1      # 结果落 logs/
+#    跨平台等价编排 MUST 由 Node 脚本承担（复用同目录的 glslang-to-spirv.mjs /
+#    prepare-spirv-able.mjs / repair-preprocessed.mjs），缺口在 W4 工作流中补齐。
 # 3) 人工/发射器定稿 → 入库 backend-webgpu/webgpu/wgsl/**（MUST NOT 写入 Source/Shaders/**）
 # 4) 更新映射表并做真机校验
 node tools/shader-leaf-map.mjs --update && node tools/shader-verify.mjs --family=globe
