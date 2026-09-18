@@ -134,11 +134,17 @@ description: "Task list for WebGPU Terrain MVP — 渲染后端替换（CesiumJS
 > ℹ️ **门禁原型代码一律放 `experiments/gates/**`**，**MUST NOT** 进入 `packages/**`、不参与 Rollup 主包构建；
 > 门禁只回答"假设是否成立"，其结论是 Phase 3+ 实现任务的输入。
 
-- [ ] T014 建立门禁产物规范与判定器：`tools/scripts/check-gate.mjs`（校验 `experiments/gates/out/<G-id>.json` 存在且含 `verdict`/`evidence`/`recordedAt`/`notes`，支持 `--all` 与 `--gate g5`）+ `experiments/gates/README.md`（门禁产物字段规范与"结论不得只写结论、必须附证据路径"的要求）。`自检`：`node --test "tests/unit/**/*.test.mjs"/check-gate.test.mjs`（缺文件/缺字段/verdict=fail 三类反例必须非 0 退出）。`→ plan「实现前的验证门」, 原则 V`
+- [X] T014 建立门禁产物规范与判定器：`tools/scripts/check-gate.mjs`（校验 `experiments/gates/out/<G-id>.json` 存在且含 `verdict`/`evidence`/`recordedAt`/`notes`，支持 `--all` 与 `--gate g5`）+ `experiments/gates/README.md`（门禁产物字段规范与"结论不得只写结论、必须附证据路径"的要求）。`自检`：`node --test "tests/unit/**/*.test.mjs"/check-gate.test.mjs`（缺文件/缺字段/verdict=fail 三类反例必须非 0 退出）。`→ plan「实现前的验证门」, 原则 V`
 
 ### G-1 接缝可替换性（H-1）
 
-- [ ] T015 G-1 门禁执行（**私有成员限定**：`scene._context` 仅用于本门禁断言，MUST NOT 进入实现路径）：在 `experiments/gates/g1-alias/` 内用 T008 的别名插件在**真实构建链**中替换 `Renderer/Context.js`（桩实现），由 Playwright 打开页面构造上游 `Scene`，断言 (a) `scene._context` 由本仓库实现提供、(b) `Scene.js` 对 `Context.js` 的**相对导入**被正确改写、(c) 白名单穷举测试通过；产出 `experiments/gates/out/g1.json` 与 `docs/gate-g1-conclusion.md`（含依据、证据路径、pass/fail）。`自检`：`node experiments/gates/g1-alias/run.mjs` 以 0 退出并写出 `g1.json`；`node tools/scripts/check-gate.mjs --gate g1` 以 0 退出。`→ H-1, FR-032, contracts/fork-patch-layer §3` **（失败动作：切换整仓 fork F1，补丁清单与审计方式不变 → STOP 上报入口 Agent 修订 plan）**
+- [X] T015 G-1 门禁执行（**私有成员限定**：`scene._context` 仅用于本门禁断言，MUST NOT 进入实现路径）：在 `experiments/gates/g1-alias/` 内用 T008 的别名插件在**真实构建链**中替换 `Renderer/Context.js`（桩实现），由 Playwright 打开页面构造上游 `Scene`，断言 (a) `scene._context` 由本仓库实现提供、(b) `Scene.js` 对 `Context.js` 的**相对导入**被正确改写、(c) 白名单穷举测试通过；产出 `experiments/gates/out/g1.json` 与 `docs/gate-g1-conclusion.md`（含依据、证据路径、pass/fail）。`自检`：`node experiments/gates/g1-alias/run.mjs` 以 0 退出并写出 `g1.json`；`node tools/scripts/check-gate.mjs --gate g1` 以 0 退出。`→ H-1, FR-032, contracts/fork-patch-layer §3` **（失败动作：切换整仓 fork F1，补丁清单与审计方式不变 → STOP 上报入口 Agent 修订 plan）**
+  > **执行结论（2026-09-19）**：**verdict = pass（25/25 检查项）**，无需触发失败动作。证据：`experiments/gates/out/g1.json`、
+  > `experiments/gates/out/g1-build.json`、`experiments/gates/out/g1-runtime.json`、`docs/gate-g1-conclusion.md`。
+  > 阴性对照 `run.mjs --control=no-rewrite` 5/5 检出"未替换"。**实现发现 F-1（须 W1 处理）**：上游 `Source/**` 依赖
+  > `mersenne-twister`/`urijs`/`grapheme-splitter`/`protobufjs` 等 **CommonJS-only** 包，而 T004 的依赖集无 CJS 互操作插件 →
+  > T009 的 `dist`（内嵌经替换的上游源码）需等价能力（引入 `@rollup/plugin-commonjs` 或等价方案），属对 T004 依赖集的增量决策。
+  > 偏离 D-1（门禁清单 vs T031 正式清单）、D-2（无 TS 插件）、D-3（桩以 WebGL2 承载上下文获取）见结论文档 §5。
 
 ### G-2 设备交接与同步构造（H-2）
 

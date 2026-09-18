@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-1 gate — module-level replacement seam (Renderer/Context.js)</title>
+    <!-- no favicon request: keeps the console transcript free of a 404 that would mask real errors -->
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #101418;
+        color: #e8eef5;
+      }
+      #g1-container {
+        position: relative;
+        width: 320px;
+        height: 200px;
+        margin: 12px;
+        background: #000;
+      }
+      canvas#g1-canvas {
+        display: block;
+        width: 320px;
+        height: 200px;
+      }
+      #g1-note {
+        margin: 12px;
+        max-width: 60ch;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The canvas lives inside a positioned parent because upstream `Scene` appends its credit
+         container to `canvas.parentNode` (Scene.js:164). -->
+    <div id="g1-container"><canvas id="g1-canvas"></canvas></div>
+    <p id="g1-note">
+      G-1 gate page (tasks.md T015). It imports the real Rollup build output of
+      <code>experiments/gates/g1-alias/entry.js</code> — bundled with the production alias plugin
+      and the gate-local replacement manifest — and constructs the upstream <code>Scene</code> with
+      no context injected. The result is collected by <code>run.mjs</code> through
+      <code>window.__g1.report</code>.
+    </p>
+    <script type="module" src="./probe.js"></script>
+  </body>
+</html>

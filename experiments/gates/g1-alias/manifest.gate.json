@@ -1,0 +1,21 @@
+{
+  "gateNote": "G-1 门禁专用替换清单（tasks.md T015）。仅用于在真实构建链中证明模块级替换接缝可用；正式清单由 T031 落在 packages/cesium-webgpu/backend-webgpu/manifest.json，本文件 MUST NOT 被当作交付清单使用。",
+  "baseline": {
+    "packageName": "@cesium/engine",
+    "version": "26.3.0",
+    "cesiumVersion": "1.145.0",
+    "integritySource": "upstream/engine-26.3.0.lock.json"
+  },
+  "entries": [
+    {
+      "upstreamModule": "Renderer/Context.js",
+      "localFile": "Renderer/Context.js",
+      "kind": "replace",
+      "requirementRef": ["FR-030", "FR-032"],
+      "reason": "G-1 接缝可替换性：以本项目实现替换上游 Context.js，证明 Scene 的相对导入被别名插件改写且替换后的对象被上游 Scene 在真实运行时消费（桩实现，只覆盖构造期读取面；WebGPU 实现在 W2/T042+）",
+      "glCallSites": 46
+    }
+  ],
+  "keptModulesHash": null,
+  "keptModulesHashNote": "由 T032 的 tools/scripts/gen-kept-hash.mjs 生成并写入正式清单；门禁清单不做上游漂移审计（该审计属 T030/T032/T033）。"
+}
