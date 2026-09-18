@@ -143,6 +143,118 @@ export function comparePassSequence({ webgpu, webgl2, gate }) {
   };
 }
 
+/**
+ * Compare two `contract:resources` artefacts (tasks.md T064, W3).
+ *
+ * Both runs perform the same resource workload through the production specifiers, so the *observable*
+ * resource behaviour MUST agree. The two paths legitimately describe the resolve differently — WebGPU
+ * pairs a multisampled attachment with its `resolveTarget`, GL blits between two framebuffers — and
+ * that difference is **declared** here rather than smoothed over (the same discipline T106 asks for).
+ */
+export function compareResources({ webgpu, webgl2 }) {
+  const checks = [];
+  const check = (id, ok, detail) => checks.push({ id, ok: ok === true, detail });
+
+  check(
+    "both-runs-present",
+    webgpu.present && webgl2.present,
+    `artefacts: webgpu=${webgpu.present ? "present" : "MISSING"}, webgl2=${webgl2.present ? "present" : "MISSING"}`,
+  );
+  if (!webgpu.present || !webgl2.present) return { checks, measurements: {}, declaredDifferences: [] };
+
+  const gpuRun = webgpu.run;
+  const glRun = webgl2.run;
+  check(
+    "two-independent-runs",
+    gpuRun.runId !== glRun.runId &&
+      gpuRun.isolation === "separate-process" &&
+      glRun.isolation === "separate-process" &&
+      gpuRun.backend === "webgpu" &&
+      glRun.backend === "webgl2",
+    `run ids ${gpuRun.runId} vs ${glRun.runId}; isolation ${gpuRun.isolation}/${glRun.isolation} — no artefact came from a shared session`,
+  );
+  check(
+    "each-run-touched-only-its-own-backend",
+    (gpuRun.report?.webgl2?.objectsCreated ?? null) === 0 &&
+      (gpuRun.report?.webgl2?.contextRequests ?? null) === 0 &&
+      (glRun.report?.webgpu?.adapterRequests ?? null) === 0 &&
+      (glRun.report?.webgpu?.deviceRequests ?? null) === 0,
+    `the WebGPU run created ${gpuRun.report?.webgl2?.objectsCreated} WebGL object(s); the WebGL2 run requested ` +
+      `${glRun.report?.webgpu?.adapterRequests} WebGPU adapter(s)`,
+  );
+
+  const gpu = gpuRun.report?.result?.resources;
+  const gl = glRun.report?.result?.resources;
+  check("both-runs-published-the-report", gpu !== undefined && gl !== undefined, "both pages published their resource report");
+  if (gpu === undefined || gl === undefined) return { checks, measurements: {}, declaredDifferences: [] };
+
+  const equalFact = (id, path, label) => {
+    const left = path(gpu);
+    const right = path(gl);
+    check(id, left === right, `${label}: WebGPU ${JSON.stringify(left)} vs WebGL2 ${JSON.stringify(right)}`);
+  };
+
+  equalFact("buffer-sizes-agree", (r) => `${r.buffer.vertexSizeInBytes}/${r.buffer.indexSizeInBytes}`, "vertex/index buffer sizes");
+  equalFact("buffer-usage-agree", (r) => `${r.buffer.vertexUsage}/${r.buffer.indexUsage}`, "BufferUsage values");
+  equalFact("index-extras-agree", (r) => `${r.buffer.indexDatatype}/${r.buffer.bytesPerIndex}/${r.buffer.numberOfIndices}`, "index datatype/bytes/count");
+  equalFact("vertex-count-agrees", (r) => r.buffer.numberOfVertices, "numberOfVertices");
+  equalFact(
+    "texture-facts-agree",
+    (r) => `${r.texture.width}x${r.texture.height}/${r.texture.pixelFormat}/${r.texture.pixelDatatype}/${r.texture.flipY}/${r.texture.sizeInBytes}`,
+    "texture size/format/type/flipY/sizeInBytes",
+  );
+  equalFact(
+    "sampler-values-agree",
+    (r) => `${r.sampler.wrapS}/${r.sampler.wrapT}/${r.sampler.wrapR}/${r.sampler.minificationFilter}/${r.sampler.magnificationFilter}/${r.sampler.maximumAnisotropy}`,
+    "the six Sampler values",
+  );
+  equalFact("msaa-sample-count-agrees", (r) => r.msaa.attachmentSamples, "the multisampled attachment's sample count");
+  equalFact("msaa-attachment-count-agrees", (r) => `${r.msaa.renderColorAttachments}/${r.msaa.colorColorAttachments}`, "colour attachment counts");
+
+  // The pixels: the same two probes on both runs, within a small tolerance (8-bit unorm storage).
+  const sampleOf = (run, name) => (run.canvasScreenshot?.samples ?? []).find((sample) => sample.name === name)?.rgba ?? null;
+  for (const [name, expectation] of [
+    ["left-centre", "the ordered-buffer colour"],
+    ["right-centre", "the MSAA-resolved colour"],
+  ]) {
+    const left = sampleOf(gpuRun, name);
+    const right = sampleOf(glRun, name);
+    const within = (a, b) => a !== null && b !== null && a.slice(0, 3).every((value, index) => Math.abs(value - b[index]) <= 12);
+    check(`pixel-${name}-agrees`, within(left, right), `${expectation}: WebGPU rgb(${left?.slice(0, 3)}) vs WebGL2 rgb(${right?.slice(0, 3)})`);
+  }
+
+  const declaredDifferences = [
+    {
+      metric: "msaa.resolveMechanism",
+      webgpu: gpu.msaa.resolveMechanism,
+      webgl2: gl.msaa.resolveMechanism,
+      reason:
+        "WebGPU resolves through `colorAttachments[i].resolveTarget` at pass end; GL copies with `blitFramebuffer`. " +
+        "The *result* is compared (the resolved pixels), not the mechanism.",
+    },
+    {
+      metric: "texture.gpuFormat / buffer.gpuLayout / counts",
+      webgpu: "present",
+      webgl2: "absent (no GPU descriptor to report)",
+      reason: "WebGPU-only descriptors; the GL side reports the upstream-visible values instead.",
+    },
+  ];
+  check(
+    "the-resolve-difference-is-declared",
+    gpu.msaa.resolveMechanism === "resolveTarget" && gl.msaa.resolveMechanism === "blitFramebuffer",
+    `WebGPU=${gpu.msaa.resolveMechanism}, WebGL2=${gl.msaa.resolveMechanism} — a declared difference, not a silent one`,
+  );
+
+  return {
+    checks,
+    declaredDifferences,
+    measurements: {
+      webgpu: { runId: gpuRun.runId, buffer: gpu.buffer, texture: gpu.texture, sampler: gpu.sampler, msaa: gpu.msaa },
+      webgl2: { runId: glRun.runId, buffer: gl.buffer, texture: gl.texture, sampler: gl.sampler, msaa: gl.msaa },
+    },
+  };
+}
+
 function main(argv) {
   const options = parseArgv(argv);
   if (options.help || options.artifact === null) {
@@ -154,7 +266,12 @@ function main(argv) {
   const gatePath = path.join(REPO_ROOT, "experiments", "gates", "out", "g3.json");
   const gate = fs.existsSync(gatePath) ? JSON.parse(fs.readFileSync(gatePath, "utf8")) : null;
 
-  const { checks, measurements } = comparePassSequence({ webgpu, webgl2, gate });
+  // Which comparison applies is decided by the artefact directory, so a new suite cannot be compared
+  // with the wrong rules by accident.
+  const isResources = /(^|[\\/])resources$/.test(options.artifact);
+  const { checks, measurements, declaredDifferences = [] } = isResources
+    ? compareResources({ webgpu, webgl2 })
+    : comparePassSequence({ webgpu, webgl2, gate });
   const failed = checks.filter((entry) => entry.ok !== true);
   const verdict = failed.length === 0 ? "pass" : "fail";
 
@@ -163,8 +280,10 @@ function main(argv) {
     artifact: options.artifact,
     recordedAt: new Date().toISOString(),
     isolation: "offline-only: this tool never launches a browser or a backend (principle II)",
+    comparison: isResources ? "resources" : "pass-sequence",
     verdict,
     checks,
+    declaredDifferences,
     measurements,
   };
   const outDir = path.join(REPO_ROOT, options.artifact);

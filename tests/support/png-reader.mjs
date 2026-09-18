@@ -144,3 +144,22 @@ export function regionStatistics(image, region) {
     centre: [image.rgba[centreOffset], image.rgba[centreOffset + 1], image.rgba[centreOffset + 2], image.rgba[centreOffset + 3]],
   };
 }
+
+/**
+ * Sample individual pixels of a decoded image.
+ *
+ * `points` are **normalised** (`0..1`) coordinates, so a suite can name "the top-left quarter of the
+ * left half" without knowing the screenshot's pixel size. Used by `visual:texture-origin` (the
+ * four-corner texel assertion of T058) and by `contract:resources` (the two half-viewport probes).
+ *
+ * @param {{width: number, height: number, rgba: Buffer}} image
+ * @param {{name: string, x: number, y: number}[]} points
+ */
+export function samplePixels(image, points) {
+  return points.map((point) => {
+    const x = Math.min(image.width - 1, Math.max(0, Math.round(point.x * (image.width - 1))));
+    const y = Math.min(image.height - 1, Math.max(0, Math.round(point.y * (image.height - 1))));
+    const offset = (y * image.width + x) * 4;
+    return { name: point.name, x, y, rgba: [image.rgba[offset], image.rgba[offset + 1], image.rgba[offset + 2], image.rgba[offset + 3]] };
+  });
+}

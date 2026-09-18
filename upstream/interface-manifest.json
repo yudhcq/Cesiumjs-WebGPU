@@ -1,7 +1,7 @@
 {
   "baselineVersion": "26.3.0",
   "cesiumVersion": "1.145.0",
-  "generatedAt": "2026-09-18T21:46:50.527Z",
+  "generatedAt": "2026-09-18T22:24:42.548Z",
   "generator": "tools/gen-interface-manifest.mjs",
   "method": "Static scan of the installed upstream sources. `exportedSymbols` = the module's exposed member surface (prototype methods, Object.defineProperties accessors, instance fields, static members, named exports). `consumedMembers` = members of that surface reached from logic-layer files (Source/** outside Source/Renderer/**) through the receiver identifiers declared in the generator (RECEIVER_HINTS + the default-exported class name). `consumedBy` lists those logic-layer files. `digest` folds module, surface, consumed members and consumers.",
   "entries": [
@@ -1429,6 +1429,40 @@
       "digest": "sha256-3371aa5b16f85c2040f8f8edc98721451bad1f069f50db64f60c4d6520c72d11"
     },
     {
+      "module": "Renderer/RenderbufferFormat.js",
+      "exportedSymbols": [
+        "DEPTH24_STENCIL8",
+        "DEPTH_COMPONENT16",
+        "DEPTH_STENCIL",
+        "RGB565",
+        "RGB5_A1",
+        "RGBA16F",
+        "RGBA32F",
+        "RGBA4",
+        "RGBA8",
+        "STENCIL_INDEX8"
+      ],
+      "consumedMembers": [
+        {
+          "name": "DEPTH24_STENCIL8",
+          "kind": "property"
+        },
+        {
+          "name": "DEPTH_COMPONENT16",
+          "kind": "property"
+        }
+      ],
+      "consumedBy": [
+        "Scene/InvertClassification.js",
+        "Scene/ShadowMap.js"
+      ],
+      "defaultExport": "RenderbufferFormat",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-09e01dd904753813c4d96854540ff85d4f574ffa31b217214de06871df900a6d"
+    },
+    {
       "module": "Renderer/Sampler.js",
       "exportedSymbols": [
         "NEAREST",
@@ -2163,6 +2197,148 @@
       "digest": "sha256-98231bcc33f85cf2dfec7b82855c242ae2dc2dce3a1a7ecddb2e3a7bb60b58f9"
     },
     {
+      "module": "Renderer/TextureMagnificationFilter.js",
+      "exportedSymbols": [
+        "LINEAR",
+        "NEAREST"
+      ],
+      "consumedMembers": [
+        {
+          "name": "LINEAR",
+          "kind": "property"
+        },
+        {
+          "name": "NEAREST",
+          "kind": "property"
+        }
+      ],
+      "consumedBy": [
+        "Scene/CloudCollection.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GltfLoader.js",
+        "Scene/GltfLoaderUtil.js",
+        "Scene/ImageryLayer.js",
+        "Scene/Material.js",
+        "Scene/Megatexture.js",
+        "Scene/Model/PrimitiveOutlineGenerator.js",
+        "Scene/Model/TextureUniform.js",
+        "Scene/PostProcessStage.js",
+        "Scene/PostProcessStageCollection.js",
+        "Scene/VoxelTraversal.js",
+        "Scene/createElevationBandMaterial.js",
+        "Scene/parseStructuralMetadata.js"
+      ],
+      "defaultExport": "TextureMagnificationFilter",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-d618e4dc32c849f4ad35422d053c267e79c145374140a5b26dab24b901c87916"
+    },
+    {
+      "module": "Renderer/TextureMinificationFilter.js",
+      "exportedSymbols": [
+        "LINEAR",
+        "LINEAR_MIPMAP_LINEAR",
+        "LINEAR_MIPMAP_NEAREST",
+        "NEAREST",
+        "NEAREST_MIPMAP_LINEAR",
+        "NEAREST_MIPMAP_NEAREST"
+      ],
+      "consumedMembers": [
+        {
+          "name": "LINEAR",
+          "kind": "property"
+        },
+        {
+          "name": "LINEAR_MIPMAP_LINEAR",
+          "kind": "property"
+        },
+        {
+          "name": "LINEAR_MIPMAP_NEAREST",
+          "kind": "property"
+        },
+        {
+          "name": "NEAREST",
+          "kind": "property"
+        },
+        {
+          "name": "NEAREST_MIPMAP_LINEAR",
+          "kind": "property"
+        },
+        {
+          "name": "NEAREST_MIPMAP_NEAREST",
+          "kind": "property"
+        }
+      ],
+      "consumedBy": [
+        "Scene/CloudCollection.js",
+        "Scene/DynamicEnvironmentMapManager.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GltfLoader.js",
+        "Scene/GltfLoaderUtil.js",
+        "Scene/GltfTextureLoader.js",
+        "Scene/ImageryLayer.js",
+        "Scene/Material.js",
+        "Scene/Megatexture.js",
+        "Scene/Model/PrimitiveOutlineGenerator.js",
+        "Scene/Model/TextureManager.js",
+        "Scene/Model/TextureUniform.js",
+        "Scene/PostProcessStage.js",
+        "Scene/PostProcessStageCollection.js",
+        "Scene/SpecularEnvironmentCubeMap.js",
+        "Scene/VoxelTraversal.js",
+        "Scene/createElevationBandMaterial.js",
+        "Scene/parseStructuralMetadata.js"
+      ],
+      "defaultExport": "TextureMinificationFilter",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-c87afa85315a4fe25500b2a7d503105afb25993fa309729b32766505370d48e1"
+    },
+    {
+      "module": "Renderer/TextureWrap.js",
+      "exportedSymbols": [
+        "CLAMP_TO_EDGE",
+        "MIRRORED_REPEAT",
+        "REPEAT"
+      ],
+      "consumedMembers": [
+        {
+          "name": "CLAMP_TO_EDGE",
+          "kind": "property"
+        },
+        {
+          "name": "MIRRORED_REPEAT",
+          "kind": "property"
+        },
+        {
+          "name": "REPEAT",
+          "kind": "property"
+        }
+      ],
+      "consumedBy": [
+        "Scene/CloudCollection.js",
+        "Scene/GlobeSurfaceTile.js",
+        "Scene/GltfLoaderUtil.js",
+        "Scene/GltfTextureLoader.js",
+        "Scene/ImageryLayer.js",
+        "Scene/Megatexture.js",
+        "Scene/Model/PrimitiveOutlineGenerator.js",
+        "Scene/Model/TextureManager.js",
+        "Scene/Model/TextureUniform.js",
+        "Scene/PostProcessStage.js",
+        "Scene/PostProcessStageCollection.js",
+        "Scene/createElevationBandMaterial.js",
+        "Scene/parseStructuralMetadata.js"
+      ],
+      "defaultExport": "TextureWrap",
+      "namedExports": [],
+      "kind": "kept-consumed",
+      "inManifest": false,
+      "digest": "sha256-4d6f4bff9b84f9f9fadf53b99d65a328f8bb3f6e1ea66d7e839a606a4fa5eae2"
+    },
+    {
       "module": "Renderer/UniformState.js",
       "exportedSymbols": [
         "UniformState",
@@ -2601,6 +2777,6 @@
       "digest": "sha256-62ab1e8a6fb0af7a154f1851cda96fe18a6500cd063f2b578ac6ec4ad0188efd"
     }
   ],
-  "digest": "sha256-1567c5fa61bf4343f71e33407bc102c3fef5a09beab0136472f33bfbb9661205",
+  "digest": "sha256-3f3fe677230dda6e2475b648e66011ab3c31fc68335ecd8ad974e7cafb626cbf",
   "notes": "Upgrade drill input (contract §6 step 2): a version bump regenerates this file and the diff is the adaptation list. `--check` fails when the committed baseline no longer matches the installed package."
 }

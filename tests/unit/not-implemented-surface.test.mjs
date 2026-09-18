@@ -86,11 +86,22 @@ test("the Context face rejects the slice-C entry points and leaves defaultFrameb
   for (const capability of ["createPickId", "getObjectByPickColor"]) {
     assert.throws(() => context[capability](), (error) => assertDiagnostic(error, "not-implemented", `Context#${capability}()`));
   }
-  for (const property of ["defaultCubeMap", "defaultEmissiveTexture", "defaultNormalTexture"]) {
+  for (const property of ["defaultCubeMap"]) {
     assert.throws(() => context[property], (error) => assertDiagnostic(error, "not-implemented", `Context#${property}`));
   }
   await assert.rejects(context.readPixels(), (error) => assertDiagnostic(error, "not-implemented", "Context#readPixels()"));
   await assert.rejects(context.readPixelsToPBO(), (error) => assertDiagnostic(error, "not-implemented", "Context#readPixelsToPBO()"));
+
+  // T056 landed the `Texture` replacement, so the two 1x1 placeholders are real textures now — the
+  // registry entries that used to point at "W3 (T056)" are gone, and asking for them MUST return a
+  // texture rather than fail. Asserted (not assumed) so the boundary cannot drift back.
+  for (const property of ["defaultEmissiveTexture", "defaultNormalTexture"]) {
+    const texture = context[property];
+    assert.equal(texture.width, 1, `Context#${property} MUST be a real 1x1 Texture after T056`);
+    assert.equal(texture.height, 1);
+    assert.equal(texture.flipY, false);
+    assert.equal(typeof texture.destroy, "function");
+  }
 
   assert.equal(context.defaultFramebuffer, undefined, "the default framebuffer IS the canvas; upstream also yields undefined");
   context.destroy();
@@ -107,7 +118,10 @@ test("a draw without backend inputs fails loudly and names the owning tasks", as
   context.beginFrame();
   assert.throws(() => context.draw({}, {}), (error) => {
     assertDiagnostic(error, "not-implemented", "Context#draw without inputs");
-    assert.equal(error.details?.plannedPhase, "W3 (T055-T060) + W4 (T075)", "the failure MUST name the tasks that will make the draw real");
+    // W3 landed the geometry half (the replaced `VertexArray` publishes it), so what is still missing
+    // is the pipeline itself — W4 / T073+T075. The attribution MUST follow the implementation.
+    assert.equal(error.details?.plannedPhase, "W4 (T073/T075)", "the failure MUST name the tasks that will make the draw real");
+    assert.equal(error.details?.extra?.hasVertexBuffers, false, "the failure MUST report which half of the payload is missing");
     return true;
   });
   context.endFrame();

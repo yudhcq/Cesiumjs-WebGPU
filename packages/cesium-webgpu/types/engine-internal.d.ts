@@ -622,10 +622,124 @@ declare module "@cesium/engine/Source/Renderer/BufferUsage.js" {
     readonly STATIC_DRAW: number;
     readonly DYNAMIC_DRAW: number;
     readonly STREAM_DRAW: number;
+    readonly DYNAMIC_READ: number;
     readonly validate: (bufferUsage: number) => boolean;
     [key: string]: UpstreamOpaque;
   };
   export default BufferUsage;
+}
+
+/**
+ * `Source/Core/PixelFormat.js` — consumed by the W3 resource layer (`webgpu/format-map.ts` maps
+ * `PixelFormat` × `PixelDatatype` to `GPUTextureFormat`; `Renderer/Texture.ts` uses
+ * `textureSizeInBytes` and the depth-format predicate; `Renderer/Framebuffer.ts` uses the colour /
+ * depth predicates for its upstream validation). GL-free and kept byte-identical.
+ */
+declare module "@cesium/engine/Source/Core/PixelFormat.js" {
+  const PixelFormat: {
+    readonly DEPTH_COMPONENT: number;
+    readonly DEPTH_STENCIL: number;
+    readonly ALPHA: number;
+    readonly RED: number;
+    readonly RG: number;
+    readonly RGB: number;
+    readonly RGBA: number;
+    readonly RED_INTEGER: number;
+    readonly RG_INTEGER: number;
+    readonly RGB_INTEGER: number;
+    readonly RGBA_INTEGER: number;
+    readonly LUMINANCE: number;
+    readonly LUMINANCE_ALPHA: number;
+    readonly componentsLength: (pixelFormat: number) => number;
+    readonly validate: (pixelFormat: number) => boolean;
+    readonly isColorFormat: (pixelFormat: number) => boolean;
+    readonly isDepthFormat: (pixelFormat: number) => boolean;
+    readonly isCompressedFormat: (pixelFormat: number) => boolean;
+    readonly textureSizeInBytes: (pixelFormat: number, pixelDatatype: number, width: number, height: number) => number;
+    readonly toInternalFormat: (pixelFormat: number, pixelDatatype: number, context: UpstreamOpaque) => number;
+    readonly flipY: (arrayView: UpstreamOpaque, width: number, height: number) => UpstreamOpaque;
+    [key: string]: UpstreamOpaque;
+  };
+  export default PixelFormat;
+}
+
+/**
+ * `Source/Core/Cartesian2.js` — the `Texture#dimensions` return type (upstream:
+ * `Texture.js:233 this._dimensions = new Cartesian2(width, height)`). GL-free, kept byte-identical.
+ */
+declare module "@cesium/engine/Source/Core/Cartesian2.js" {
+  export default class Cartesian2 {
+    constructor(x?: number, y?: number);
+    x: number;
+    y: number;
+    clone(result?: Cartesian2): Cartesian2;
+    equals(right?: Cartesian2): boolean;
+    [key: string]: UpstreamOpaque;
+  }
+}
+
+/**
+ * `Source/Renderer/RenderbufferFormat.js` — GL-free, kept byte-identical. Consumed by
+ * `webgpu/format-map.ts` (`mapRenderbufferFormat`) and `Renderer/FramebufferManager.ts`
+ * (upstream's depth/colour attachment selection).
+ */
+declare module "@cesium/engine/Source/Renderer/RenderbufferFormat.js" {
+  const RenderbufferFormat: {
+    readonly RGBA4: number;
+    readonly RGBA8: number;
+    readonly RGBA16F: number;
+    readonly RGBA32F: number;
+    readonly RGB5_A1: number;
+    readonly RGB565: number;
+    readonly DEPTH_COMPONENT16: number;
+    readonly STENCIL_INDEX8: number;
+    readonly DEPTH_STENCIL: number;
+    readonly DEPTH24_STENCIL8: number;
+    readonly validate: (renderbufferFormat: number) => boolean;
+    readonly getColorFormat: (datatype: number) => number;
+    [key: string]: UpstreamOpaque;
+  };
+  export default RenderbufferFormat;
+}
+
+/**
+ * `Source/Renderer/TextureWrap.js` / `TextureMinificationFilter.js` /
+ * `TextureMagnificationFilter.js` — GL-free, kept byte-identical. All three are consumed by
+ * `webgpu/sampler-map.ts`, which is the one place a kept `Sampler` becomes a `GPUSamplerDescriptor`.
+ */
+declare module "@cesium/engine/Source/Renderer/TextureWrap.js" {
+  const TextureWrap: {
+    readonly CLAMP_TO_EDGE: number;
+    readonly REPEAT: number;
+    readonly MIRRORED_REPEAT: number;
+    readonly validate: (textureWrap: number) => boolean;
+    [key: string]: UpstreamOpaque;
+  };
+  export default TextureWrap;
+}
+
+declare module "@cesium/engine/Source/Renderer/TextureMinificationFilter.js" {
+  const TextureMinificationFilter: {
+    readonly NEAREST: number;
+    readonly LINEAR: number;
+    readonly NEAREST_MIPMAP_NEAREST: number;
+    readonly LINEAR_MIPMAP_NEAREST: number;
+    readonly NEAREST_MIPMAP_LINEAR: number;
+    readonly LINEAR_MIPMAP_LINEAR: number;
+    readonly validate: (textureMinificationFilter: number) => boolean;
+    [key: string]: UpstreamOpaque;
+  };
+  export default TextureMinificationFilter;
+}
+
+declare module "@cesium/engine/Source/Renderer/TextureMagnificationFilter.js" {
+  const TextureMagnificationFilter: {
+    readonly NEAREST: number;
+    readonly LINEAR: number;
+    readonly validate: (textureMagnificationFilter: number) => boolean;
+    [key: string]: UpstreamOpaque;
+  };
+  export default TextureMagnificationFilter;
 }
 
 /** `Source/Renderer/PassState.js` — 7 logic-layer sites; GL-free, kept byte-identical. */

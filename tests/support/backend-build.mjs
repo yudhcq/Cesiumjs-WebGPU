@@ -112,6 +112,16 @@ async function buildOne({ backend }) {
     replacementContextInGraph: watchFiles.some((file) => file.endsWith(path.join("backend-webgpu", "Renderer", "Context.ts"))),
     containsUpstreamContextSnippet: code.includes(UPSTREAM_CONTEXT_SNIPPET),
     warnings: [...new Set(warnings.map((warning) => warning.code))],
+    /**
+     * Warnings whose message mentions this repository's own sources.
+     *
+     * Upstream Cesium carries known internal cycles (`Scene/**`, `DataSources/**`), so the full warning
+     * list is not a useful gate — but a warning pointing at `backend-webgpu/**`, `tests/**` or
+     * `src/**` is a warning the patch layer introduced, and that MUST be empty.
+     */
+    patchLayerWarnings: warnings
+      .filter((warning) => /backend-webgpu|packages[\\/]cesium-webgpu|tests[\\/]contract/.test(warning.message ?? ""))
+      .map((warning) => `${warning.code}: ${String(warning.message).split("\n")[0].slice(0, 200)}`),
   };
   fs.writeFileSync(path.join(bundleDir, "build.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
   return report;

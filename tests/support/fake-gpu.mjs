@@ -189,6 +189,8 @@ export function createFakeDevice({ limits = FAKE_LIMITS, features = ["float32-fi
           return pass;
         },
         copyTextureToBuffer: (...args) => encoderCalls.push({ name: "copyTextureToBuffer", args }),
+        copyBufferToBuffer: (...args) => encoderCalls.push({ name: "copyBufferToBuffer", args }),
+        copyTextureToTexture: (...args) => encoderCalls.push({ name: "copyTextureToTexture", args }),
         clearBuffer: (...args) => encoderCalls.push({ name: "clearBuffer", args }),
         finish: () => {
           encoderCalls.push({ name: "finish", args: [] });
@@ -283,4 +285,42 @@ export function assertDiagnostic(error, category, where = "diagnostic") {
   if (category !== undefined) assert.equal(error.category, category, `${where} MUST use category "${category}" (got "${error.category}")`);
   assert.ok(typeof error.message === "string" && error.message.length > 20, `${where} MUST carry an explanatory message`);
   return true;
+}
+
+/**
+ * A double of the replacement `Context` surface the **replaced resource classes** read (W3).
+ *
+ * Deliberately not a `Context`: the resource classes must depend only on the members listed here
+ * (`device`, `id`, the capability flags, the two `ContextLimits` maxima they validate against, and the
+ * render-target registration used by `Framebuffer`). A double that is narrower than the real thing is
+ * what keeps that dependency honest — a resource class that reaches for anything else fails here.
+ */
+export function createFakeGpuContext({ device = createFakeDevice(), capabilities = {}, limits = {}, label = "unit-context" } = {}) {
+  const registered = new Map();
+  return {
+    device,
+    id: label,
+    msaa: true,
+    depthTexture: false,
+    fragmentDepth: true,
+    instancedArrays: true,
+    elementIndexUint: true,
+    colorBufferFloat: true,
+    colorBufferHalfFloat: true,
+    floatingPointTexture: true,
+    halfFloatingPointTexture: true,
+    textureFilterAnisotropic: false,
+    drawingBufferWidth: 300,
+    drawingBufferHeight: 150,
+    contextLimits: { maximumTextureSize: 16384, maximumRenderbufferSize: 16384, maximumColorAttachments: 8, ...limits },
+    ...capabilities,
+    __registeredTargets: registered,
+    registerTarget(target) {
+      registered.set(target.id, target);
+    },
+    unregisterTarget(id) {
+      registered.delete(id);
+    },
+    isDestroyed: () => false,
+  };
 }

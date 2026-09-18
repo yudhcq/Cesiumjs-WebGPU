@@ -17,11 +17,13 @@
  *
  * T037's scope narrows as the implementation phases land: W2 (T042-T053) turned `device-handoff`,
  * `capability`, `pass-encoder`, `pipeline-cache`, `Renderer/Context` and `Renderer/RenderState` into
- * real implementations, so they are asserted by their own suites
- * (`tests/unit/{context-construction,context-dispatch,capability-composition,pass-encoder,pipeline-cache,render-state-mapping}.test.mjs`)
+ * real implementations, and W3 (T055-T065) turned the **resource classes** (`Buffer`, `Texture`,
+ * `VertexArray`, `Framebuffer`, `Renderbuffer`, `MultisampleFramebuffer`, `FramebufferManager`) into
+ * real implementations. Each is asserted by its own suite
+ * (`tests/unit/{context-construction,context-dispatch,capability-composition,pass-encoder,pipeline-cache,render-state-mapping,buffer-mapping,texture-mapping,format-map,sampler-mapping,vertex-array-mapping,framebuffer-attachments,framebuffer-manager,gpu-resource-registry}.test.mjs`)
  * instead of by this placeholder scan. The lists below therefore name exactly the modules that MUST
- * still fail loudly, and `the W2 modules are implemented, not stubbed` pins the transition so a
- * regression back to a placeholder cannot slip through.
+ * still fail loudly, and the `the W2/W3 modules are implemented, not stubbed` tests pin the
+ * transitions so a regression back to a placeholder cannot slip through.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -36,13 +38,7 @@ const manifest = readJson(`${BACKEND}/manifest.json`);
 
 /** Constructor-style replacements that are STILL placeholders: `new Module()` MUST fail loudly. */
 const CLASS_MODULES = [
-  "Texture",
   "ShaderProgram",
-  "Buffer",
-  "VertexArray",
-  "Framebuffer",
-  "Renderbuffer",
-  "MultisampleFramebuffer",
   "ShaderSource",
   "SharedContext",
   "Texture3D",
@@ -57,13 +53,7 @@ const FUNCTION_MODULES = ["createUniform", "createUniformArray", "loadCubeMap"];
 
 /** Static factory entry points the upstream logic layer calls without constructing. */
 const STATIC_ENTRIES = [
-  ["Buffer", "createVertexBuffer"],
-  ["Buffer", "createIndexBuffer"],
-  ["Buffer", "createPixelBuffer"],
-  ["Texture", "create"],
-  ["Texture", "fromFramebuffer"],
   ["ShaderProgram", "fromCache"],
-  ["VertexArray", "fromGeometry"],
 ];
 
 /** Every `webgpu/**` module that is STILL a placeholder, with the entry point it MUST refuse. */
@@ -97,6 +87,24 @@ const W2_IMPLEMENTED_MODULES = [
   "Renderer/ShaderCache.ts",
   "Renderer/TextureCache.ts",
   "Renderer/ComputeEngine.ts",
+];
+
+/**
+ * Modules W3 implemented (T055-T065): the resource layer. They MUST be loadable and MUST NOT be the
+ * T037 placeholder any more; their behaviour is asserted by their own unit suites.
+ */
+const W3_IMPLEMENTED_MODULES = [
+  "webgpu/format-map.ts",
+  "webgpu/sampler-map.ts",
+  "webgpu/gpu-resource-registry.ts",
+  "webgpu/texture-upload.ts",
+  "webgpu/context-device.ts",
+  "Renderer/Buffer.ts",
+  "Renderer/Texture.ts",
+  "Renderer/VertexArray.ts",
+  "Renderer/Framebuffer.ts",
+  "Renderer/Renderbuffer.ts",
+  "Renderer/MultisampleFramebuffer.ts",
   "Renderer/FramebufferManager.ts",
 ];
 
@@ -209,6 +217,31 @@ test("the webgpu module set is complete (10 modules of T037 plus the W2 addition
   for (const file of W2_IMPLEMENTED_MODULES) {
     assert.ok(fs.existsSync(repoPath(`${BACKEND}/${file}`)), `${file} MUST exist (implemented in W2)`);
   }
+  for (const file of W3_IMPLEMENTED_MODULES) {
+    assert.ok(fs.existsSync(repoPath(`${BACKEND}/${file}`)), `${file} MUST exist (implemented in W3)`);
+  }
+});
+
+test("the W3 resource modules are implemented, not stubbed (a placeholder regression fails here)", async () => {
+  // Same purpose as the W2 pin below: the narrowed CLASS_MODULES/STATIC_ENTRIES lists must not be
+  // able to hide a regression of a W3 module back to the T037 placeholder.
+  const formatMap = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/format-map.ts`), { externals: upstreamStubs() });
+  assert.equal(formatMap.mapTextureFormat(0x1908, 0x1401).format, "rgba8unorm", "format-map MUST map a real pair");
+  assert.equal(typeof formatMap.bufferUsageToGpu, "function");
+
+  const samplerMap = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/sampler-map.ts`), { externals: upstreamStubs() });
+  assert.equal(samplerMap.mapSampler({}).descriptor.addressModeU, "clamp-to-edge", "sampler-map MUST return a real descriptor");
+
+  const registry = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/gpu-resource-registry.ts`));
+  registry.gpuResourceRegistry.reset();
+  assert.equal(registry.gpuResourceRegistry.totalBytes, 0, "the ledger MUST start empty");
+  assert.equal(typeof registry.gpuResourceRegistry.register, "function");
+
+  const upload = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/texture-upload.ts`));
+  assert.equal(typeof upload.planTextureUpload, "function");
+
+  const contextDevice = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/context-device.ts`));
+  assert.equal(contextDevice.hasGpuDevice({}), false, "context-device MUST tell a GPU context from a delegated one");
 });
 
 test("the W2 modules are implemented, not stubbed (a placeholder regression fails here)", async () => {
@@ -277,17 +310,22 @@ test("the W2 modules are implemented, not stubbed (a placeholder regression fail
   });
 
   // T043 finding: `Scene` → `InvertClassification` constructs a FramebufferManager during
-  // construction, so it MUST be constructible; allocating render targets stays W3's job.
+  // construction, so it MUST be constructible. T062 landed the orchestration, so `update()` is real
+  // now — with a WebGPU context it allocates the attachments; without width/height it reports the
+  // same caller error upstream does instead of the W2 placeholder failure.
   const framebufferManager = await loadTypeScriptModule(repoPath(`${BACKEND}/Renderer/FramebufferManager.ts`), { externals: upstreamStubs() });
   const manager = new framebufferManager.default({ color: true, depth: true, numSamples: 4 });
   assert.equal(manager.numSamples, 4);
   assert.equal(manager.isDirty(300, 150, 4), true, "a manager without a framebuffer is dirty");
-  assert.throws(() => manager.update(), (error) => {
-    assert.equal(error.name, "DiagnosticError");
-    assert.equal(error.category, "not-implemented");
-    assert.match(error.message, /T061|T062|W3/);
-    return true;
-  });
+  assert.throws(
+    () => manager.update(),
+    (error) => {
+      assert.equal(error.name, "DiagnosticError");
+      assert.equal(error.category, "internal", "T062 replaced the placeholder with upstream's caller error");
+      assert.match(error.message, /width and height must be defined/);
+      return true;
+    },
+  );
   assert.throws(() => new framebufferManager.default({ color: false }), /at least one type of framebuffer attachment/);
   assert.throws(() => new framebufferManager.default({ depth: true, depthStencil: true }), /Cannot have both a depth and depth-stencil/);
 });

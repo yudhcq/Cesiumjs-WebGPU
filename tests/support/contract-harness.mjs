@@ -23,7 +23,7 @@ import { chromium } from "playwright";
 
 import { createStaticServer } from "../../tools/scripts/serve.mjs";
 import { REPO_ROOT, bundleRelativePath, ensureBundle } from "./backend-build.mjs";
-import { decodePng, regionStatistics } from "./png-reader.mjs";
+import { decodePng, regionStatistics, samplePixels } from "./png-reader.mjs";
 
 export const ARTIFACT_ROOT = path.join(REPO_ROOT, "artifacts");
 export const PAGE_RELATIVE = "tests/contract/page/index.html";
@@ -36,6 +36,8 @@ export const SUITE_SCENARIOS = {
   "smoke:present": "present",
   "contract:pass-sequence": "pass-sequence",
   "contract:device-lost": "device-lost",
+  "contract:resources": "resources",
+  "visual:texture-origin": "texture-origin",
 };
 
 /** The backend of this run — one run, one backend, never a list. */
@@ -47,8 +49,19 @@ export function activeBackend() {
   return backend;
 }
 
+/**
+ * Directory name one suite's artefacts live in.
+ *
+ * `contract:resources` → `resources`, `smoke:present` → `present`, `visual:texture-origin` →
+ * `texture-origin`. The `:` MUST NOT survive: it is a path separator on POSIX and illegal on Windows,
+ * and the runner's suite names always carry one.
+ */
+export function artifactDirName(suiteName) {
+  return suiteName.replace(/^[a-z]+[:-]/, "");
+}
+
 export function artifactPath(suiteName, backend = activeBackend()) {
-  return path.join(ARTIFACT_ROOT, suiteName.replace(/^contract[:-]/, "").replace(/^smoke[:-]/, ""), `${backend}.json`);
+  return path.join(ARTIFACT_ROOT, artifactDirName(suiteName), `${backend}.json`);
 }
 
 function writeArtifact(file, payload) {
@@ -62,8 +75,13 @@ function writeArtifact(file, payload) {
  * This is the authoritative **presentation** evidence: `createImageBitmap(canvas)` inside the page is
  * best-effort on a WebGPU canvas, while a screenshot is what the compositor actually shows. The page
  * leaves its last frame presented (and its backend alive) for the suites that need this.
+ *
+ * `samplePoints` are **normalised** coordinates of individual pixels the suite wants to assert on
+ * (T058's four-corner texel assertion, T064's two half-viewport probes). A screenshot is a
+ * downscaled-to-1x copy of the canvas region, so a point is rounded to the nearest pixel — the suites
+ * pick points far from an edge, which is what makes that safe.
  */
-async function captureCanvasRegion(page, viewport, suiteName, backend) {
+async function captureCanvasRegion(page, viewport, suiteName, backend, samplePoints = []) {
   const box = await page.locator("#contract-canvas").boundingBox();
   if (box === null) return { captured: false, reason: "the canvas is not laid out" };
   const buffer = await page.screenshot({
@@ -71,7 +89,7 @@ async function captureCanvasRegion(page, viewport, suiteName, backend) {
   });
   const image = decodePng(buffer);
   const statistics = regionStatistics(image, { x: 0, y: 0, width: image.width, height: image.height });
-  const file = path.join(ARTIFACT_ROOT, suiteName.replace(/^contract[:-]/, "").replace(/^smoke[:-]/, ""), `${backend}-canvas.png`);
+  const file = path.join(ARTIFACT_ROOT, artifactDirName(suiteName), `${backend}-canvas.png`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, buffer);
   void viewport;
@@ -81,6 +99,7 @@ async function captureCanvasRegion(page, viewport, suiteName, backend) {
     width: image.width,
     height: image.height,
     ...statistics,
+    ...(samplePoints.length === 0 ? {} : { samples: samplePixels(image, samplePoints) }),
   };
 }
 
@@ -88,7 +107,7 @@ async function captureCanvasRegion(page, viewport, suiteName, backend) {
  * Run one contract suite in this process and return everything the spec needs to assert.
  *
  * @param {string} suiteName key of {@link SUITE_SCENARIOS}
- * @param {{viewport?: {width: number, height: number}, timeoutMs?: number, force?: boolean, captureCanvas?: boolean}} [options]
+ * @param {{viewport?: {width: number, height: number}, timeoutMs?: number, force?: boolean, captureCanvas?: boolean, samplePoints?: {name: string, x: number, y: number}[]}} [options]
  */
 export async function runContractSuite(suiteName, options = {}) {
   const scenario = SUITE_SCENARIOS[suiteName];
@@ -148,10 +167,13 @@ export async function runContractSuite(suiteName, options = {}) {
     await page.goto(url, { waitUntil: "load", timeout: timeoutMs });
     await page.waitForFunction(() => globalThis.__contract !== undefined && globalThis.__contract.ready === true, null, { timeout: timeoutMs });
     run.report = await page.evaluate(() => globalThis.__contract);
-    if (options.captureCanvas !== false && (suiteName === "contract-backend-core" || suiteName === "smoke:present")) {
-      // The page leaves its last frame presented for exactly this step: the screenshot is what the
-      // compositor shows, i.e. the strongest evidence that the draw reached the screen.
-      run.canvasScreenshot = await captureCanvasRegion(page, viewport, suiteName, backend);
+    // The page leaves its last frame presented for exactly this step: the screenshot is what the
+    // compositor shows, i.e. the strongest evidence that the draw reached the screen. Suites that
+    // assert on pixels ask for it explicitly; the two W2 suites always get it.
+    const shouldCapture =
+      options.captureCanvas ?? (suiteName === "contract-backend-core" || suiteName === "smoke:present");
+    if (shouldCapture === true) {
+      run.canvasScreenshot = await captureCanvasRegion(page, viewport, suiteName, backend, options.samplePoints ?? []);
     }
   } catch (error) {
     run.error = { name: error?.name ?? "Error", message: error?.message ?? String(error), stack: error?.stack ?? null };

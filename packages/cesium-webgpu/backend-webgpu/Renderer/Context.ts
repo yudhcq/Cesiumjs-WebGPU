@@ -49,6 +49,7 @@ import { createDefaultTexture, type DefaultTexture } from "../webgpu/default-res
 import { HANDOFF_CATEGORY, peek, take, type DeviceHandoff } from "../webgpu/device-handoff.js";
 import { DiagnosticError } from "../webgpu/errors.js";
 import { ErrorScopeCollector, type CollectedGpuError } from "../webgpu/error-scope.js";
+import { gpuResourceRegistry } from "../webgpu/gpu-resource-registry.js";
 import { sliceCNotImplemented } from "../webgpu/not-implemented.js";
 import { PassStateMachine, type ClearMechanism, type DerivedPassRecord, type RenderPassKey } from "../webgpu/pass-encoder.js";
 import {
@@ -66,6 +67,7 @@ import {
 } from "../webgpu/pipeline-cache.js";
 import { Swapchain, type CanvasLike } from "../webgpu/swapchain.js";
 import RenderState from "./RenderState.js";
+import Texture from "./Texture.js";
 
 const UPSTREAM_MODULE = "Renderer/Context.js";
 
@@ -104,8 +106,8 @@ export interface WebgpuDrawInputs {
 export interface WebgpuFramebufferRef {
   readonly id: string;
   readonly colorAttachments: readonly { readonly id: string; readonly view: GPUTextureView; readonly resolveTarget?: GPUTextureView; readonly clearValue?: GPUColor }[];
-  readonly depthStencilAttachment?: GPURenderPassDepthStencilAttachment;
-  readonly sampleCount?: number;
+  readonly depthStencilAttachment?: GPURenderPassDepthStencilAttachment | undefined;
+  readonly sampleCount?: number | undefined;
 }
 
 export interface ContextOptions {
@@ -130,9 +132,24 @@ interface CommandLike {
   readonly count?: number;
   readonly offset?: number;
   readonly instanceCount?: number;
-  readonly vertexArray?: { readonly indexBuffer?: unknown; readonly numberOfVertices?: number };
+  /** The replaced `VertexArray` (W3 / T060); it carries the geometry half of the draw inputs. */
+  readonly vertexArray?: { readonly indexBuffer?: unknown; readonly numberOfVertices?: number; readonly __webgpu?: GeometryDrawInputs };
   readonly color?: { readonly red?: number; readonly green?: number; readonly blue?: number; readonly alpha?: number };
   readonly clearColor?: { readonly red?: number; readonly green?: number; readonly blue?: number; readonly alpha?: number };
+}
+
+/**
+ * The geometry half of the draw inputs, as the replaced `VertexArray` publishes it (T060).
+ *
+ * Kept structurally identical to the matching members of {@link WebgpuDrawInputs} so the two can be
+ * merged without translation; the separation exists because the two halves have **different
+ * owners** — geometry is W3 (T055-T060), the pipeline and bind groups are W4 (T073/T075).
+ */
+export interface GeometryDrawInputs {
+  readonly vertexBuffers?: WebgpuDrawInputs["vertexBuffers"];
+  readonly indexBuffer?: WebgpuDrawInputs["indexBuffer"];
+  readonly vertexLayout?: WebgpuDrawInputs["vertexLayout"];
+  readonly indexed?: boolean;
 }
 
 interface PassStateLike {
@@ -220,6 +237,8 @@ export default class Context {
   #frameErrors: CollectedGpuError[] = [];
   #deviceLostReason: string | null = null;
   #viewportQuadVertexArray: unknown = null;
+  #defaultEmissiveTexture: Texture | undefined;
+  #defaultNormalTexture: Texture | undefined;
   #deviceLostUnsubscribe: (() => void) | null = null;
   readonly #registeredTargets = new Map<string, WebgpuFramebufferRef>();
   readonly #contextLimitsWritten!: readonly string[];
@@ -440,6 +459,8 @@ export default class Context {
     this.#encoder = this.device.createCommandEncoder({ label: `cesium-webgpu:frame-${this.counters.frames}` });
     this.#frameErrors = [];
     this.#machine.beginFrame();
+    // The ledger's frame stamp is what makes the leak assertion a plain set comparison (T063).
+    gpuResourceRegistry.setFrame(this.counters.frames);
     this.counters.frames += 1;
   }
 
@@ -643,11 +664,37 @@ export default class Context {
   get defaultCubeMap(): never {
     throw sliceCNotImplemented("defaultCubeMap");
   }
-  get defaultEmissiveTexture(): never {
-    throw sliceCNotImplemented("defaultEmissiveTexture");
+
+  /**
+   * A 1×1 RGB texture initialised to `[0, 0, 0]` — the "not emissive" placeholder (T056).
+   *
+   * Upstream creates it lazily on first access; the same laziness is kept so a scene that never
+   * touches it never allocates one.
+   */
+  get defaultEmissiveTexture(): Texture {
+    this.#assertAlive("defaultEmissiveTexture");
+    this.#defaultEmissiveTexture ??= new Texture({
+      context: this,
+      pixelFormat: PIXEL_FORMAT_RGB,
+      source: { width: 1, height: 1, arrayBufferView: new Uint8Array([0, 0, 0]) },
+      flipY: false,
+    });
+    return this.#defaultEmissiveTexture;
   }
-  get defaultNormalTexture(): never {
-    throw sliceCNotImplemented("defaultNormalTexture");
+
+  /**
+   * A 1×1 RGB texture initialised to `[128, 128, 255]` — the tangent-space normal pointing at +Z
+   * (T056).
+   */
+  get defaultNormalTexture(): Texture {
+    this.#assertAlive("defaultNormalTexture");
+    this.#defaultNormalTexture ??= new Texture({
+      context: this,
+      pixelFormat: PIXEL_FORMAT_RGB,
+      source: { width: 1, height: 1, arrayBufferView: new Uint8Array([128, 128, 255]) },
+      flipY: false,
+    });
+    return this.#defaultNormalTexture;
   }
   get defaultFramebuffer(): undefined {
     // The default framebuffer IS the swap chain; upstream's `defaultFramebuffer` object has no
@@ -678,8 +725,25 @@ export default class Context {
   /** Number of GPU resources this context owns and releases on `destroy()` (whole-switch evidence). */
   get liveResourceCount(): number {
     if (this.#destroyed) return 0;
-    // The swap-chain/MSAA attachment(s) + the default texture + every registered render target.
-    return (this.#swapchain.isDestroyed() ? 0 : 1) + 1 + this.#registeredTargets.size;
+    // The swap-chain/MSAA attachment(s) + the default texture + the lazily created placeholders +
+    // every registered render target.
+    return (
+      (this.#swapchain.isDestroyed() ? 0 : 1) +
+      1 +
+      (this.#defaultEmissiveTexture === undefined ? 0 : 1) +
+      (this.#defaultNormalTexture === undefined ? 0 : 1) +
+      this.#registeredTargets.size
+    );
+  }
+
+  /**
+   * The FR-017 graphics-memory proxy of the live ledger (T063).
+   *
+   * Every replaced resource class registers what it creates in `gpuResourceRegistry`, so this is the
+   * same number the resource suites assert on — the context only exposes it.
+   */
+  get gpuResourceStats(): ReturnType<typeof gpuResourceRegistry.stats> {
+    return gpuResourceRegistry.stats();
   }
 
   destroy(): void {
@@ -691,6 +755,10 @@ export default class Context {
     this.#errors.destroy();
     this.#swapchain.destroy();
     this.defaultTexture.destroy();
+    this.#defaultEmissiveTexture?.destroy();
+    this.#defaultEmissiveTexture = undefined;
+    this.#defaultNormalTexture?.destroy();
+    this.#defaultNormalTexture = undefined;
     clearPipelineCache();
     setPipelineFactory(null);
     this.#encoder = null;
@@ -702,9 +770,14 @@ export default class Context {
     return this.#destroyed;
   }
 
-  /** Register a render target so commands can name it (`Framebuffer` replacement wires this in W3). */
+  /** Register a render target so commands can name it (`Framebuffer` registers itself in W3/T061). */
   registerTarget(target: WebgpuFramebufferRef): void {
     this.#registeredTargets.set(target.id, target);
+  }
+
+  /** Forget a render target (the replaced `Framebuffer#destroy` calls this). */
+  unregisterTarget(id: string): void {
+    this.#registeredTargets.delete(id);
   }
 
   /** Resolve the pipeline for one draw; always through the cache so hits/misses are counted (T048). */
@@ -809,6 +882,9 @@ export interface ViewportQuadOptions {
 
 const EMPTY_RENDER_STATE: RenderStateLike = {};
 
+/** `PixelFormat.RGB` (`0x1907`) — the format upstream's emissive/normal placeholders use. */
+const PIXEL_FORMAT_RGB = 0x1907;
+
 const VIEWPORT_QUAD_DEFAULT_VS = "in vec4 position; void main() { gl_Position = position; }";
 
 /** Upstream's viewport-quad geometry (`Context.js` builds it from a 4-vertex strip). */
@@ -822,22 +898,53 @@ function resolveTarget(command: CommandLike, passState: PassStateLike): WebgpuFr
   return explicit === undefined ? null : explicit;
 }
 
+/**
+ * Resolve a draw's backend inputs from the three places that can carry them.
+ *
+ * W2 introduced the explicit `__webgpu` payload because neither half existed yet. W3 landed the
+ * **geometry** half: the replaced `VertexArray` publishes `__webgpu` with its vertex buffers, index
+ * buffer and layout (T060), so a command that carries a real vertex array no longer has to be
+ * skipped. The **pipeline** half is still W4's (T073/T075) and stays an explicit requirement.
+ *
+ * The merge order is "explicit payload wins, geometry fills the gaps": a caller that builds the whole
+ * payload by hand (the contract workload does) keeps full control, while a command assembled by the
+ * logic layer only needs to name its `vertexArray`.
+ */
 function resolveDrawInputs(command: CommandLike, program: unknown): WebgpuDrawInputs {
   const fromCommand = command.__webgpu;
-  if (fromCommand !== undefined) return fromCommand;
   const fromProgram = (program as { __webgpu?: WebgpuDrawInputs } | undefined)?.__webgpu;
-  if (fromProgram !== undefined) return fromProgram;
+  const fromVertexArray = command.vertexArray?.__webgpu;
+  const base: WebgpuDrawInputs = fromCommand ?? fromProgram ?? {};
+
+  const vertexBuffers = base.vertexBuffers ?? fromVertexArray?.vertexBuffers;
+  const indexBuffer = base.indexBuffer ?? fromVertexArray?.indexBuffer ?? null;
+  const vertexLayout = base.vertexLayout ?? fromVertexArray?.vertexLayout;
+  const merged: WebgpuDrawInputs = {
+    ...base,
+    ...(vertexBuffers === undefined ? {} : { vertexBuffers }),
+    indexBuffer,
+    ...(vertexLayout === undefined ? {} : { vertexLayout }),
+    indexed: base.indexed ?? fromVertexArray?.indexed ?? indexBuffer !== null,
+  };
+
+  if (merged.pipeline !== undefined) return merged;
+
   throw new DiagnosticError(
     "not-implemented",
-    "Context.draw: the command carries no WebGPU draw inputs (pipeline, bind groups, vertex/index buffers). The replaced " +
-      "`ShaderProgram` (W4 / T075) and the resource layer (W3 / T055-T060) produce them; until then a draw MUST fail loudly " +
-      "rather than be skipped — a skipped draw yields a plausible but wrong frame (FR-033).",
+    "Context.draw: the command carries no render pipeline. The geometry half is resolved from the replaced `VertexArray` " +
+      "(W3 / T060) and the render state from the replaced `RenderState` (W2 / T049), but the pipeline and its bind groups come from " +
+      "the WGSL emission front-end, which lands in W4 (T073/T075). Skipping the draw would yield a plausible but wrong frame (FR-033).",
     {
       backend: "webgpu",
       upstreamModule: UPSTREAM_MODULE,
       requirementRef: "FR-030",
       entryPoint: "Context#draw",
-      plannedPhase: "W3 (T055-T060) + W4 (T075)",
+      plannedPhase: "W4 (T073/T075)",
+      extra: {
+        hasVertexBuffers: vertexBuffers !== undefined,
+        hasIndexBuffer: indexBuffer !== null,
+        hasRenderState: base.renderState !== undefined || command.renderState !== undefined,
+      },
     },
   );
 }
