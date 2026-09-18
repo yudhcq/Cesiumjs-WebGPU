@@ -7,26 +7,45 @@
  * (kind: "adapt") in the cesium-webgpu patch layer.
  * Upstream baseline: @cesium/engine 26.3.0 — see upstream/engine-26.3.0.lock.json and
  * packages/cesium-webgpu/backend-webgpu/manifest.json.
+ *
+ * T053 draws the boundary at the **execution**, not at the construction: upstream's `Scene` builds a
+ * `ComputeEngine` unconditionally (`Scene.js:182`), so a constructor that threw would make the whole
+ * scene unconstructible — and T043's construct-time takeover impossible. The engine is therefore a
+ * real, inert container here (upstream's constructor is literally `this._context = context`), and
+ * `execute()` — the GPGPU path, which the MVP scene configuration keeps at zero dispatches
+ * (data-model §11 A6) — fails loudly with `category: "not-implemented"`.
+ *
+ * Research §5.1 records the eventual mapping: upstream's `ComputeEngine` is not GPU compute at all but
+ * "a full-screen viewport quad + a fragment shader writing a texture", i.e. one render pass onto an
+ * offscreen target, which is why it is out of scope for W2 rather than technically impossible.
  */
-import { throwNotImplemented } from "../webgpu/errors.js";
+import { sliceCNotImplemented } from "../webgpu/not-implemented.js";
 
-const UPSTREAM_MODULE = "Renderer/ComputeEngine.js";
-const NOT_IMPLEMENTED = "GPGPU draw path (not reachable on the terrain MVP)";
-const PLANNED_PHASE = "slice C";
-
-/**
- * Adaptation skeleton: the upstream implementation is reused and only the semantics named below change.
- * Boundary: the patch only ever replaces `Source/Renderer/**`; upstream stays unmodified on disk.
- */
 export default class ComputeEngine {
+  readonly _context: unknown;
+
+  constructor(context: unknown) {
+    // Upstream: `function ComputeEngine(context) { this._context = context; }` (ComputeEngine.js:18-20)
+    this._context = context;
+  }
+
   /**
-   * @throws a `DiagnosticError` with `category: "not-implemented"` until slice C lands.
+   * Execute a `ComputeCommand`.
+   *
+   * @throws a `DiagnosticError` (`category: "not-implemented"`, FR-033) — never a silently skipped
+   *   dispatch, which would leave the output texture with stale contents.
    */
-  constructor(..._args: unknown[]) {
-    throwNotImplemented(NOT_IMPLEMENTED, {
-      upstreamModule: UPSTREAM_MODULE,
-      entryPoint: "ComputeEngine#constructor",
-      plannedPhase: PLANNED_PHASE,
-    });
+  execute(computeCommand?: unknown): never {
+    void computeCommand;
+    throw sliceCNotImplemented("ComputeEngine");
+  }
+
+  /** The framebuffer the GPGPU pass would render into (upstream builds it per output texture). */
+  isDestroyed(): boolean {
+    return false;
+  }
+
+  destroy(): void {
+    // Nothing to release while `execute()` cannot run: the engine holds no GPU resources yet.
   }
 }

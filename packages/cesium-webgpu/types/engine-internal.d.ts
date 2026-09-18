@@ -24,6 +24,20 @@
 type UpstreamOpaque = any;
 
 /**
+ * `Source/Core/defined.js` / `Source/Core/destroyObject.js` — the two GL-free Core helpers the
+ * replacement caches consume (upstream `TextureCache.js:1-2`, `ShaderCache.js:1-2`).
+ */
+declare module "@cesium/engine/Source/Core/defined.js" {
+  const defined: (value: unknown) => boolean;
+  export default defined;
+}
+
+declare module "@cesium/engine/Source/Core/destroyObject.js" {
+  const destroyObject: (object: { destroy?: () => void }) => undefined;
+  export default destroyObject;
+}
+
+/**
  * `Source/Renderer/ContextLimits.js` — 23 members declared below, covering the measured union
  * (measured: 9 distinct members referenced from the 1,306 non-`Renderer` modules) or by
  * the `Renderer/**` modules this patch layer reimplements (`RenderState` reads the aliased
@@ -292,6 +306,7 @@ declare module "@cesium/engine/Source/Renderer/ShaderSource.js" {
   }
 }
 
+/** `Source/Renderer/ShaderCache.js` — a **kept** module the replacement `Context` constructs. */
 declare module "@cesium/engine/Source/Renderer/ShaderCache.js" {
   const ShaderCache: {
     getShaderProgram(context: UpstreamOpaque, shaderSource: UpstreamOpaque, attributeLocations: Record<string, number> | undefined, programId?: string): UpstreamOpaque;
@@ -302,6 +317,33 @@ declare module "@cesium/engine/Source/Renderer/ShaderCache.js" {
     [key: string]: UpstreamOpaque;
   };
   export default ShaderCache;
+}
+
+/**
+ * `Source/Renderer/TextureCache.js` — a **kept** module the replacement `Context` constructs
+ * (`Context.js:82 new TextureCache()`; `Scene/Scene.js:4428` reads `context.textureCache`).
+ */
+declare module "@cesium/engine/Source/Renderer/TextureCache.js" {
+  export default class TextureCache {
+    constructor();
+    getTextureFromCache(key: string): UpstreamOpaque;
+    addTextureToCache(key: string, texture: UpstreamOpaque): void;
+    destroy(): void;
+    isDestroyed(): boolean;
+    [key: string]: UpstreamOpaque;
+  }
+}
+
+/**
+ * `Source/Renderer/UniformState.js` — a **kept** module (zero GL calls) the replacement `Context`
+ * constructs (`Context.js:335 new UniformState()`); the logic layer reads it in 57 places.
+ */
+declare module "@cesium/engine/Source/Renderer/UniformState.js" {
+  export default class UniformState {
+    constructor();
+    update(context: UpstreamOpaque, passState: UpstreamOpaque, camera: UpstreamOpaque, us: UpstreamOpaque): void;
+    [key: string]: UpstreamOpaque;
+  }
 }
 
 /** `Source/Renderer/Buffer.js` — 97 logic-layer consumption sites; 18 WebGL call sites. */

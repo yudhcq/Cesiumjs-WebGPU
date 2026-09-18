@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>cesium-webgpu contract suite</title>
+    <!-- no favicon request: keeps the console transcript free of a 404 that would mask a real error -->
+    <link rel="icon" href="data:," />
+    <style>
+      body {
+        margin: 0;
+        font: 13px/1.4 system-ui, sans-serif;
+        background: #0b0f14;
+        color: #e8eef5;
+      }
+      /* Upstream `Scene` appends its credit container to `canvas.parentNode`, so the canvas needs a parent. */
+      #contract-container {
+        position: relative;
+        width: 320px;
+        height: 200px;
+        margin: 12px;
+        background: #000;
+      }
+      canvas#contract-canvas {
+        display: block;
+        width: 320px;
+        height: 200px;
+      }
+      #contract-note {
+        margin: 12px;
+        max-width: 76ch;
+      }
+      code {
+        color: #9fd0ff;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="contract-container"><canvas id="contract-canvas"></canvas></div>
+    <p id="contract-note">
+      Contract-suite page (tasks.md T043/T044/T047/T050/T051). It loads exactly one bundle
+      (<code>?bundle=…</code>) built by <code>tests/support/backend-build.mjs</code> for
+      <strong>one</strong> backend (<code>?backend=webgpu|webgl2</code>) and runs one scenario. Cross-backend
+      statements are made offline from two separate runs — this page never sees two backends.
+    </p>
+    <script type="module" src="./probe.js"></script>
+  </body>
+</html>

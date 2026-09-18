@@ -9,9 +9,19 @@
  *
  * Coverage:
  *   - `webgpu/errors.ts` builds and throws `not-implemented` diagnostics;
- *   - every `Renderer/**` replacement module fails loudly on construction / its factory entry;
- *   - every `webgpu/**` placeholder module fails loudly on its documented entry point;
+ *   - every `Renderer/**` replacement module that is STILL a placeholder fails loudly on construction /
+ *     its factory entry;
+ *   - every `webgpu/**` placeholder module that is STILL a placeholder fails loudly on its documented
+ *     entry point;
  *   - the four-valued manifest `kind` matches the skeleton's intent (stubs included).
+ *
+ * T037's scope narrows as the implementation phases land: W2 (T042-T053) turned `device-handoff`,
+ * `capability`, `pass-encoder`, `pipeline-cache`, `Renderer/Context` and `Renderer/RenderState` into
+ * real implementations, so they are asserted by their own suites
+ * (`tests/unit/{context-construction,context-dispatch,capability-composition,pass-encoder,pipeline-cache,render-state-mapping}.test.mjs`)
+ * instead of by this placeholder scan. The lists below therefore name exactly the modules that MUST
+ * still fail loudly, and `the W2 modules are implemented, not stubbed` pins the transition so a
+ * regression back to a placeholder cannot slip through.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -19,27 +29,22 @@ import test from "node:test";
 
 import { readJson, repoPath } from "../support/repo.mjs";
 import { loadTypeScriptModule } from "../support/ts-module-loader.mjs";
+import { upstreamStubs } from "../support/upstream-stubs.mjs";
 
 const BACKEND = "packages/cesium-webgpu/backend-webgpu";
 const manifest = readJson(`${BACKEND}/manifest.json`);
 
-/** Constructor-style replacements: `new Module()` MUST fail loudly. */
+/** Constructor-style replacements that are STILL placeholders: `new Module()` MUST fail loudly. */
 const CLASS_MODULES = [
-  "Context",
   "Texture",
   "ShaderProgram",
-  "RenderState",
   "Buffer",
   "VertexArray",
   "Framebuffer",
   "Renderbuffer",
   "MultisampleFramebuffer",
   "ShaderSource",
-  "ShaderCache",
-  "FramebufferManager",
-  "ComputeEngine",
   "SharedContext",
-  "TextureCache",
   "Texture3D",
   "CubeMap",
   "CubeMapFace",
@@ -58,24 +63,11 @@ const STATIC_ENTRIES = [
   ["Texture", "create"],
   ["Texture", "fromFramebuffer"],
   ["ShaderProgram", "fromCache"],
-  ["RenderState", "fromCache"],
-  ["RenderState", "partialApply"],
-  ["RenderState", "apply"],
   ["VertexArray", "fromGeometry"],
 ];
 
-/** Every `webgpu/**` module with the placeholder entry point it MUST refuse. */
+/** Every `webgpu/**` module that is STILL a placeholder, with the entry point it MUST refuse. */
 const WEBGPU_ENTRIES = [
-  ["device-handoff.ts", "install", []],
-  ["device-handoff.ts", "take", []],
-  ["device-handoff.ts", "peek", []],
-  ["device-handoff.ts", "clear", []],
-  ["pass-encoder.ts", "beginPass", [{}]],
-  ["pass-encoder.ts", "closePass", []],
-  ["pass-encoder.ts", "isPassOpen", []],
-  ["pipeline-cache.ts", "getOrCreate", [{}]],
-  ["pipeline-cache.ts", "stats", []],
-  ["pipeline-cache.ts", "clear", []],
   ["bind-layout.ts", "buildBindLayout", [""]],
   ["bind-layout.ts", "emitWgslStruct", [{}]],
   ["shader-emit.ts", "emitShader", [{}]],
@@ -83,11 +75,29 @@ const WEBGPU_ENTRIES = [
   ["glsl-preprocess.ts", "evaluateConditionals", ["", {}]],
   ["glsl-preprocess.ts", "inlineCzmBuiltins", [""]],
   ["glsl-preprocess.ts", "textureUnitsDefine", [1]],
-  ["capability.ts", "composeCapabilities", [{}]],
   ["wgsl-prelude/index.ts", "preludeFor", [[]]],
   ["wgsl-prelude/index.ts", "renderPrelude", [[]]],
   ["wgsl/index.ts", "loadShaderLibrary", []],
   ["wgsl/index.ts", "readWgslModule", ["GlobeVS"]],
+];
+
+/** Modules W2 implemented: they MUST be loadable and MUST NOT be placeholders any more. */
+const W2_IMPLEMENTED_MODULES = [
+  "webgpu/device-handoff.ts",
+  "webgpu/capability.ts",
+  "webgpu/pass-encoder.ts",
+  "webgpu/pipeline-cache.ts",
+  "webgpu/swapchain.ts",
+  "webgpu/error-scope.ts",
+  "webgpu/whole-switch.ts",
+  "webgpu/not-implemented.ts",
+  "webgpu/default-resources.ts",
+  "Renderer/Context.ts",
+  "Renderer/RenderState.ts",
+  "Renderer/ShaderCache.ts",
+  "Renderer/TextureCache.ts",
+  "Renderer/ComputeEngine.ts",
+  "Renderer/FramebufferManager.ts",
 ];
 
 /** A thrown error that is a diagnosable `not-implemented` diagnostic. */
@@ -182,7 +192,7 @@ test("every webgpu placeholder module fails loudly on its documented entry point
   }
 });
 
-test("the webgpu module set is complete (10 modules of T037)", () => {
+test("the webgpu module set is complete (10 modules of T037 plus the W2 additions)", () => {
   const expected = [
     "webgpu/device-handoff.ts",
     "webgpu/pass-encoder.ts",
@@ -196,6 +206,90 @@ test("the webgpu module set is complete (10 modules of T037)", () => {
     "webgpu/errors.ts",
   ];
   for (const file of expected) assert.ok(fs.existsSync(repoPath(`${BACKEND}/${file}`)), `${file} MUST exist`);
+  for (const file of W2_IMPLEMENTED_MODULES) {
+    assert.ok(fs.existsSync(repoPath(`${BACKEND}/${file}`)), `${file} MUST exist (implemented in W2)`);
+  }
+});
+
+test("the W2 modules are implemented, not stubbed (a placeholder regression fails here)", async () => {
+  // Each of these has its own suite for behaviour; this test only pins that they are no longer the
+  // T037 placeholder — a regression would otherwise hide behind the narrowed CLASS_MODULES list above.
+  const handoff = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/device-handoff.ts`));
+  handoff.resetSlot();
+  assert.equal(handoff.take(), undefined, "device-handoff.take() MUST be a real implementation");
+  assert.equal(typeof handoff.install, "function");
+  assert.equal(typeof handoff.resetCycle, "function");
+
+  const capability = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/capability.ts`));
+  assert.equal(typeof capability.composeCapabilities, "function");
+  assert.equal(typeof capability.applyContextLimits, "function", "the ContextLimits publication helper MUST exist");
+
+  const passEncoder = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/pass-encoder.ts`));
+  assert.equal(typeof passEncoder.PassStateMachine, "function", "the derived pass state machine MUST be a real class");
+
+  const pipelineCache = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/pipeline-cache.ts`));
+  assert.deepEqual(pipelineCache.stats(), { size: 0, hits: 0, misses: 0 }, "pipeline-cache.stats() MUST answer without throwing");
+
+  const renderState = await loadTypeScriptModule(repoPath(`${BACKEND}/Renderer/RenderState.ts`));
+  const state = renderState.default.fromCache({ cull: { enabled: true } });
+  assert.equal(typeof state.id, "number", "RenderState.fromCache MUST return a real state");
+  assert.equal(state.cull.enabled, true);
+  assert.ok(state.toPipelineState().primitive.cullMode === "back");
+
+  const swapchain = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/swapchain.ts`));
+  assert.equal(typeof swapchain.Swapchain, "function");
+  assert.equal(typeof swapchain.resolveDrawingBufferSize, "function");
+
+  const errorScope = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/error-scope.ts`));
+  assert.equal(typeof errorScope.ErrorScopeCollector, "function");
+
+  const wholeSwitch = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/whole-switch.ts`));
+  assert.equal(typeof wholeSwitch.performWholeSwitch, "function");
+
+  const surface = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/not-implemented.ts`));
+  assert.ok(surface.SLICE_C_SURFACE.length >= 7, "the slice-C registry MUST enumerate the boundary");
+
+  const defaultResources = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/default-resources.ts`));
+  assert.equal(typeof defaultResources.createDefaultTexture, "function");
+
+  // T043 finding: the upstream `Scene` constructor builds these two through the replacement `Context`,
+  // so an unusable placeholder here would make construct-time takeover impossible. They are real caches
+  // whose shader-program side still fails loudly until W4.
+  const shaderCache = await loadTypeScriptModule(repoPath(`${BACKEND}/Renderer/ShaderCache.ts`), { externals: upstreamStubs() });
+  const cache = new shaderCache.default({});
+  assert.equal(cache.numberOfShaders, 0, "ShaderCache MUST be constructible (Context.js:81)");
+  assert.equal(typeof cache.getShaderProgram, "function");
+  assert.equal(typeof cache.releaseShaderProgram, "function");
+
+  const textureCache = await loadTypeScriptModule(repoPath(`${BACKEND}/Renderer/TextureCache.ts`), { externals: upstreamStubs() });
+  const textures = new textureCache.default();
+  assert.equal(textures.numberOfTextures, 0, "TextureCache MUST be constructible (Context.js:82)");
+  assert.equal(textures.getTexture("missing"), undefined, "a cache miss returns undefined, exactly like upstream");
+
+  // T053 draws the ComputeEngine boundary at the execution, because `Scene.js:182` constructs it.
+  const computeEngine = await loadTypeScriptModule(repoPath(`${BACKEND}/Renderer/ComputeEngine.ts`), { externals: upstreamStubs() });
+  const engine = new computeEngine.default({});
+  assert.equal(engine.execute !== undefined, true, "ComputeEngine MUST be constructible; only execute() fails");
+  assert.throws(() => engine.execute({}), (error) => {
+    assert.equal(error.name, "DiagnosticError");
+    assert.equal(error.category, "not-implemented");
+    return true;
+  });
+
+  // T043 finding: `Scene` → `InvertClassification` constructs a FramebufferManager during
+  // construction, so it MUST be constructible; allocating render targets stays W3's job.
+  const framebufferManager = await loadTypeScriptModule(repoPath(`${BACKEND}/Renderer/FramebufferManager.ts`), { externals: upstreamStubs() });
+  const manager = new framebufferManager.default({ color: true, depth: true, numSamples: 4 });
+  assert.equal(manager.numSamples, 4);
+  assert.equal(manager.isDirty(300, 150, 4), true, "a manager without a framebuffer is dirty");
+  assert.throws(() => manager.update(), (error) => {
+    assert.equal(error.name, "DiagnosticError");
+    assert.equal(error.category, "not-implemented");
+    assert.match(error.message, /T061|T062|W3/);
+    return true;
+  });
+  assert.throws(() => new framebufferManager.default({ color: false }), /at least one type of framebuffer attachment/);
+  assert.throws(() => new framebufferManager.default({ depth: true, depthStencil: true }), /Cannot have both a depth and depth-stencil/);
 });
 
 test("the stub modules of the manifest fail loudly too (never an empty texture)", async () => {

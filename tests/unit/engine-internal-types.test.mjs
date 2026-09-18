@@ -285,10 +285,17 @@ test("RenderState option declarations match the option keys read upstream", () =
   }
 });
 
-test("all declared internal modules exist in the installed upstream Renderer directory", () => {
+test("all declared internal modules exist in the installed upstream source tree", () => {
   assert.ok(upstreamFiles.length > 0, "upstream Source/Renderer MUST be installed");
+  // Declarations are not limited to `Renderer/**`: the replacement caches consume the GL-free Core
+  // helpers (`Core/defined.js`, `Core/destroyObject.js`) exactly like their upstream originals do, so
+  // every declared module id is resolved against `Source/**` and MUST exist there.
+  const sourceRoot = path.resolve(RENDERER, "..");
   for (const id of blocks.keys()) {
-    const file = id.replace("@cesium/engine/Source/Renderer/", "");
-    assert.ok(upstreamFiles.includes(file), `declared module Renderer/${file} does not exist upstream`);
+    const relative = id.replace("@cesium/engine/Source/", "");
+    assert.ok(fs.existsSync(path.join(sourceRoot, ...relative.split("/"))), `declared module Source/${relative} does not exist upstream`);
+    if (relative.startsWith("Renderer/")) {
+      assert.ok(upstreamFiles.includes(relative.replace("Renderer/", "")), `declared module Renderer/${relative.replace("Renderer/", "")} does not exist upstream`);
+    }
   }
 });

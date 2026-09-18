@@ -58,6 +58,11 @@ Thumbs.db
 # Test / coverage
 coverage/
 .nyc_output/
+# Playwright output (failure contexts, traces, HTML report) produced by tests/support/backend-runner.mjs
+test-results/
+playwright-report/
+blob-report/
+.playwright/
 
 # Spec Kit: 本地指针，见 .specify/.gitignore
 .specify/feature.json

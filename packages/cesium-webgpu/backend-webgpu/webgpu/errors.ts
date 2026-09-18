@@ -9,7 +9,17 @@
  * the constitution's "verifiable rendering" principle (III) cannot catch.
  */
 
-/** Error categories shared by the patch layer and the public diagnostics surface (contract §6). */
+/**
+ * The six error **families** shared by the patch layer and the public diagnostics surface
+ * (contract render-path-api.md §6). `DIAGNOSTIC_CATEGORIES` lists exactly these.
+ *
+ * A category MAY be refined with a `family/detail` suffix when the family alone is too coarse to
+ * act on — `device-handoff/missing` is the wording G-2 established and that
+ * `docs/gate-g2-conclusion.md` §2 records for "the slot was empty at construction time"
+ * (T043 reuses the same wording). The suffix never introduces a seventh family: consumers switch
+ * on the part before the slash. `DiagnosticError.category` is therefore typed as `string` and
+ * every refinement MUST keep `split("/")[0]` inside `DiagnosticCategory`.
+ */
 export type DiagnosticCategory =
   | "not-implemented"
   | "data-unavailable"
@@ -17,6 +27,15 @@ export type DiagnosticCategory =
   | "probe-failed"
   | "device-lost"
   | "internal";
+
+/** A category value: one of the six families, optionally refined as `family/detail`. */
+export type DiagnosticCategoryRef = DiagnosticCategory | `${string}/${string}`;
+
+/** The family of a (possibly refined) category — the part consumers switch on. */
+export function diagnosticFamily(category: string): string {
+  const slash = category.indexOf("/");
+  return slash < 0 ? category : category.slice(0, slash);
+}
 
 /** The backend a diagnostic came from; identical vocabulary to the public `BackendKind`. */
 export type DiagnosticBackend = "webgpu" | "webgl2";
@@ -48,11 +67,11 @@ export interface DiagnosticErrorOptions extends DiagnosticDetails {
  * be surfaced through `TerrainSceneHandle.diagnostics.onError` without translation.
  */
 export class DiagnosticError extends Error {
-  readonly category: DiagnosticCategory;
+  readonly category: string;
   readonly backend: DiagnosticBackend | undefined;
   readonly details: DiagnosticDetails;
 
-  constructor(category: DiagnosticCategory, message: string, options: DiagnosticErrorOptions = {}) {
+  constructor(category: DiagnosticCategoryRef, message: string, options: DiagnosticErrorOptions = {}) {
     const { backend, cause, ...details } = options;
     super(message, cause === undefined ? undefined : { cause });
     this.name = "DiagnosticError";

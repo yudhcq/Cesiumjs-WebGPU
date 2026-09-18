@@ -52,6 +52,22 @@ Explicit-failure stubs (not implemented in this increment, kind: stub-not-implem
   Renderer/TextureAtlas.js   [stub-not-implemented] FR-033
   Renderer/Sync.js   [stub-not-implemented] FR-033
 
+Vendored upstream copies (verbatim, not rewritten by the alias plugin)
+--------------------------------------------------------------------
+plan.md decision D2-a requires the replacement `Renderer/Context` to delegate **wholesale** to the
+upstream WebGL2 implementation when the device hand-off slot is empty. Because the manifest is static
+and the alias plugin rewrites every route to `Source/Renderer/Context.js`, the patch layer carries a
+copy of that one file, byte-identical except for its import block (relative specifiers rewritten to the
+equivalent bare deep specifiers so it can live outside the upstream `Source` tree) plus a licence /
+modification header:
+
+  packages/cesium-webgpu/backend-webgpu/vendor/upstream-webgl2/Context.js
+  packages/cesium-webgpu/backend-webgpu/vendor/upstream-webgl2/PROVENANCE.json   (sha256 + rationale)
+
+Regenerate with `node tools/scripts/vendor-upstream-webgl2-context.mjs`; verify with `--check`. The
+copy is dormant on the WebGPU path: nothing imports it there, so it never acquires a GL context, never
+holds a device and never draws (plan.md D2-a's principle-II argument).
+
 Derived-file header convention
 ------------------------------
 Every file that reimplements or adapts an upstream module MUST keep the original copyright

@@ -1,0 +1,15 @@
+{
+  "tool": "tools/scripts/vendor-upstream-webgl2-context.mjs",
+  "why": "plan.md decision D2-a: the manifest is static, so every route to the upstream Renderer/Context.js is rewritten by tools/rollup-plugin-engine-patch.mjs. The construction-time whole delegation therefore needs a copy inside the patch layer.",
+  "upstream": {
+    "path": "node_modules/@cesium/engine/Source/Renderer/Context.js",
+    "package": "@cesium/engine",
+    "version": "26.3.0"
+  },
+  "upstreamSha256": "3d7fa4ec0c97df6c9e1a2142f6b7ee527c37ce339f744b22edee402d60d90b83",
+  "bodySha256": "sha256-ffc1d2237be7d9c9a0f0c205b00b84ece2682699b9aaaf839f8837864d5dcde4",
+  "vendoredBodySha256": "sha256-0947c77369deb9810f2bdf2ca506c401439d98e04688dfe274eb115190e307e6",
+  "modification": "import block only: relative specifiers → equivalent bare deep specifiers; license/modification header prepended",
+  "boundary": "W2 vendors Context.js only. The Renderer resource classes it reaches are still patch-layer modules; the full WebGL2 fallback build-out belongs to W3 (resource implementations) and W6 (T100/T101). Undelegatable capabilities fail loudly.",
+  "regeneratedAt": "2026-09-18T21:36:22.185Z"
+}

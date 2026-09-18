@@ -145,7 +145,11 @@ function runOneSuite(descriptor, suiteFile, passthrough) {
         "(see tasks.md for the task that lands it).",
     );
   }
-  const result = spawnSync(process.execPath, [playwrightCli(), "test", absolute, "--reporter=line", ...passthrough], {
+  // Playwright treats a positional argument as a regex matched against the **test-dir-relative** path,
+  // so the suite MUST be passed in that form: an absolute path (and, on Windows, a backslash path)
+  // silently matches nothing and the run reports "No tests found".
+  const suiteArgument = path.relative(REPO_ROOT, absolute).split(path.sep).join("/");
+  const result = spawnSync(process.execPath, [playwrightCli(), "test", suiteArgument, "--reporter=line", ...passthrough], {
     stdio: "inherit",
     cwd: REPO_ROOT,
     env: {
