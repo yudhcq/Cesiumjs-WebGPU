@@ -4,10 +4,10 @@
   "datasetId": "matterhorn-z0-12",
   "backend": "webgl2",
   "referenceFrame": "reference-frames/terrain-multitile/matterhorn-z0-12/matterhorn-multitile.webgl2.png",
-  "generatedAt": "2026-09-19T03:08:30.401Z",
+  "generatedAt": "2026-09-19T03:13:47.540Z",
   "generatedBy": "node tests/support/backend-runner.mjs --backend=webgl2 --suite=visual:terrain (VISUAL_TERRAIN_BASELINE=1)",
   "overwrotePrevious": false,
-  "runId": "webgl2-16240-1789787309139",
+  "runId": "webgl2-42348-1789787625987",
   "sourceScreenshot": "artifacts/terrain/webgl2-canvas.png",
   "fixedConditions": {
     "caseId": "matterhorn-multitile",
@@ -99,7 +99,7 @@
     {
       "id": "msaa-resolve",
       "what": "MSAA 解析：两次运行对多采样附件的解析",
-      "basis": "解析是逐样本平均：边缘像素落在 anti-aliased-edge 的排除带内，其余像素的样本颜色相同因而解析结果相同。实测样本数写入 `record.fixedConditions.context.sampleCount`；样本数一变即为条件变更（MUST 重新生成参考帧），而不是靠加容差糊过去。",
+      "basis": "解析是逐样本平均：边缘像素落在 anti-aliased-edge 的排除带内，其余像素的样本颜色相同因而解析结果相同。多采样的实测状态写入 `record.fixedConditions.context`：WebGPU 臂给出数值 `sampleCount`，WebGL2 臂的上游 Context 不暴露该数值（记为 null，以 `context.msaa` 为据）；该状态一变即为条件变更（MUST 重新生成参考帧），而不是靠加容差糊过去。",
       "tolerance": {
         "applicable": "edge-band-only"
       }
@@ -117,7 +117,7 @@
     {
       "id": "silhouette-geometry",
       "what": "轮廓几何：排除抗锯齿带之后，画面里承载地形几何的结构是地形轮廓（背景为清屏色）",
-      "basis": "若只做「排除边缘 + 比较颜色」，均匀表面上的几何变化（相机移动、瓦片缺失）会被排除带吞掉，比较就永不失真 —— 故轮廓另设独立判据：前景覆盖率差 ≤ 0.5 个百分点、逐行前景像素计数差 ≤ 4 px（= 4 × 膨胀半径），两者都在**包含排除带**的整帧上计算。实测值写入统计 JSON。",
+      "basis": "若只做「排除边缘 + 比较颜色」，均匀表面上的几何变化（相机移动、瓦片缺失）会被排除带吞掉，比较就永不失真 —— 故轮廓另设独立判据：前景覆盖率差 ≤ 0.5 个百分点、逐行前景像素计数差 ≤ 4 px（= 4 × 膨胀半径），两者都在**包含排除带**的整帧上计算。实测值写入统计 JSON。口径披露：本基线的实测帧前景覆盖率为 100 %（相机俯视，画面内没有背景），所以这两条判据在当前基线上**不产生实质约束**，它们是几何变化的守卫（相机改变或瓦片缺失会改变覆盖率与逐行计数），而不是对「起伏可见」的断言。",
       "tolerance": {
         "coverageDeltaMax": 0.005,
         "rowCountDeltaMax": 4

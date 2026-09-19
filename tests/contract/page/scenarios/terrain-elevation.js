@@ -566,7 +566,11 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
   // ----------------------------------------------------------------------------------------------
   // 4. depth corroboration — measured BEFORE the presented frame is captured
   // ----------------------------------------------------------------------------------------------
-  const canvasDepth = await readCanvasDepth(context, canvas, terrain.bufferReadbackStaging);
+  // The depth read-back is a WebGPU-path instrument: `canvasDepthTexture()` belongs to the replacement
+  // `Context`, so on the WebGL2 path the helper would throw. The absence is reported, never provoked.
+  const canvasDepth = typeof context.canvasDepthTexture !== "function"
+    ? { measurable: false, reason: "context.canvasDepthTexture is not a function on this backend: the canvas depth read-back is a WebGPU-path instrument" }
+    : await readCanvasDepth(context, canvas, terrain.bufferReadbackStaging);
   let depthIndicator = { skipped: "the depth-test indicator is a WebGPU-path instrument" };
   if (isWebgpu && readback !== null) {
     const resources = createDepthIndicatorResources(context.device, context.swapchainFormat, context.sampleCount);
@@ -618,10 +622,15 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
       greaterOverTerrain: greaterOverTerrain === null ? null : { markerPixels: greaterOverTerrain.markerPixels, viewportPixels: greaterOverTerrain.viewportPixels },
       lessOverTerrain: lessOverTerrain === null ? null : { markerPixels: lessOverTerrain.markerPixels, viewportPixels: lessOverTerrain.viewportPixels },
       clearOnlyGreater: clearOnlyGreater === null ? null : { markerPixels: clearOnlyGreater.markerPixels, viewportPixels: clearOnlyGreater.viewportPixels },
-      // `less` paints zero over rendered depth and everything over the clear value: that difference is
-      // what makes the depth presence measurable here.
+      // `less` paints zero over rendered depth and everything over the clear value. MEASURED HERE: it
+      // paints the whole viewport, exactly like `greater`, so the two comparisons do **not** distinguish
+      // "the terrain wrote depth" from "the attachment holds its clear value" in this scenario — the
+      // marker is therefore reported as a measurement and NOT used as depth-presence evidence. The
+      // decisive statement about depth in this task is the `ctx.readCanvasDepth` record above (the depth
+      // aspect of `depth24plus-stencil8` is not copyable on Chrome 153, `probe.js:1989-2010`).
       controlPaintsNothing: lessOverTerrain === null ? null : lessOverTerrain.markerPixels === 0,
-      controlNote: "the clear-only frame is reported, not asserted: it painted the whole viewport here, so this platform does not expose the depth clear value to the marker the way the probe's `greater` over a cleared buffer would need",
+      discriminating: lessOverTerrain === null || always === null ? null : lessOverTerrain.markerPixels === 0 && greaterOverTerrain.markerPixels !== always.markerPixels,
+      controlNote: "both the `less` and the `greater` marker painted the full viewport (measured), so this indicator does not discriminate here; the numbers are published as a measurement, not as depth evidence",
       depthWrittenShare: greaterOverTerrain === null || always === null ? null : Number((greaterOverTerrain.markerPixels / always.viewportPixels).toFixed(6)),
       verdict: greaterOverTerrain === null ? "the indicator did not run" : `${greaterOverTerrain.markerPixels} of ${always?.viewportPixels ?? 0} viewport pixels hold depth written below the clear value`,
     };

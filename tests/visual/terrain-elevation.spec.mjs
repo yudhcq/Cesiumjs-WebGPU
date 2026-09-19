@@ -322,25 +322,20 @@ test("visual:terrain-elevation — the rendered terrain's elevation agrees with 
   // ---------------------------------------------------------------------------------------------
   // depth: what is measurable here, plus the depth-test corroboration
   // ---------------------------------------------------------------------------------------------
-  assert.equal(result.depth.canvasDepth.measurable, false, "the canvas depth aspect is not copyable on this platform; the scenario MUST report that instead of provoking a GPU error");
-  assert.ok(String(result.depth.canvasDepth.reason).length > 0, "an unmeasurable dimension MUST carry its reason");
+  assert.equal(result.depth.canvasDepth.measurable, false, "the canvas depth aspect is not measurable on this platform; the scenario MUST report that instead of provoking a GPU error");
+  assert.ok(String(result.depth.canvasDepth.reason).length > 0, "an unmeasurable dimension MUST carry its reason (WebGPU: the depth aspect of depth24plus-stencil8 cannot be copied; WebGL2: no canvasDepthTexture)");
   if (run.backend === "webgpu") {
     const indicator = result.depth.indicator;
-    assert.ok(indicator.always !== null && indicator.always.markerPixels === indicator.always.viewportPixels, `the marker MUST cover the whole viewport when it ignores depth (${indicator.always?.markerPixels}/${indicator.always?.viewportPixels}): without that, a small depth-tested count would prove nothing`);
-    assert.ok(indicator.greaterOverTerrain.markerPixels > 0, "the terrain MUST have written depth below the clear value somewhere: the depth test paints exactly where geometry rasterised");
-    assert.equal(
-      indicator.controlPaintsNothing,
-      true,
-      `a \`less\` marker at clip depth 1.0 MUST paint nothing over the terrain's depth (measured ${indicator.lessOverTerrain?.markerPixels} px): if it painted, the attachment would hold the clear value and the \`greater\` count above would mean nothing`,
-    );
-    assert.ok(
-      indicator.greaterOverTerrain.markerPixels <= indicator.always.viewportPixels,
-      `the depth-tested marker MUST NOT cover more than the unconditional one (${indicator.greaterOverTerrain.markerPixels} vs ${indicator.always.viewportPixels})`,
-    );
-    // Published, not asserted: the clear-only frame painted the whole viewport on this platform, which is
-    // the instrument limitation that made the `less` control the discriminating one.
+    // The marker ran and covered the viewport through the whole Context; it is recorded as a measurement
+    // only. The `less` control painted the full viewport too (measured), so the two comparisons cannot
+    // separate "the terrain wrote depth" from "the attachment holds its clear value" here — this suite
+    // therefore makes **no** depth-presence claim from it, and the depth dimension is reported as not
+    // measurable with its reason (`ctx.readCanvasDepth`, asserted above).
+    assert.ok(indicator.always !== null && indicator.always.markerPixels === indicator.always.viewportPixels, `the marker MUST cover the viewport when it ignores depth (${indicator.always?.markerPixels}/${indicator.always?.viewportPixels}) — otherwise the recorded numbers would describe the marker rather than the frame`);
+    assert.equal(indicator.discriminating, false, "the depth-test marker is MEASURED to be non-discriminating here (both compares paint the full viewport); if that changes, revisiting the depth evidence is warranted");
+    assert.equal(typeof indicator.controlNote, "string", "a non-discriminating instrument MUST carry the note that says so");
     console.log(
-      `terrain-elevation[${run.backend}]: depth indicator — always ${indicator.always.markerPixels}/${indicator.always.viewportPixels}, greater-over-terrain ${indicator.greaterOverTerrain.markerPixels}, less-over-terrain ${indicator.lessOverTerrain.markerPixels} (control), clear-only-greater ${indicator.clearOnlyGreater.markerPixels} (instrument limitation, reported not asserted)`,
+      `terrain-elevation[${run.backend}]: depth marker (recorded, not used as evidence) — always ${indicator.always.markerPixels}/${indicator.always.viewportPixels}, greater ${indicator.greaterOverTerrain.markerPixels}, less ${indicator.lessOverTerrain.markerPixels}, clear-only-greater ${indicator.clearOnlyGreater.markerPixels}`,
     );
   } else {
     assert.ok(result.depth.indicator.skipped !== undefined, "a backend without the depth indicator MUST say so");
