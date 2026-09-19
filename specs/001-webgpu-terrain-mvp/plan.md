@@ -298,16 +298,23 @@ upstream/                               # engine-26.3.0.lock.json、interface-ma
   场景配置：`skyBox:false`、`skyAtmosphere:false`、**`baseLayer:false`**（影像重投影会派发真实 `ComputeCommand`）、
   无后处理、`globe.enableLighting=true`、地形来自 `CustomHeightmapTerrainProvider`；
   临时降级：`depthTexture=false`（于是 `GlobeDepth`/OIT 不创建）。
-- **起伏可见性决策（W5 追加，用户批准）**：SC-002 要求"不出现整片单色区域"且"高程最高与最低处可观察差异明显"。
+- **起伏可见性：显式后置（W5 追加，用户决策，取代早先的"方案 A"）**：
   实测证明：在 `baseLayer:false` + 常规近地相机（`cameraDist = |czm_view[3].xyz| = 6.39e6 m` <
   `lightingFadeOutDistance = 9.99e6 m`）下，`ENABLE_DAYNIGHT_SHADING` 分支
   （`globe-fragment-main.wgsl:82-84`）的 `fade = clamp((cameraDist − fadeOut)/(fadeIn − fadeOut), 0, 1) = 0`
   会把光照**完全抑制**（`finalColor = color × lightColor` = 未调制基色），
-  这是**上游设计行为、两条路径一致**，**不是缺陷**。
-  因此地形 MUST 提供**法线**并使 `hasVertexNormals === true`，由上游推入 **`ENABLE_VERTEX_LIGHTING`**
-  （`GlobeSurfaceShaderSet.js:327-330`）——该分支（`globe-fragment-main.wgsl:79-81`）**不含 `fade`**，
-  故在任何相机距离下都能显示起伏。代价：地形顶点布局扩为含法线、fixture 需重新生成；
-  **WGSL 闭包无需改动**（该分支已存在）。验收判据：`uniqueColours > 1` 且明暗差异与高程相关（统计断言，非肉眼）。
+  这是**上游设计行为、两条路径一致**，**不是缺陷**；`uniqueColoursGpuReadback = 1` 因此是**正确结果**。
+  **用户决策：本增量不实现起伏，SC-002 相应修订**（见 `spec.md`，明暗/遮挡差异后置到后续增量）。
+  **早先考虑的"方案 A"经查证不可行**：上游 heightmap 路径**根本不产生逐顶点法线**
+  ——`HeightmapTessellator.js:480-491` 与 `CustomHeightmapTerrainProvider.js:158-162` 均把
+  `hasVertexNormals` **写死为 false**，而置 true 单独做只会让 VS 读到缺失的第 4 分量（填充 1.0 ⇒
+  `czm_octDecode(1.0)` 常量法线 ⇒ 明暗仍均匀）；真正产生法线的一步在 **worker**（`createVerticesFromHeightmap`）内，
+  补丁层覆盖不到。若要后补，两条路线与其代价已查证：
+  **A2（推荐）** fixture 换 **quantized-mesh**（该格式原生带 `extension.vertexNormals`，
+  上游 `QuantizedMeshTerrainData`/`TerrainEncoding` 自动置位，**零新增补丁条目**，不越出 `Renderer/**` 边界），
+  代价是重做 T084/T085 的生成器与校验器；
+  **A1（否决）** 替换 `Core/HeightmapTessellator.js`——越出补丁边界且需另行解决 worker 模块图打包。
+  本增量**不实施** A1/A2，仅在此登记为后续增量入口。
 - **切片 B（MVP 验收要求）**：`Framebuffer`/`Renderbuffer`/`MultisampleFramebuffer`/`FramebufferManager` 的附件化实现、
   离屏深度纹理与深度拷贝用的视口四边形命令、`depthTexture=true` 翻转并重跑全量验证（FR-030 明列"帧缓冲"）。
 - **切片 C（后续增量）**：picking/回读（`readPixels`/`readPixelsToPBO`/`Sync`）、`CubeMap`/`Texture3D`/`TextureAtlas`、
