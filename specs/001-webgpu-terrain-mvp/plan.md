@@ -298,6 +298,16 @@ upstream/                               # engine-26.3.0.lock.json、interface-ma
   场景配置：`skyBox:false`、`skyAtmosphere:false`、**`baseLayer:false`**（影像重投影会派发真实 `ComputeCommand`）、
   无后处理、`globe.enableLighting=true`、地形来自 `CustomHeightmapTerrainProvider`；
   临时降级：`depthTexture=false`（于是 `GlobeDepth`/OIT 不创建）。
+- **起伏可见性决策（W5 追加，用户批准）**：SC-002 要求"不出现整片单色区域"且"高程最高与最低处可观察差异明显"。
+  实测证明：在 `baseLayer:false` + 常规近地相机（`cameraDist = |czm_view[3].xyz| = 6.39e6 m` <
+  `lightingFadeOutDistance = 9.99e6 m`）下，`ENABLE_DAYNIGHT_SHADING` 分支
+  （`globe-fragment-main.wgsl:82-84`）的 `fade = clamp((cameraDist − fadeOut)/(fadeIn − fadeOut), 0, 1) = 0`
+  会把光照**完全抑制**（`finalColor = color × lightColor` = 未调制基色），
+  这是**上游设计行为、两条路径一致**，**不是缺陷**。
+  因此地形 MUST 提供**法线**并使 `hasVertexNormals === true`，由上游推入 **`ENABLE_VERTEX_LIGHTING`**
+  （`GlobeSurfaceShaderSet.js:327-330`）——该分支（`globe-fragment-main.wgsl:79-81`）**不含 `fade`**，
+  故在任何相机距离下都能显示起伏。代价：地形顶点布局扩为含法线、fixture 需重新生成；
+  **WGSL 闭包无需改动**（该分支已存在）。验收判据：`uniqueColours > 1` 且明暗差异与高程相关（统计断言，非肉眼）。
 - **切片 B（MVP 验收要求）**：`Framebuffer`/`Renderbuffer`/`MultisampleFramebuffer`/`FramebufferManager` 的附件化实现、
   离屏深度纹理与深度拷贝用的视口四边形命令、`depthTexture=true` 翻转并重跑全量验证（FR-030 明列"帧缓冲"）。
 - **切片 C（后续增量）**：picking/回读（`readPixels`/`readPixelsToPBO`/`Sync`）、`CubeMap`/`Texture3D`/`TextureAtlas`、
