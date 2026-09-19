@@ -40,7 +40,7 @@ test("the MVP terrain scene renders and every FramebufferManager request is reco
     fs.mkdirSync(out, { recursive: true });
     fs.writeFileSync(
       path.join(out, `observation.${variant.id}.${run.backend}.json`),
-      `${JSON.stringify({ variant: variant.id, query: variant.query, run: { backend: run.backend, url: run.url, browserVersion: run.browserVersion, error: run.error }, result, pageErrors: run.pageErrors, pageReportedErrors: report.errors, requestFailures: run.requestFailures, requests: run.requests, badResponses: run.badResponses, consoleMessages: run.consoleMessages }, null, 2)}\n`,
+      `${JSON.stringify({ variant: variant.id, query: variant.query, run: { backend: run.backend, url: run.url, browserVersion: run.browserVersion, error: run.error }, result, canvasScreenshot: run.canvasScreenshot ?? null, pageErrors: run.pageErrors, pageReportedErrors: report.errors, requestFailures: run.requestFailures, requests: run.requests, badResponses: run.badResponses, consoleMessages: run.consoleMessages }, null, 2)}\n`,
       "utf8",
     );
     console.log(
@@ -50,7 +50,7 @@ test("the MVP terrain scene renders and every FramebufferManager request is reco
         passes: result?.counts?.passes ?? null,
         tiles: result?.globeDiagnostics?.tilesToRenderLength ?? null,
         gpuFrame: result?.gpuFrame === undefined || result.gpuFrame === null ? null : { nonBlack: result.gpuFrame.nonBlackPixels, centre: result.gpuFrame.centre },
-        screenshot: run.canvasScreenshot === undefined ? null : { nonBackground: run.canvasScreenshot.nonBackground, centre: run.canvasScreenshot.centre },
+        screenshot: run.canvasScreenshot === undefined ? null : { nonBackground: run.canvasScreenshot.nonBackground, uniqueColours: run.canvasScreenshot.uniqueColours, centre: run.canvasScreenshot.centre },
         framebufferUpdateShapes: (result?.framebufferUpdates ?? []).length,
       })}`,
     );

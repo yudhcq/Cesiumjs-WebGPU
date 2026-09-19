@@ -23,8 +23,6 @@ import { partitionTrace } from "/experiments/gates/g3-pass-trace/partition.mjs";
  */
 globalThis.CESIUM_BASE_URL = "/engine/";
 
-globalThis.__probeCullNone = true; // TEMPORARY W5 bisect switch
-
 const params = new URLSearchParams(globalThis.location.search);
 const scenario = params.get("scenario") ?? "backend-core";
 const backend = params.get("backend") ?? "webgpu";
@@ -1397,11 +1395,12 @@ function instrumentShaderEmission(bundle, log) {
  * Wrap `Context.draw` so the **real terrain draws** can be inspected: which pipeline (if any), which
  * vertex layout, and which render state the logic layer actually asked for.
  */
-function instrumentContextDraw(bundle, log, uniformTargets = [], limit = 8) {
+function instrumentContextDraw(bundle, log, uniformTargets = [], pipelineRef = null, limit = 8) {
   const prototype = bundle.contextModule?.default?.prototype;
   if (prototype === undefined || typeof prototype.draw !== "function") return false;
   const original = prototype.draw;
   prototype.draw = function instrumentedDraw(command, passState, program, uniformMap) {
+    let recordedIndex = -1;
     if (log.length < limit) {
       const renderState = command?.renderState ?? {};
       log.push({
@@ -1409,6 +1408,7 @@ function instrumentContextDraw(bundle, log, uniformTargets = [], limit = 8) {
         hasShaderProgram: command?.shaderProgram !== undefined || command?._shaderProgram !== undefined,
         shaderProgramVariant: (command?.shaderProgram ?? command?._shaderProgram)?.variantKey ?? null,
         pipelinePublished: (command?.shaderProgram ?? command?._shaderProgram)?.pipeline !== undefined,
+        pipelineId: pipelineRef?.current?.idOf((command?.shaderProgram ?? command?._shaderProgram)?.pipeline) ?? null,
         vertexArray: command?.vertexArray === undefined ? null : {
           numberOfVertices: command.vertexArray.numberOfVertices ?? null,
           layout: (command.vertexArray.__webgpu?.vertexLayout ?? []).map((attribute) => ({ loc: attribute.index ?? attribute.location, comps: attribute.componentsPerAttribute, type: attribute.componentDatatype, offset: attribute.offsetInBytes, stride: attribute.strideInBytes, normalized: attribute.normalized })),
@@ -1431,6 +1431,49 @@ function instrumentContextDraw(bundle, log, uniformTargets = [], limit = 8) {
         rawGpuVertexBuffers: (command?.vertexArray?.__webgpu?.gpuVertexBuffers ?? []).map((layout) => ({ arrayStride: layout.arrayStride, stepMode: layout.stepMode, attributes: layout.attributes.map((attribute) => ({ shaderLocation: attribute.shaderLocation, offset: attribute.offset, format: attribute.format })) })),
         rawIndexBuffer: command?.vertexArray?.__webgpu?.indexBuffer ?? null,
         uniformMapKeys: Object.keys(command?._uniformMap ?? command?.uniformMap ?? {}).slice(0, 16),
+        // The frame this draw belongs to: the wrapper logs the **first** `limit` draws of the whole
+        // session by default, which are the coarse ancestor tiles of the opening frames. A diagnosis of
+        // a black *settled* frame has to look at the last frame's draws.
+        frame: this.frameNumber ?? null,
+        // The **same draw's** uniform values, invoked as `_setUniforms` invokes them (the callbacks
+        // read `this`; entries the logic layer already resolved are plain objects/array-likes).
+        uniformValues: (() => {
+          const map = command?._uniformMap ?? command?.uniformMap ?? null;
+          if (map === null || typeof map !== "object") return null;
+          const normalise = (value) => {
+            if (typeof value === "number") return Number(value);
+            if (value === null || value === undefined) return null;
+            if (ArrayBuffer.isView(value) || Array.isArray(value)) return Array.from(value).slice(0, 16).map((entry) => Number(entry));
+            if (typeof value === "object") {
+              if (typeof value.length === "number") return Array.from(value).slice(0, 16).map((entry) => Number(entry));
+              const lanes = ["x", "y", "z", "w"].map((lane) => value[lane]);
+              // A `Cartesian3` has no `w`, so the lane list is allowed to stop early — but the lanes it
+              // does have must all be numbers.
+              const present = lanes.filter((lane) => lane !== undefined);
+              if (present.length >= 2 && present.every((lane) => typeof lane === "number")) return present;
+              const colour = ["red", "green", "blue", "alpha"].map((lane) => value[lane]);
+              if (colour.every((lane) => typeof lane === "number")) return colour;
+            }
+            return null;
+          };
+          const pick = (name) => {
+            try {
+              const candidate = map[name];
+              return normalise(typeof candidate === "function" ? candidate.call(map) : candidate);
+            } catch (error) {
+              return `throws: ${String(error?.message ?? error).slice(0, 80)}`;
+            }
+          };
+          return {
+            u_center3D: pick("u_center3D"),
+            u_tileRectangle: pick("u_tileRectangle"),
+            u_modifiedModelView: pick("u_modifiedModelView"),
+            u_modifiedModelViewProjection: pick("u_modifiedModelViewProjection"),
+            u_minMaxHeight: pick("u_minMaxHeight"),
+            u_initialColor: pick("u_initialColor"),
+            u_southAndNorthLatitude: pick("u_southAndNorthLatitude"),
+          };
+        })(),
         programDynamicOffset: (command?.shaderProgram ?? command?._shaderProgram)?.uniformDynamicOffset ?? null,
       });
       // Non-serializable handles (the uniform ring's `GPUBuffer`) live in a side list: putting them in
@@ -1441,16 +1484,39 @@ function instrumentContextDraw(bundle, log, uniformTargets = [], limit = 8) {
         uniformTargets.push({
           buffer: staging.buffer,
           label: String(probeProgram.id),
-          members: (probeProgram.layout?.members ?? []).filter((member) => /ModelViewProjection|Projection|ModelView/i.test(member.name)).map((member) => ({ name: member.name, offset: member.byteOffset, glslType: member.glslType })),
+          // Every member, with the offsets the WGSL `struct` was generated with: the W5 root-cause probe
+          // has to name a float it read out of the block, not guess which of 53 members it belongs to.
+          members: (probeProgram.layout?.members ?? []).map((member) => ({
+            name: member.name,
+            byteOffset: member.byteOffset,
+            glslType: member.glslType,
+            scalar: member.scalar,
+            components: member.components,
+            columns: member.columns,
+            length: member.length,
+            scalarOffsets: [...(member.scalarOffsets ?? [])],
+          })),
           structSize: probeProgram.layout?.structSize ?? null,
+          variantKey: probeProgram.variantKey ?? null,
+          defines: [...(probeProgram.defines ?? [])],
+          vertexModule: typeof probeProgram.wgsl?.vertexModule === "string" ? probeProgram.wgsl.vertexModule : null,
+          fragmentModule: typeof probeProgram.wgsl?.fragmentModule === "string" ? probeProgram.wgsl.fragmentModule : null,
           // Live references; the scenario snapshots their state **after** the frames, because this wrapper
           // runs before `Context.draw` and would otherwise only see pre-draw values.
           program: probeProgram,
           gpuStaging: staging,
         });
       }
+      recordedIndex = log.length - 1;
     }
-    return original.call(this, command, passState, program, uniformMap);
+    const recorded = recordedIndex;
+    const result = original.call(this, command, passState, program, uniformMap);
+    if (recorded >= 0) {
+      // `_setUniforms` has run by now, so the command's own ring slot is known — the matrix the shader
+      // reads lives at that offset, not at the one visible before the call.
+      log[recorded].programDynamicOffsetAfter = (command?.shaderProgram ?? command?._shaderProgram)?.uniformDynamicOffset ?? null;
+    }
+    return result;
   };
   return true;
 }
@@ -1538,6 +1604,26 @@ function enableFrameReadback(bundle, canvas, context) {
         }
       }
       const centreOffset = Math.floor(height / 2) * bytesPerRow + Math.floor(width / 2) * 4;
+      // A coarse coverage map + the bounding box of the non-background pixels: "how many pixels" alone
+      // cannot tell a full screen from a small patch in one corner (W5).
+      const cellsX = 12;
+      const cellsY = 9;
+      const cells = new Array(cellsX * cellsY).fill(0);
+      let minX = width;
+      let minY = height;
+      let maxX = -1;
+      let maxY = -1;
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const offset = y * bytesPerRow + x * 4;
+          if (range[offset] + range[offset + 1] + range[offset + 2] <= 24) continue;
+          cells[Math.min(cellsY - 1, Math.floor((y / height) * cellsY)) * cellsX + Math.min(cellsX - 1, Math.floor((x / width) * cellsX))] += 1;
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      }
       return {
         width,
         height,
@@ -1546,6 +1632,9 @@ function enableFrameReadback(bundle, canvas, context) {
         maxChannel,
         uniqueColours: colours.size,
         centre: [range[centreOffset], range[centreOffset + 1], range[centreOffset + 2], range[centreOffset + 3]],
+        nonBlackBoundingBox: maxX < 0 ? null : { minX, minY, maxX, maxY },
+        coverageCells: cells,
+        coverageCellsShape: [cellsX, cellsY],
       };
     },
   };
@@ -1639,6 +1728,153 @@ function recordFramePasses(context, log, limit = 6) {
     return result;
   };
   return true;
+}
+
+/**
+ * Record the **actual** bindings of every indexed draw on the canvas pass (W5 root cause).
+ *
+ * Everything upstream of this point is intent: the command's vertex array, the program's bind group,
+ * the pipeline cache. This wraps the real `GPURenderPassEncoder` the context opened, so the log is what
+ * the GPU was told — pipeline, vertex buffers (with their labels and sizes), index buffer, bind groups
+ * and dynamic offsets.
+ */
+function instrumentPassEncoders(log, limit = 40) {
+  const prototype = globalThis.GPUCommandEncoder?.prototype;
+  if (prototype === undefined || typeof prototype.beginRenderPass !== "function") return false;
+  const originalBeginRenderPass = prototype.beginRenderPass;
+  prototype.beginRenderPass = function instrumentedBeginRenderPass(descriptor) {
+    const encoder = originalBeginRenderPass.call(this, descriptor);
+    const bound = { pipeline: null, vertexBuffers: [], bindGroups: [], indexBuffer: null };
+    const originalSetPipeline = encoder.setPipeline.bind(encoder);
+    encoder.setPipeline = (pipeline) => {
+      bound.pipeline = pipeline;
+      return originalSetPipeline(pipeline);
+    };
+    const originalSetVertexBuffer = encoder.setVertexBuffer.bind(encoder);
+    encoder.setVertexBuffer = (slot, buffer, offset, size) => {
+      bound.vertexBuffers[slot] = { label: buffer?.label ?? null, size: buffer?.size ?? null, offset: offset ?? 0, size_parameter: size ?? null };
+      return originalSetVertexBuffer(slot, buffer, offset, size);
+    };
+    const originalSetBindGroup = encoder.setBindGroup.bind(encoder);
+    encoder.setBindGroup = (index, group, offsets) => {
+      bound.bindGroups[index] = { offsets: offsets === undefined ? null : [...offsets] };
+      return originalSetBindGroup(index, group, offsets);
+    };
+    const originalSetIndexBuffer = encoder.setIndexBuffer.bind(encoder);
+    encoder.setIndexBuffer = (buffer, format, offset, size) => {
+      bound.indexBuffer = { label: buffer?.label ?? null, size: buffer?.size ?? null, format, offset: offset ?? 0, size_parameter: size ?? null };
+      return originalSetIndexBuffer(buffer, format, offset, size);
+    };
+    const originalDrawIndexed = encoder.drawIndexed.bind(encoder);
+    encoder.drawIndexed = (indexCount, instanceCount, firstIndex, baseVertex, firstInstance) => {
+      if (log.length < limit) {
+        log.push({
+          indexCount: indexCount ?? null,
+          instanceCount: instanceCount ?? null,
+          firstIndex: firstIndex ?? 0,
+          baseVertex: baseVertex ?? 0,
+          firstInstance: firstInstance ?? 0,
+          pipelineLabel: bound.pipeline?.label ?? null,
+          pipelineId: bound.pipeline?.__probePipelineId ?? null,
+          vertexBuffers: bound.vertexBuffers.map((binding) => (binding === undefined ? null : { ...binding })),
+          indexBuffer: bound.indexBuffer === null ? null : { ...bound.indexBuffer },
+          bindGroups: bound.bindGroups.map((group) => (group === undefined ? null : { ...group })),
+        });
+      }
+      return originalDrawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
+    };
+    return encoder;
+  };
+  return true;
+}
+
+/**
+ * Record every `queue.writeBuffer` with the **CPU-side bytes** that were handed to it (W5 diagnosis).
+ *
+ * The vertex read-back says what the GPU holds; this says what the backend uploaded. When the two
+ * disagree the upload path is at fault; when they agree the data never was what the shader needed.
+ * Test-side only: it wraps the probe's own device.
+ */
+function instrumentBufferUploads(device, log, limit = 600) {
+  const labels = new WeakMap();
+  const originalCreate = device.createBuffer.bind(device);
+  device.createBuffer = (descriptor) => {
+    const buffer = originalCreate(descriptor);
+    labels.set(buffer, descriptor?.label ?? null);
+    return buffer;
+  };
+  const originalWrite = device.queue.writeBuffer.bind(device.queue);
+  device.queue.writeBuffer = (buffer, bufferOffset, data, dataOffset, size) => {
+    if (log.length < limit && ArrayBuffer.isView(data)) {
+      const bytes = new Uint8Array(data.buffer, data.byteOffset, Math.min(data.byteLength, 64));
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const floats = [];
+      for (let offset = 0; offset + 4 <= bytes.byteLength && floats.length < 16; offset += 4) floats.push(Number(view.getFloat32(offset, true).toPrecision(9)));
+      log.push({
+        buffer,
+        label: labels.get(buffer) ?? null,
+        bufferOffset,
+        dataOffset: dataOffset ?? null,
+        size: size ?? null,
+        byteLength: data.byteLength,
+        typedArray: data.constructor?.name ?? null,
+        viewByteOffset: data.byteOffset,
+        firstFloats: floats,
+      });
+    }
+    return originalWrite(buffer, bufferOffset, data, dataOffset, size);
+  };
+  return { log, labelOf: (buffer) => labels.get(buffer) ?? null };
+}
+
+/**
+ * Record every `createRenderPipeline` descriptor, and tag the pipeline so a draw can name the exact one
+ * it used (W5 diagnosis).
+ *
+ * The vertex fetch layout, the cull mode and the depth state are baked into the pipeline; the command's
+ * own vertex array says nothing about what the GPU was actually told to read.
+ */
+function instrumentPipelines(device, log, limit = 120) {
+  const original = device.createRenderPipeline.bind(device);
+  let nextId = 0;
+  device.createRenderPipeline = (descriptor) => {
+    const pipeline = original(descriptor);
+    const id = (nextId += 1);
+    try {
+      Object.defineProperty(pipeline, "__probePipelineId", { value: id, enumerable: false });
+    } catch {
+      // A frozen pipeline object would only cost the id, never the descriptor record below.
+    }
+    if (log.length < limit) {
+      log.push({
+        id,
+        label: descriptor?.label ?? null,
+        vertexEntryPoint: descriptor?.vertex?.entryPoint ?? null,
+        fragmentEntryPoint: descriptor?.fragment?.entryPoint ?? null,
+        vertexBuffers: (descriptor?.vertex?.buffers ?? []).map((buffer) => ({
+          arrayStride: buffer.arrayStride,
+          stepMode: buffer.stepMode ?? "vertex",
+          attributes: (buffer.attributes ?? []).map((attribute) => ({ shaderLocation: attribute.shaderLocation, offset: attribute.offset, format: attribute.format })),
+        })),
+        colorFormats: (descriptor?.fragment?.targets ?? []).map((target) => target.format),
+        topology: descriptor?.primitive?.topology ?? null,
+        cullMode: descriptor?.primitive?.cullMode ?? "none",
+        frontFace: descriptor?.primitive?.frontFace ?? null,
+        depthFormat: descriptor?.depthStencil?.format ?? null,
+        depthWriteEnabled: descriptor?.depthStencil?.depthWriteEnabled ?? null,
+        depthCompare: descriptor?.depthStencil?.depthCompare ?? null,
+        depthBias: descriptor?.depthStencil?.depthBias ?? null,
+        depthBiasSlopeScale: descriptor?.depthStencil?.depthBiasSlopeScale ?? null,
+        depthBiasClamp: descriptor?.depthStencil?.depthBiasClamp ?? null,
+        stencilFront: descriptor?.depthStencil?.stencilFront ?? null,
+        targetWriteMasks: (descriptor?.fragment?.targets ?? []).map((target) => target.writeMask ?? 0xf),
+        targetBlend: (descriptor?.fragment?.targets ?? []).map((target) => target.blend ?? null),
+        sampleCount: descriptor?.multisample?.count ?? 1,
+      });
+    }
+    return pipeline;
+  };
+  return { log, idOf: (pipeline) => (pipeline === undefined || pipeline === null ? null : pipeline.__probePipelineId ?? null) };
 }
 
 /**
@@ -1826,11 +2062,12 @@ async function buildTerrainScene(bundle, canvas, options = {}) {
   const uniformTargets = [];
   const clearLog = [];
   instrumentContextClear(bundle, clearLog, 12);
-  const drawInstrumented = instrumentContextDraw(bundle, drawLog, uniformTargets);
+  const pipelineRef = { current: null };
+  const drawInstrumented = instrumentContextDraw(bundle, drawLog, uniformTargets, pipelineRef);
   const pipelineStateLog = [];
   const uniformValueLog = [];
   instrumentUniformValues(bundle, uniformValueLog);
-  const pipelineOverridden = overridePipelineState(bundle, { cullNone: params.get("cull") === "none" || globalThis.__probeCullNone === true, depthAlways: params.get("depth") === "always", log: pipelineStateLog });
+  const pipelineOverridden = overridePipelineState(bundle, { cullNone: options.cullNone === true || params.get("cull") === "none", depthAlways: params.get("depth") === "always", log: pipelineStateLog });
 
   if (isWebgpu) {
     const { adapter, device } = await prefetchDevice();
@@ -1892,6 +2129,13 @@ async function buildTerrainScene(bundle, canvas, options = {}) {
   });
   step("construct-scene", { contextConstructor: scene.context?.constructor?.name ?? null, backend, latitude: camera.latitude });
   const readback = options.readback === true && isWebgpu ? enableFrameReadback(bundle, canvas, scene.context) : null;
+  // Installed **before** the terrain tiles are requested, so the upload records exist for the buffers
+  // the draws later name.
+  const uploads = options.uploadLog === true && isWebgpu ? instrumentBufferUploads(scene.context.device, []) : null;
+  const pipelineLog = options.pipelineLog === true && isWebgpu ? instrumentPipelines(scene.context.device, []) : null;
+  pipelineRef.current = pipelineLog;
+  const drawBindings = options.pipelineLog === true && isWebgpu ? [] : null;
+  const drawBindingsInstrumented = drawBindings === null ? false : instrumentPassEncoders(drawBindings);
   const bufferReadback = options.bufferReadback === true && isWebgpu ? enableBufferReadback(scene.context.device) : null;
   const bufferReadbackStaging = bufferReadback?.createStaging ?? null;
   const framePassLog = [];
@@ -1902,8 +2146,7 @@ async function buildTerrainScene(bundle, canvas, options = {}) {
 
   const frameErrors = [];
   const frameTimesMs = [];
-  const renderFrames = async (count, settleMs = 12) => {
-    for (let index = 0; index < count; index += 1) {
+  const renderFrames = async (count, settleMs = 12) => {    for (let index = 0; index < count; index += 1) {
       const started = performance.now();
       try {
         scene.initializeFrame();
@@ -1917,7 +2160,22 @@ async function buildTerrainScene(bundle, canvas, options = {}) {
     }
   };
 
-  return { scene, globe, provider, renderFrames, frameErrors, renderErrors, frameTimesMs, framebufferUpdates, requestedTiles, emissionLog, emissionInstrumented, drawLog, drawInstrumented, pipelineStateLog, pipelineOverridden, framePassLog, readback, bufferReadback, bufferReadbackStaging, uniformValueLog, uniformTargets, clearLog, instrumented, isWebgpu };
+  /**
+   * Forget the recorded draws (and the uniform targets they named), so the **next** frame's draws are
+   * the ones the probe inspects. Without it the log holds the session's opening frames, whose tiles are
+   * the coarse ancestors still on screen while the fine tiles load — a different tile than the settled
+   * frame draws (measured: the opening draws are level-0 tiles, the settled frame draws finer ones).
+   */
+  const resetDrawLog = () => {
+    drawLog.length = 0;
+    uniformTargets.length = 0;
+    if (drawBindings !== null) drawBindings.length = 0;
+    // The pipeline log is deliberately **not** cleared: the programs of the opening frames built their
+    // pipelines then, and the settled frame reuses them — clearing it would lose the descriptor the
+    // settled frame's draws actually used.
+  };
+
+  return { scene, globe, provider, renderFrames, frameErrors, renderErrors, frameTimesMs, framebufferUpdates, requestedTiles, emissionLog, emissionInstrumented, drawLog, drawInstrumented, pipelineStateLog, pipelineOverridden, framePassLog, readback, bufferReadback, bufferReadbackStaging, uniformValueLog, uniformTargets, clearLog, instrumented, isWebgpu, uploads, pipelineLog, drawBindings, drawBindingsInstrumented, resetDrawLog };
 }
 
 /** Wait until the globe reports every visible tile loaded, or the budget runs out. */
@@ -1950,7 +2208,7 @@ async function scenarioTerrainProbe(bundle, canvas) {
     readback: true,
     bufferReadback: true,
     singleSample: params.get("samples") === "1",
-    cullNone: globalThis.__probeCullNone === true,
+    cullNone: params.get("cull") === "none",
     lightingOff: params.get("lighting") === "off",
     globeHidden: params.get("globe") === "hidden",
     ellipsoidProvider: params.get("provider") === "ellipsoid",
@@ -2109,9 +2367,646 @@ async function scenarioTerrainProbe(bundle, canvas) {
   return { result, context: terrain.isWebgpu ? context : null };
 }
 
+// ------------------------------------------------------------------------------------------------
+// W5 root cause: did the terrain rasterise at all, and with which vertex transform?
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * A full-viewport triangle written at clip depth **1.0** with `depthWriteEnabled: false`.
+ *
+ * This is the working replacement for reading the canvas depth buffer back. `copyTextureToBuffer`
+ * **cannot** read the depth aspect of `depth24plus-stencil8` (measured on Chrome 153:
+ * "The depth aspect of [Texture "cesium-webgpu:canvas-depth-stencil"] format
+ * TextureFormat::Depth24PlusStencil8 cannot be selected in a texture to buffer copy."), so the depth
+ * attachment is interrogated *through the depth test* instead:
+ *
+ *   - `depthCompare: "always"`  → the triangle paints the whole viewport (control: the draw works);
+ *   - `depthCompare: "greater"` → the fragment depth (1.0) beats the stored depth only where geometry
+ *     wrote a depth **below** 1.0, i.e. exactly where the terrain rasterised.
+ *
+ * The probe frame is opened with a draw as its first work operation, so the pass machine opens it with
+ * `loadOp: "load"` for both colour and depth (`webgpu/pass-encoder.ts` `#descriptorFor`) and the depth
+ * written by the previous terrain frame survives.
+ */
+function createDepthIndicatorResources(device, format, sampleCount) {
+  const code = `
+@vertex
+fn vs_main(@builtin(vertex_index) index : u32) -> @builtin(position) vec4f {
+  var corners = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+  let corner = corners[index];
+  return vec4f(corner, 1.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4f {
+  return vec4f(0.0, 1.0, 0.0, 1.0);
+}
+`;
+  const module_ = device.createShaderModule({ label: "probe-depth-indicator", code });
+  const pipelines = new Map();
+  const pipelineFor = (depthCompare) => {
+    let pipeline = pipelines.get(depthCompare);
+    if (pipeline === undefined) {
+      pipeline = device.createRenderPipeline({
+        label: `probe-depth-indicator-${depthCompare}`,
+        layout: "auto",
+        vertex: { module: module_, entryPoint: "vs_main" },
+        fragment: { module: module_, entryPoint: "fs_main", targets: [{ format }] },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth24plus-stencil8", depthWriteEnabled: false, depthCompare },
+        multisample: { count: sampleCount },
+      });
+      pipelines.set(depthCompare, pipeline);
+    }
+    return pipeline;
+  };
+  return { module: module_, pipelineFor };
+}
+
+/** One indicator draw through the replacement `Context` (no program: the pipeline is supplied). */
+function depthIndicatorInputs(resources, { depthCompare, sampleCount, format }) {
+  const renderState = { depthTest: { enabled: false }, depthMask: false, cull: { enabled: false }, colorFormats: [format], depthFormat: "depth24plus-stencil8", sampleCount };
+  return {
+    shaderProgramId: `probe-depth-indicator-${depthCompare}`,
+    pipeline: resources.pipelineFor(depthCompare),
+    vertexBuffers: [],
+    indexed: false,
+    vertexCount: 3,
+    topology: "triangle-list",
+    colorFormats: [format],
+    depthFormat: "depth24plus-stencil8",
+    sampleCount,
+    renderState,
+  };
+}
+
+/** Decode one member of a uniform block from the floats a read-back produced (`scalarOffsets`-driven). */
+function decodeMember(floats, member) {
+  return (member.scalarOffsets ?? []).map((offset) => floats[offset / 4] ?? null);
+}
+
+/**
+ * Name every non-zero member of a uniform block dump, and list the members that are entirely zero.
+ *
+ * A member that the shader needs for the vertex transform but that the block carries as zeros is the
+ * exact signature of a broken automatic-uniform assembly — which is why the probe reports the *values*,
+ * not only the names.
+ */
+function decodeBlock(floats, members) {
+  const named = {};
+  const zeroMembers = [];
+  for (const member of members) {
+    const values = decodeMember(floats, member);
+    if (values.every((value) => value === 0)) zeroMembers.push(member.name);
+    named[member.name] = values.map((value) => Number(Number(value).toPrecision(9)));
+  }
+  return { named, zeroMembers };
+}
+
+/** `Matrix4 * vec4` in Cesium's storage order (column-major, identical to the WGSL `mat4x4<f32>`). */
+function multiplyMatrix4Vector(matrix, vector) {
+  const [x, y, z, w] = vector;
+  return [
+    matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12] * w,
+    matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13] * w,
+    matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14] * w,
+    matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15] * w,
+  ];
+}
+
+/** `czms_remapClipDepth` as the emitted WGSL writes it (`globe-vs.wgsl:28-30`). */
+function remapClipDepth(clip) {
+  return [clip[0], clip[1], 0.5 * clip[2] + 0.5 * clip[3], clip[3]];
+}
+
+/**
+ * `terrain-raster-probe` — the W5 root-cause measurement.
+ *
+ * Three independent questions, answered by measurement rather than by inference:
+ *
+ *   1. **What do the vertex and uniform buffers actually hold?** The first terrain draw's vertex rows,
+ *      index rows and both uniform slots (the automatic block at offset 0 and the command slot at the
+ *      dynamic offset) are read back and decoded through the program's own layout table.
+ *   2. **Where does the vertex transform put the vertices?** The clip-space position of the drawn
+ *      vertices is evaluated in JavaScript with `czms_remapClipDepth(MP * vec4(position, 1))`, exactly
+ *      as the emitted WGSL computes it, and each vertex is classified inside/outside the WebGPU clip
+ *      volume. A vertex count of 0 inside is the "zero fragments" mechanism.
+ *   3. **Did anything rasterise?** The depth-presence indicator above separates "no fragments" from
+ *      "fragments that are black", which a colour read-back alone cannot do.
+ */
+async function scenarioTerrainRasterProbe(bundle, canvas) {
+  const terrain = await buildTerrainScene(bundle, canvas, {
+    readback: true,
+    bufferReadback: true,
+    uploadLog: true,
+    pipelineLog: true,
+    singleSample: params.get("samples") !== "0",
+    cullNone: params.get("cull") === "none",
+    lightingOff: params.get("lighting") === "off",
+    globeHidden: params.get("globe") === "hidden",
+    ellipsoidProvider: params.get("provider") === "ellipsoid",
+  });
+  const load = await renderUntilTilesLoaded(terrain);
+  step("tiles-loaded", load);
+  await terrain.renderFrames(3, 16);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  const context = terrain.scene.context;
+  const device = context.device;
+  const readback = terrain.readback;
+  // Forget the opening frames' draws: the frame that is read back below is the one whose tiles,
+  // vertex buffers and uniforms the probe must describe.
+  terrain.resetDrawLog();
+  readback.arm();
+  await terrain.renderFrames(1, 16);
+  const gpuFrame = await readback.read();
+  const terrainFramePasses = context.lastFramePasses().map((pass) => ({ index: pass.index, keyText: pass.keyText, clearOps: pass.clearOps, drawOps: pass.drawOps, gpuPassCount: pass.gpuPassCount, openedWithLoadOpClear: pass.openedWithLoadOpClear, workOrder: pass.workOps.map((op) => `${op.kind}${op.clearMechanism === undefined ? "" : `(${op.clearMechanism})`}`).join(" → ") }));
+  step("terrain-frame", { frameTimes: terrain.frameTimesMs.slice(-3), gpuFrame, recordedDrawFrame: terrain.drawLog[0]?.frame ?? null, terrainFramePasses });
+
+  // ---- 1. the geometry ---------------------------------------------------------------------------
+  // Prefer a draw that really carries a terrain program **and** real vertex buffers: the first logged
+  // draws of a frame are not necessarily tile draws.
+  const drawWithGeometry = (entry) => (entry.rawVertexBuffers ?? []).length > 0 && (entry.count ?? 0) > 0;
+  const firstDraw =
+    terrain.drawLog.find((entry) => drawWithGeometry(entry) && entry.hasShaderProgram === true) ??
+    terrain.drawLog.find(drawWithGeometry) ??
+    null;
+  let geometry = { error: "no draw with vertex buffers was recorded (drawLog length " + String(terrain.drawLog.length) + ")" };
+  let firstRow = null;
+  let firstFloats = null;
+  if (terrain.bufferReadback !== null && firstDraw !== null) {
+    try {
+      const stride = firstDraw.rawGpuVertexBuffers?.[0]?.arrayStride ?? 28;
+      const floatsPerRow = stride / 4;
+      const buffer = firstDraw.rawVertexBuffers[0].buffer;
+      const totalRows = firstDraw.vertexArray?.numberOfVertices ?? 0;
+      const declaredBytes = totalRows * stride;
+      // The whole vertex array, so "the first row is degenerate" can be told apart from "the whole
+      // buffer is degenerate" — 125 KB is nothing next to a wrong diagnosis.
+      const floats = await terrain.bufferReadback.readFloats(buffer, Math.min(Math.ceil(declaredBytes / 4), Math.floor(buffer.size / 4)));
+      firstFloats = floats;
+      const rowAt = (index) => (index * floatsPerRow + floatsPerRow > floats.length ? null : floats.slice(index * floatsPerRow, (index + 1) * floatsPerRow).map((value) => Number(value.toPrecision(9))));
+      const firstRows = [];
+      for (let vertex = 0; vertex < 8; vertex += 1) firstRows.push(rowAt(vertex));
+      const probeIndices = [64, 65, 66, 2048, 4224, 4225, 4484].filter((index) => index < totalRows);
+      const laneMinimum = new Array(floatsPerRow).fill(Number.POSITIVE_INFINITY);
+      const laneMaximum = new Array(floatsPerRow).fill(Number.NEGATIVE_INFINITY);
+      const distinctPositions = new Set();
+      for (let row = 0; row + 1 <= Math.floor(floats.length / floatsPerRow); row += 1) {
+        const base = row * floatsPerRow;
+        for (let lane = 0; lane < floatsPerRow; lane += 1) {
+          const value = floats[base + lane];
+          if (value < laneMinimum[lane]) laneMinimum[lane] = value;
+          if (value > laneMaximum[lane]) laneMaximum[lane] = value;
+        }
+        if (distinctPositions.size < 4096) distinctPositions.add(`${floats[base]},${floats[base + 1]},${floats[base + 2]}`);
+      }
+      const uploads = (terrain.uploads?.log ?? []).filter((entry) => entry.buffer === buffer);
+      firstRow = firstRows[0];
+      geometry = {
+        arrayStride: stride,
+        gpuVertexBuffers: firstDraw.rawGpuVertexBuffers,
+        numberOfVertices: totalRows,
+        declaredBytes,
+        gpuBufferSize: buffer.size,
+        gpuBufferUsage: buffer.usage,
+        count: firstDraw.count,
+        indexFormat: firstDraw.rawIndexBuffer?.format ?? null,
+        firstVertices: firstRows,
+        probeRows: probeIndices.map((index) => ({ index, row: rowAt(index) })),
+        distinctPositions: distinctPositions.size,
+        laneMinimum: laneMinimum.map((value) => Number(value.toPrecision(9))),
+        laneMaximum: laneMaximum.map((value) => Number(value.toPrecision(9))),
+        firstIndices: firstDraw.rawIndexBuffer === null || firstDraw.rawIndexBuffer === undefined ? null : await terrain.bufferReadback.readUint16(firstDraw.rawIndexBuffer.buffer, 12),
+        uniformMapKeys: firstDraw.uniformMapKeys,
+        uniformValues: firstDraw.uniformValues ?? null,
+        programDynamicOffset: firstDraw.programDynamicOffset,
+        shaderProgramVariant: firstDraw.shaderProgramVariant,
+        pipelineId: firstDraw.pipelineId ?? null,
+        // CPU → GPU: what the backend *uploaded* into this very buffer (the upload records are keyed
+        // by the `GPUBuffer` identity, so this is the same object the draw binds).
+        uploads: uploads.map((entry) => ({ label: entry.label, bufferOffset: entry.bufferOffset, byteLength: entry.byteLength, typedArray: entry.typedArray, viewByteOffset: entry.viewByteOffset, firstFloats: entry.firstFloats })),
+        uploadCount: (terrain.uploads?.log ?? []).length,
+      };
+    } catch (error) {
+      geometry = { error: String(error?.message ?? error).slice(0, 400) };
+    }
+  }
+  step("geometry-sample", { ...geometry, firstVertices: undefined });
+
+  // ---- 1b. the pipeline the draw actually used ---------------------------------------------------
+  const pipeline = (terrain.pipelineLog?.log ?? []).find((entry) => entry.id === geometry.pipelineId) ?? null;
+  step("pipeline", pipeline === null ? { error: `no pipeline descriptor recorded for id ${String(geometry.pipelineId)}` } : { id: pipeline.id, label: pipeline.label, vertexBuffers: pipeline.vertexBuffers, cullMode: pipeline.cullMode, depthFormat: pipeline.depthFormat, depthCompare: pipeline.depthCompare, sampleCount: pipeline.sampleCount });
+
+  // ---- 2. the uniform block, named -----------------------------------------------------------------
+  const target = terrain.uniformTargets[0] ?? null;
+  let uniforms = { error: "no uniform staging area was recorded (the terrain draws did not publish a program)" };
+  let automaticDecoded = null;
+  let slotDecoded = null;
+  if (target !== null && terrain.bufferReadback !== null) {
+    try {
+      const floatCount = Math.floor((target.structSize ?? 0) / 4);
+      const automaticFloats = await terrain.bufferReadback.readFloats(target.buffer, floatCount, 0);
+      // `firstDraw.programDynamicOffset` is sampled *before* `_setUniforms` runs (the draw wrapper
+      // precedes the real call), so the live value is taken from the program **after** the frames.
+      const offset = target.program?.uniformDynamicOffset ?? firstDraw?.programDynamicOffset ?? 0;
+      const slotFloats = await terrain.bufferReadback.readFloats(target.buffer, floatCount, offset);
+      automaticDecoded = decodeBlock(automaticFloats, target.members ?? []);
+      slotDecoded = decodeBlock(slotFloats, target.members ?? []);
+      uniforms = {
+        structSize: target.structSize,
+        slotSize: target.gpuStaging?.slotSize ?? null,
+        variantKey: target.variantKey,
+        defines: target.defines,
+        memberCount: (target.members ?? []).length,
+        automaticSlotOffset: 0,
+        commandSlotOffset: offset,
+        automaticZeroMembers: automaticDecoded.zeroMembers,
+        commandZeroMembers: slotDecoded.zeroMembers,
+        // Slot 0 is written by every member of every draw (the automatic setter path writes through
+        // `UniformStaging.writeMember` into slot 0), so it is *not* purely automatic: it carries the
+        // last draw's manual uniforms too. Both dumps are reported so the two can be compared.
+        automatic: automaticDecoded.named,
+        command: slotDecoded.named,
+      };
+    } catch (error) {
+      uniforms = { error: String(error?.message ?? error).slice(0, 400) };
+    }
+  }
+  step("uniform-block", { structSize: uniforms.structSize ?? null, automaticZeroMembers: uniforms.automaticZeroMembers ?? null, commandSlotOffset: uniforms.commandSlotOffset ?? null });
+
+  // ---- 3. the clip-space verdict, computed exactly as the emitted WGSL does -----------------------
+  let clipVerdict = { error: "the uniform block or the vertex rows were not readable" };
+  if (automaticDecoded !== null && slotDecoded !== null && firstFloats !== null && firstDraw !== null) {
+    const stride = geometry.arrayStride ?? 28;
+    const matrix = slotDecoded.named.u_modifiedModelViewProjection ?? automaticDecoded.named.u_modifiedModelViewProjection;
+    const center = slotDecoded.named.u_center3D ?? automaticDecoded.named.u_center3D;
+    const view = automaticDecoded.named.czm_view;
+    const projection = automaticDecoded.named.czm_projection;
+    const vertices = [];
+    const vertexCount = Math.floor(Math.min(firstFloats.length, 64 * (stride / 4)) / (stride / 4));
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      const base = vertex * (stride / 4);
+      vertices.push([firstFloats[base], firstFloats[base + 1], firstFloats[base + 2], firstFloats[base + 3]]);
+    }
+    const rows = vertices.map((vertex) => {
+      const clip = remapClipDepth(multiplyMatrix4Vector(matrix, [vertex[0], vertex[1], vertex[2], 1]));
+      const w = clip[3];
+      const inside = w > 0 && Math.abs(clip[0]) <= w && Math.abs(clip[1]) <= w && clip[2] >= 0 && clip[2] <= w;
+      // The independent path: world = position + u_center3D, then view and projection separately. A
+      // mismatch with `MP * position` means the RTC centre and the matrix translation disagree.
+      const world = [vertex[0] + center[0], vertex[1] + center[1], vertex[2] + center[2]];
+      const eye = multiplyMatrix4Vector(view, [world[0], world[1], world[2], 1]);
+      const independent = remapClipDepth(multiplyMatrix4Vector(projection, eye));
+      return {
+        position: vertex.slice(0, 3).map((value) => Number(value.toPrecision(9))),
+        height: Number(vertex[3].toPrecision(9)),
+        clip: clip.map((value) => Number(value.toPrecision(9))),
+        independentClip: independent.map((value) => Number(value.toPrecision(9))),
+        insideClipVolume: inside,
+        ndc: w === 0 ? null : [clip[0] / w, clip[1] / w, clip[2] / w].map((value) => Number(value.toPrecision(6))),
+      };
+    });
+    const insideCount = rows.filter((row) => row.insideClipVolume).length;
+    // The **pairing test**: `u_center3D` is the RTC origin of the very draw that owns this vertex
+    // buffer, so `position + u_center3D` MUST land on the WGS84 shell (`k ≈ 1`; the terrain heights of
+    // the fixture live in [-1120, 9000] m, i.e. `k` in [0.9998, 1.0014]). A `k` far from 1 means the
+    // vertex positions and the tile centre do not belong to the same tile — the "RTC pairing" failure.
+    const pairedCenter = firstDraw?.uniformValues?.u_center3D ?? center;
+    const surfaceCheck =
+      Array.isArray(pairedCenter) && pairedCenter.length >= 3
+        ? vertices.slice(0, 8).map((vertex) => {
+            const world = [vertex[0] + pairedCenter[0], vertex[1] + pairedCenter[1], vertex[2] + pairedCenter[2]];
+            const k = Math.sqrt((world[0] / 6378137) ** 2 + (world[1] / 6378137) ** 2 + (world[2] / 6356752.3142451793) ** 2);
+            return { world: world.map((value) => Number(value.toPrecision(9))), ellipsoidScale: Number(k.toPrecision(9)), heightMetres: Number((Math.hypot(world[0], world[1], world[2]) * (1 - 1 / k)).toPrecision(9)), vertexHeight: Number(vertex[3].toPrecision(9)) };
+          })
+        : null;
+    clipVerdict = {
+      vertexRowsEvaluated: rows.length,
+      insideClipVolume: insideCount,
+      outsideClipVolume: rows.length - insideCount,
+      matrixSource: slotDecoded.named.u_modifiedModelViewProjection === undefined ? "automatic slot" : "command slot",
+      center: (center ?? []).map((value) => Number(Number(value).toPrecision(9))),
+      pairedCenter: Array.isArray(pairedCenter) ? pairedCenter.map((value) => Number(Number(value).toPrecision(9))) : pairedCenter,
+      surfaceCheck,
+      rows,
+    };
+  }
+  step("clip-verdict", { inside: clipVerdict.insideClipVolume ?? null, evaluated: clipVerdict.vertexRowsEvaluated ?? null });
+
+  // ---- 3b. per-draw clip extents, paired through the slot the draw actually bound ------------------
+  // `programDynamicOffsetAfter` is the ring slot `_setUniforms` selected for **that** draw, so the matrix
+  // read here is the one the vertex shader of that draw reads — the only pairing that cannot be fooled by
+  // the shared scratch objects upstream's uniform map holds.
+  const perDrawClip = [];
+  if (target !== null && terrain.bufferReadback !== null && (target.members ?? []).length > 0) {
+    const structFloats = Math.floor((target.structSize ?? 0) / 4);
+    for (const draw of terrain.drawLog) {
+      const offset = draw.programDynamicOffsetAfter;
+      if (offset === null || offset === undefined || (draw.rawVertexBuffers ?? []).length === 0) continue;
+      try {
+        const slotFloats = await terrain.bufferReadback.readFloats(target.buffer, structFloats, offset);
+        const decoded = decodeBlock(slotFloats, target.members ?? []);
+        const matrix = decoded.named.u_modifiedModelViewProjection;
+        if (matrix === undefined) continue;
+        const stride = draw.rawGpuVertexBuffers?.[0]?.arrayStride ?? 28;
+        const floatsPerRow = stride / 4;
+        // **Every** vertex of the mesh (4485 of them, 125 KB), not just the first row: sampling one row
+        // makes the tile look 50:1 flat, because a grid row has a constant latitude and therefore spans
+        // no screen height at all.
+        const gridWidth = draw.rawIndexBuffer === null || draw.rawIndexBuffer === undefined ? null : (await terrain.bufferReadback.readUint16(draw.rawIndexBuffer.buffer, 6))[1] ?? null;
+        const totalVertices = draw.vertexArray?.numberOfVertices ?? 0;
+        const floats = await terrain.bufferReadback.readFloats(draw.rawVertexBuffers[0].buffer, totalVertices * floatsPerRow);
+        const ndcList = [];
+        let inside = 0;
+        for (let vertex = 0; vertex < totalVertices; vertex += 1) {
+          const base = vertex * floatsPerRow;
+          const clip = remapClipDepth(multiplyMatrix4Vector(matrix, [floats[base], floats[base + 1], floats[base + 2], 1]));
+          const w = clip[3];
+          if (!(w > 0)) continue;
+          const ndc = [clip[0] / w, clip[1] / w, clip[2] / w];
+          ndcList.push(ndc);
+          if (Math.abs(ndc[0]) <= 1 && Math.abs(ndc[1]) <= 1 && ndc[2] >= 0 && ndc[2] <= 1) inside += 1;
+        }
+        const xs = ndcList.map((ndc) => ndc[0]);
+        const ys = ndcList.map((ndc) => ndc[1]);
+        perDrawClip.push({
+          frame: draw.frame,
+          slotOffset: offset,
+          pipelineId: draw.pipelineId ?? null,
+          vertexBuffer: draw.rawVertexBuffers[0].buffer.label ?? null,
+          gridWidth,
+          verticesEvaluated: totalVertices,
+          insideClipVolume: inside,
+          ndcMinimum: ndcList.length === 0 ? null : [Math.min(...xs), Math.min(...ys)].map((value) => Number(value.toPrecision(6))),
+          ndcMaximum: ndcList.length === 0 ? null : [Math.max(...xs), Math.max(...ys)].map((value) => Number(value.toPrecision(6))),
+          ndcWidth: ndcList.length === 0 ? null : Number(((Math.max(...xs) - Math.min(...xs)) / 2).toPrecision(6)),
+          ndcHeight: ndcList.length === 0 ? null : Number(((Math.max(...ys) - Math.min(...ys)) / 2).toPrecision(6)),
+          // The whole mesh's screen-space size in pixels of the 384x288 canvas (100 % = the full canvas).
+          screenWidthPixels: ndcList.length === 0 ? null : Number((((Math.max(...xs) - Math.min(...xs)) / 2) * (384 / 2)).toPrecision(6)),
+          screenHeightPixels: ndcList.length === 0 ? null : Number((((Math.max(...ys) - Math.min(...ys)) / 2) * (288 / 2)).toPrecision(6)),
+          centre: (decoded.named.u_center3D ?? []).map((value) => Number(Number(value).toPrecision(9))),
+        });
+      } catch (error) {
+        perDrawClip.push({ frame: draw.frame, error: String(error?.message ?? error).slice(0, 200) });
+      }
+    }
+  }
+  step("per-draw-clip", {
+    draws: perDrawClip.length,
+    vertices: perDrawClip.map((entry) => entry.verticesEvaluated ?? null),
+    inside: perDrawClip.map((entry) => entry.insideClipVolume ?? null),
+    screenWidthPixels: perDrawClip.map((entry) => entry.screenWidthPixels ?? null),
+    screenHeightPixels: perDrawClip.map((entry) => entry.screenHeightPixels ?? null),
+  });
+
+  // ---- 3c. why the frame is a single flat colour ------------------------------------------------
+  // `GlobeFS.glsl`'s `ENABLE_DAYNIGHT_SHADING` branch multiplies the base colour by the day/night term
+  // only as far as the lighting fade allows:
+  //     fade       = clamp((cameraDist - fadeOutDist) / (fadeInDist - fadeOutDist), 0, 1)
+  //     finalColor = color * czm_lightColor * mix(1.0, diffuseIntensity, fade)
+  // A camera 24 km above the ground is far inside `u_lightingFadeDistance` (the fade-out starts at
+  // ~0.5 x pi x the polar radius), so `fade` is 0 and the terrain colour is the **unmodulated** base
+  // colour — the source of "one unique colour" in the frame statistics. Computed here from the values
+  // the GPU block actually holds, so the flat frame is self-explained by the artefact rather than by
+  // an argument about the shader.
+  const automaticNamed = uniforms.automatic ?? {};
+  const commandNamed = uniforms.command ?? {};
+  const lightingModel = (() => {
+    const view = automaticNamed.czm_view;
+    const lightColor = automaticNamed.czm_lightColor;
+    const fade = commandNamed.u_lightingFadeDistance ?? automaticNamed.u_lightingFadeDistance;
+    const initialColor = commandNamed.u_initialColor ?? automaticNamed.u_initialColor;
+    if (!Array.isArray(view) || view.length < 16 || !Array.isArray(fade) || fade.length < 2) {
+      return { error: "the automatic block does not carry `czm_view` / `u_lightingFadeDistance`" };
+    }
+    const cameraDist = Math.hypot(view[12], view[13], view[14]);
+    const fadeOutDistance = fade[0];
+    const fadeInDistance = fade[1];
+    const fadeValue = Math.max(0, Math.min(1, (cameraDist - fadeOutDistance) / (fadeInDistance - fadeOutDistance)));
+    const rgb = Array.isArray(initialColor) && initialColor.length >= 3 ? initialColor.slice(0, 3).map((component) => component * (Array.isArray(lightColor) ? lightColor[0] ?? 1 : 1)) : null;
+    return {
+      source: "node_modules/@cesium/engine/Source/Shaders/GlobeFS.glsl (`ENABLE_DAYNIGHT_SHADING`) == webgpu/wgsl/leaves/globe-fragment-main.wgsl:82",
+      cameraDist: Number(cameraDist.toPrecision(9)),
+      fadeOutDistance,
+      fadeInDistance,
+      fade: Number(fadeValue.toPrecision(9)),
+      lightingFactor: Number(fadeValue.toPrecision(9)),
+      unmodulatedBaseColorRgb: Array.isArray(initialColor) ? initialColor.slice(0, 3) : null,
+      expectedFrameColourRgb: rgb === null ? null : rgb.map((component) => Math.round(component * 255)),
+      measuredCentreBgraBytes: gpuFrame === null || gpuFrame === undefined ? null : gpuFrame.centre,
+      verdict:
+        fadeValue === 0
+          ? "the near-ground camera is inside `u_lightingFadeDistance`, so the day/night term is faded out " +
+            "entirely (`mix(1, diffuse, 0) = 1`) and the terrain colour is `u_initialColor * czm_lightColor`. " +
+            "A single-colour frame is upstream's behaviour for this camera, not a missing shading path."
+          : `the lighting fade is ${String(fadeValue)} at this camera distance, so the day/night term is only partly mixed in`,
+    };
+  })();
+  step("lighting-model", { fade: lightingModel.fade ?? null, cameraDist: lightingModel.cameraDist ?? null, expectedFrameColourRgb: lightingModel.expectedFrameColourRgb ?? null, measuredCentreBgraBytes: lightingModel.measuredCentreBgraBytes ?? null });
+
+  // ---- 4. did anything rasterise? ----------------------------------------------------------------
+  const indicator = createDepthIndicatorResources(device, context.swapchainFormat, context.sampleCount);
+  const renderState = { depthTest: { enabled: false }, depthMask: false, cull: { enabled: false } };
+  const drawIndicator = async (depthCompare, options = {}) => {
+    const inputs = depthIndicatorInputs(indicator, { depthCompare, sampleCount: context.sampleCount, format: context.swapchainFormat });
+    readback.arm();
+    context.beginFrame();
+    if (options.clearOnly === true) {
+      // A frame that **only clears** (the clear includes the depth attachment), so the depth buffer holds
+      // exactly its clear value and nothing has been drawn. This is the discrimination control: the
+      // `greater` marker over it MUST paint 0 px if the marker really tests "stored depth < clear value".
+      context.clear({ color: { red: 0, green: 0, blue: 0, alpha: 1 }, depth: 1, stencil: 0 }, {});
+    } else {
+      context.draw({ __webgpu: inputs, count: 3, renderState }, {});
+    }
+    context.endFrame();
+    await context.awaitFrameErrors().catch((error) => ({ error: String(error?.message ?? error).slice(0, 300) }));
+    return readback.read();
+  };
+  // The green marker layer, measured three ways so every number is interpretable on its own:
+  //   * `indicatorAlways`      — the marker ignores depth entirely: proves the probe's own draw lands;
+  //   * `clearOnlyThenGreater` — depth is at its clear value with no geometry: MUST be 0 painted px;
+  //   * `terrainFrameGreater`  — depth as the terrain frame left it: the px where depth ≠ clear value.
+  //
+  // ORDER IS LOAD-BEARING: the terrain reading MUST come first, because the clear-only control clears the
+  // depth attachment and every later frame loads that cleared buffer (measured: running the control first
+  // made the terrain reading report 0 px, i.e. the control erased the very state it was calibrating).
+  const depthPresence = {
+    terrainFrameGreater: await drawIndicator("greater"),
+    indicatorAlways: await drawIndicator("always"),
+    clearOnlyThenGreater: await drawIndicator("greater", { clearOnly: true }),
+  };
+  depthPresence.pixelsWhereDepthDiffersFromClear = depthPresence.terrainFrameGreater?.nonBlackPixels ?? null;
+  depthPresence.discriminationControl = depthPresence.clearOnlyThenGreater?.nonBlackPixels ?? null;
+  depthPresence.indicatorLayerWorks = (depthPresence.indicatorAlways?.nonBlackPixels ?? 0) > 0;
+  depthPresence.differenceFromControl =
+    depthPresence.pixelsWhereDepthDiffersFromClear === null || depthPresence.discriminationControl === null
+      ? null
+      : depthPresence.pixelsWhereDepthDiffersFromClear - depthPresence.discriminationControl;
+  depthPresence.verdict =
+    depthPresence.indicatorLayerWorks !== true
+      ? "inconclusive: the marker draw painted nothing, so a 0 from the `greater` variants cannot be attributed"
+      : depthPresence.discriminationControl !== 0
+        ? `inconclusive: the clear-only control painted ${String(depthPresence.discriminationControl)} px, so the marker does not discriminate`
+        : depthPresence.differenceFromControl > 0
+          ? `DEPTH WRITTEN: the terrain left a stored depth below the clear value over ${String(depthPresence.differenceFromControl)} px ` +
+            `(clear-only control: 0, terrain frame: ${String(depthPresence.pixelsWhereDepthDiffersFromClear)})`
+          : "NO DEPTH WRITTEN: the terrain frame's depth is identical to a frame that only cleared, so no geometry rasterised";
+  step("depth-presence", {
+    verdict: depthPresence.verdict,
+    indicatorAlways: depthPresence.indicatorAlways?.nonBlackPixels ?? null,
+    clearOnlyThenGreater: depthPresence.discriminationControl,
+    terrainFrameGreater: depthPresence.pixelsWhereDepthDiffersFromClear,
+    difference: depthPresence.differenceFromControl,
+  });
+
+  // ---- 5. the geometry bisect: the terrain's own buffers, drawn by a shader this probe owns --------
+  // If this paints, the buffers and the vertex fetch are fine and the fault is on the terrain program's
+  // transform side; if it does not, the bytes the draw binds are not the bytes that were read back.
+  let geometryProbe = { skipped: "no recorded terrain draw" };
+  if (firstDraw !== null && firstDraw.rawVertexBuffers.length > 0 && firstDraw.rawGpuVertexBuffers.length > 0) {
+    const probeModule = device.createShaderModule({
+      label: "probe-terrain-geometry",
+      code: `
+@vertex
+fn vs_main(@location(0) position3DAndHeight : vec4<f32>, @location(1) textureCoordAndEncodedNormals : vec4<f32>) -> @builtin(position) vec4<f32> {
+  return vec4<f32>(position3DAndHeight.xy / 8000.0, 0.5, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+  return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+}
+`,
+    });
+    const probePipeline = device.createRenderPipeline({
+      label: "probe-terrain-geometry",
+      layout: "auto",
+      vertex: { module: probeModule, entryPoint: "vs_main", buffers: firstDraw.rawGpuVertexBuffers },
+      fragment: { module: probeModule, entryPoint: "fs_main", targets: [{ format: context.swapchainFormat }] },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil: { format: "depth24plus-stencil8", depthWriteEnabled: false, depthCompare: "always" },
+      multisample: { count: context.sampleCount },
+    });
+    const probeRenderState = { depthTest: { enabled: false }, depthMask: false, cull: { enabled: false } };
+    const probeInputs = {
+      shaderProgramId: "probe-terrain-geometry",
+      pipeline: probePipeline,
+      vertexBuffers: firstDraw.rawVertexBuffers.map((binding) => ({ slot: binding.slot, buffer: binding.buffer, offset: binding.offset ?? 0 })),
+      indexBuffer: firstDraw.rawIndexBuffer,
+      indexed: true,
+      indexCount: firstDraw.count,
+      gpuVertexBuffers: firstDraw.rawGpuVertexBuffers,
+      topology: "triangle-list",
+      colorFormats: [context.swapchainFormat],
+      depthFormat: "depth24plus-stencil8",
+      sampleCount: context.sampleCount,
+      renderState: probeRenderState,
+    };
+    readback.arm();
+    context.beginFrame();
+    context.draw({ __webgpu: probeInputs, count: firstDraw.count, renderState: probeRenderState }, {});
+    context.endFrame();
+    await context.awaitFrameErrors().catch((error) => {
+      geometryProbe.error = String(error?.message ?? error).slice(0, 300);
+    });
+    geometryProbe = { ...geometryProbe, ...(await readback.read()) };
+    geometryProbe.verdict =
+      (geometryProbe.nonBlackPixels ?? 0) > 0
+        ? `the terrain's own vertex/index buffers DO rasterise (${geometryProbe.nonBlackPixels} px): the fetch and the buffers are fine, the fault is in the terrain program's uniform transform`
+        : "the terrain's own vertex/index buffers rasterise NOTHING even with a trivial shader: the bound geometry is not what was read back";
+  }
+  step("geometry-bisect", geometryProbe.verdict === undefined ? geometryProbe : { verdict: geometryProbe.verdict, nonBlackPixels: geometryProbe.nonBlackPixels ?? null });
+
+  // ---- 6. leave the **terrain** frame presented ---------------------------------------------------
+  // The harness screenshots the canvas after the page reports ready, and it uses the same
+  // `regionStatistics` schema the WebGL2 reference run uses. Leaving the probe's own marker frames on
+  // screen would make the two paths incomparable, so the last thing this scenario does is render the
+  // terrain again (three frames, so the compositor definitely picks it up).
+  await terrain.renderFrames(3, 16);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  const result = {
+    backend,
+    variantKey: target?.variantKey ?? null,
+    tilesLoad: load,
+    gpuFrame,
+    geometry,
+    pipeline,
+    pipelineCount: (terrain.pipelineLog?.log ?? []).length,
+    pipelineDescriptors: (terrain.pipelineLog?.log ?? []).map((entry) => ({ id: entry.id, label: entry.label, vertexBuffers: entry.vertexBuffers, cullMode: entry.cullMode, frontFace: entry.frontFace, depthFormat: entry.depthFormat, depthWriteEnabled: entry.depthWriteEnabled, depthCompare: entry.depthCompare, sampleCount: entry.sampleCount, colorFormats: entry.colorFormats })),
+    terrainFramePasses,
+    clearLog: terrain.clearLog,
+    uniforms,
+    clipVerdict,
+    perDrawClip,
+    lightingModel,
+    depthPresence,
+    geometryProbe,
+    drawBindings: terrain.drawBindingsInstrumented ? terrain.drawBindings : { instrumented: false },
+    renderErrors: terrain.renderErrors,
+    frameErrors: terrain.frameErrors,
+    counts: {
+      draws: context.counters.draws,
+      drawIndexedCalls: context.counters.drawIndexedCalls,
+      passes: context.counters.passes,
+      frameErrors: context.frameErrors(),
+    },
+    globeDiagnostics: {
+      tilesLoaded: terrain.scene.globe.tilesLoaded,
+      tilesToRenderLength: terrain.scene.globe._surface?._tilesToRender?.length ?? null,
+      terrainProviderName: terrain.scene.globe.terrainProvider?.constructor?.name ?? null,
+    },
+    pipelineStateLog: terrain.pipelineStateLog,
+    lastFramePasses: context.lastFramePasses().map((pass) => ({ index: pass.index, keyText: pass.keyText, clearOps: pass.clearOps, drawOps: pass.drawOps, gpuPassCount: pass.gpuPassCount, openedWithLoadOpClear: pass.openedWithLoadOpClear })),
+    canvasDepthTextureFormat: context.canvasDepthTexture()?.format ?? null,
+    sampleCount: context.sampleCount,
+    vertexModule: target?.vertexModule ?? null,
+    fragmentModule: target?.fragmentModule ?? null,
+    // Which `#ifdef`-style regions the emitted module actually carries (the defines the module was
+    // emitted with, recovered from the module text itself rather than from the request).
+    emittedDefineMarkers: (() => {
+      const text = target?.fragmentModule ?? "";
+      if (typeof text !== "string" || text.length === 0) return null;
+      return ["ENABLE_DAYNIGHT_SHADING", "GROUND_ATMOSPHERE", "PER_FRAGMENT_GROUND_ATMOSPHERE", "DYNAMIC_ATMOSPHERE_LIGHTING", "ENABLE_VERTEX_LIGHTING", "TEXTURE_UNITS"]
+        .filter((marker) => text.includes(marker));
+    })(),
+    /**
+     * What this probe established, so the next phase does not have to re-derive it (W5 root cause).
+     *
+     * Everything here is a *measurement* recorded in this same artefact; the strings are the shared
+     * conclusion for whoever picks the phase up next, not a substitute for the numbers above.
+     */
+    conclusion: {
+      rootCauseOne:
+        "Context.draw forwarded upstream's `instanceCount === 0` verbatim to `drawIndexed`, which draws " +
+        "nothing (upstream's GL path reads 0 as 'not instanced'). 98 healthy draws, zero validation errors, " +
+        "zero fragments. Fixed in Renderer/Context.ts (`instanceCountFromUpstream`).",
+      rootCauseTwo:
+        "RenderState.FRONT_FACE_MAP carried an inverted winding mapping, so `cullMode:'back'` culled every " +
+        "terrain *surface* triangle and kept only the skirt walls (frame = tile outlines, 1990 px). Fixed in " +
+        "Renderer/RenderState.ts (1:1 mapping), verified against the WebGL2 reference run of the same scene.",
+      flatColour:
+        "The frame is a single colour because the day/night term is faded out at this camera distance " +
+        "(`fade === 0` in GlobeFS's ENABLE_DAYNIGHT_SHADING branch) — upstream's behaviour for a near-ground " +
+        "camera with no imagery layer, not a missing shading path. See `lightingModel`.",
+      notTheCause: [
+        "missing automatic uniforms: both blocks decode to real values; the members that are zero are the ones that should be zero",
+        "geometry, RTC pairing and the vertex fetch: the mesh is a coherent RTC grid (k ~ 1 against the tile centre) and rasterises 73921 px through a probe-owned shader",
+        "the uniform ring / dynamic offsets / bind group: the real pass-encoder bindings show one vertex buffer, the index buffer and a per-draw dynamic offset for every tile draw",
+        "the pass machine's clear semantics: all three clears precede the seven tile draws (`terrainFramePasses[0].workOrder`)",
+        "channel order and alpha: the centre value is bgra8unorm's B lane (127 = 0.5 x 255 = u_initialColor.b)",
+      ],
+    },
+  };
+  return { result, context };
+}
+
 const SCENARIOS = {
   "canvas-depth-probe": scenarioCanvasDepthProbe,
   "terrain-probe": scenarioTerrainProbe,
+  "terrain-raster-probe": scenarioTerrainRasterProbe,
   "scene-construct": scenarioSceneConstruct,
   "draw-dispatch": scenarioDrawDispatch,
   present: scenarioPresent,

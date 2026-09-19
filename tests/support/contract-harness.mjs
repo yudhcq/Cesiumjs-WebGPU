@@ -39,6 +39,7 @@ export const SUITE_SCENARIOS = {
   "contract:resources": "resources",
   "visual:texture-origin": "texture-origin",
   "terrain:probe": "terrain-probe",
+  "terrain:raster-probe": "terrain-raster-probe",
   "terrain:canvas-depth-probe": "canvas-depth-probe",
 };
 

@@ -51,6 +51,7 @@ export const SUITE_MAP = {
   "visual:terrain-elevation": "tests/visual/terrain-elevation.spec.mjs",
   "visual:texture-origin": "tests/visual/texture-origin.spec.mjs",
   "terrain:probe": "tests/contract/terrain-probe.spec.mjs",
+  "terrain:raster-probe": "tests/contract/terrain-raster-probe.spec.mjs",
   "terrain:canvas-depth-probe": "tests/contract/canvas-depth-probe.spec.mjs",
   "bench:terrain": "tests/benchmark/terrain.spec.mjs",
   "bench:shader-variants": "tests/benchmark/shader-variants.spec.mjs",

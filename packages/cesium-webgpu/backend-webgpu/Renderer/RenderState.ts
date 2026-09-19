@@ -107,20 +107,31 @@ export const STENCIL_OPERATION_MAP: Readonly<Record<number, GPUStencilOperation>
 };
 
 /**
- * GL winding-order enum → `GPUFrontFace` — **the two orders are swapped, and that is the mapping.**
+ * GL winding-order enum → `GPUFrontFace`.
  *
- * GL decides the winding in **window coordinates**, whose y axis points up (`glFrontFace` is defined
- * on the signed area in window space). WebGPU decides it in **framebuffer coordinates**, whose y axis
- * points **down** (`GPURenderPipelineDescriptor.frontFace`: "the front face is determined by the sign
- * of the signed area computed in framebuffer coordinates"). The two are therefore mirror images: a
- * triangle that is CCW in GL is CW in WebGPU.
+ * **The 1:1 mapping is the correct one**, and it is the only mapping that reproduces the WebGL2
+ * reference on the real terrain (measured in W5). `glFrontFace(GL_CCW)` means "a polygon is
+ * front-facing if its vertices are counter-clockwise in window coordinates", and a WebGPU pipeline
+ * whose `frontFace` is `"ccw"` keeps exactly the same triangles front-facing: the terrain grid is wound
+ * counter-clockwise as seen from outside the ellipsoid (`TerrainProvider.addRegularGridIndices` emits
+ * `upperLeft, lowerLeft, upperRight` over rows that run north→south and columns that run west→east), so
+ * `GlobeSurfaceTileProvider`'s `cull: { enabled: true, face: BACK }` keeps it.
  *
- * Measured in W5: with the naive 1:1 mapping the whole terrain disappeared — a black frame with 91
- * successful `drawIndexed` calls and zero validation errors, because every camera-facing (GL-CCW,
- * `frontFace: 0x0901`) triangle was classified as a back face and culled by the globe's
- * `cull: { enabled: true, face: CullFace.BACK }` render state.
+ * MEASUREMENT (why this table is spelled out)
+ * -------------------------------------------
+ * W5 briefly carried the **swapped** table (`0x0901 → "cw"`) on the theory that WebGPU's framebuffer
+ * coordinates are y-down and therefore mirror GL's window coordinates. That theory does not hold on
+ * Chrome 153: with the swap, `cullMode: "back"` classified every terrain *surface* triangle as a back
+ * face while leaving the outward-facing skirt walls, so the frame held only the tiles' outlines —
+ * `nonBlackPixels = 1990` of 110592 (1.8 %) with 7 healthy `drawIndexed` calls and zero validation
+ * errors. The swap was undetectable while the separate `instanceCount === 0` defect made *every* draw
+ * empty (see `Context.draw`), which is how it survived the W5 pass.
+ *
+ * Evidence: `artifacts/terrain-raster-probe/observation.webgpu.json` (`cull=none` run: 110592 px;
+ * default run with the swap: 1990 px) against the WebGL2 reference run of the same scenario
+ * (`artifacts/terrain-probe/`: canvas screenshot `nonBackground = 110592` = the whole 384x288 canvas).
  */
-export const FRONT_FACE_MAP: Readonly<Record<number, GPUFrontFace>> = { 0x0900: "ccw", 0x0901: "cw" };
+export const FRONT_FACE_MAP: Readonly<Record<number, GPUFrontFace>> = { 0x0900: "cw", 0x0901: "ccw" };
 
 /** GL cull-face enum → `GPUCullMode`. */
 export const CULL_MODE_MAP: Readonly<Record<number, GPUCullMode>> = { 0x0404: "front", 0x0405: "back", 0x0408: "none" };

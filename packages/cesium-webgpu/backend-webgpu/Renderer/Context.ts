@@ -648,11 +648,20 @@ export default class Context {
     const reference = (renderState.stencilTest as { reference?: number } | undefined)?.reference ?? 0;
     encoder.setStencilReference(reference);
 
+    // Upstream encodes "not an instanced draw" as `instanceCount === 0`
+    // (`Renderer/DrawCommand.js:89` defaults `_instanceCount` to 0; `Context.js:1367,1390` dispatch to
+    // `gl.drawElements`/`gl.drawArrays`, i.e. **one** instance). WebGPU has no such encoding:
+    // `drawIndexed(count, 0, …)` draws **nothing at all** — and it is not a validation error, Chrome
+    // only warns "calling Draw with an instance count of 0 is unusual". Forwarding the upstream value
+    // therefore produced the W5 black frame: 98 successful `drawIndexed` calls, zero validation errors,
+    // zero fragments (measured with the terrain raster probe, `artifacts/terrain-raster-probe/`).
+    // The translation is upstream's own: 0 (or absent) ⇒ 1 instance, a positive value ⇒ that count.
+    const instanceCount = instanceCountFromUpstream(inputs.instanceCount ?? command.instanceCount);
     if (inputs.indexed === true) {
-      encoder.drawIndexed(inputs.indexCount ?? command.count ?? 0, inputs.instanceCount ?? command.instanceCount ?? 1, inputs.firstIndex ?? command.offset ?? 0, 0, 0);
+      encoder.drawIndexed(inputs.indexCount ?? command.count ?? 0, instanceCount, inputs.firstIndex ?? command.offset ?? 0, 0, 0);
       this.counters.drawIndexedCalls += 1;
     } else {
-      encoder.draw(inputs.vertexCount ?? command.count ?? 0, inputs.instanceCount ?? command.instanceCount ?? 1, inputs.firstVertex ?? command.offset ?? 0, 0);
+      encoder.draw(inputs.vertexCount ?? command.count ?? 0, instanceCount, inputs.firstVertex ?? command.offset ?? 0, 0);
       this.counters.drawCalls += 1;
     }
     this.counters.draws += 1;
@@ -1034,6 +1043,20 @@ export interface ViewportQuadOptions {
 }
 
 const EMPTY_RENDER_STATE: RenderStateLike = {};
+
+/**
+ * Upstream's `instanceCount` encoding → the count WebGPU needs.
+ *
+ * Upstream `Renderer/DrawCommand.js:89` defaults `_instanceCount` to **0** and
+ * `Renderer/Context.js:1367,1390` treats `0` as "a plain, non-instanced draw" (`gl.drawElements` /
+ * `gl.drawArrays` draw exactly one instance). `GPURenderPassEncoder.drawIndexed(count, 0, …)` draws
+ * nothing, so the value MUST be translated — this is the one place the two encodings differ, and
+ * passing it through verbatim is invisible to the validation layer (measured in W5: 98 successful
+ * indexed draws, `frameErrors: []`, zero fragments, black frame).
+ */
+function instanceCountFromUpstream(value: unknown): number {
+  return typeof value === "number" && value > 0 ? value : 1;
+}
 
 /** `PixelFormat.RGB` (`0x1907`) — the format upstream's emissive/normal placeholders use. */
 const PIXEL_FORMAT_RGB = 0x1907;
