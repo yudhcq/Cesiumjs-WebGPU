@@ -1,0 +1,167 @@
+{
+  "tool": "tests/visual/terrain-multitile.spec.mjs",
+  "caseId": "matterhorn-multitile",
+  "datasetId": "matterhorn-z0-12",
+  "backend": "webgpu",
+  "referenceFrame": "reference-frames/terrain-multitile/matterhorn-z0-12/matterhorn-multitile.webgpu.png",
+  "generatedAt": "2026-09-19T03:04:18.680Z",
+  "generatedBy": "node tests/support/backend-runner.mjs --backend=webgpu --suite=visual:terrain (VISUAL_TERRAIN_BASELINE=1)",
+  "overwrotePrevious": false,
+  "runId": "webgpu-16912-1789787057035",
+  "sourceScreenshot": "artifacts/terrain/webgpu-canvas.png",
+  "fixedConditions": {
+    "caseId": "matterhorn-multitile",
+    "datasetId": "matterhorn-z0-12",
+    "backend": "webgpu",
+    "cameraEcho": {
+      "longitude": 6.865199999999997,
+      "latitude": 45.8326,
+      "height": 23999.999999996395,
+      "headingDegrees": 360,
+      "pitchDegrees": -50.00000000000002
+    },
+    "cameraDeclared": {
+      "longitude": 6.8652,
+      "latitude": 45.8326,
+      "height": 24000,
+      "heading": 0,
+      "pitch": -50,
+      "roll": 0
+    },
+    "dateIso": "2026-03-20T12:00:00Z",
+    "viewport": {
+      "width": 320,
+      "height": 200,
+      "cssWidth": 320,
+      "cssHeight": 200,
+      "devicePixelRatio": 1
+    },
+    "settle": {
+      "frames": 4,
+      "settleMs": 16,
+      "tilesLoadedAfterSettle": true
+    },
+    "context": {
+      "constructorName": "Context",
+      "sampleCount": 4,
+      "msaa": true,
+      "swapchainFormat": "bgra8unorm",
+      "logarithmicDepthBuffer": false
+    },
+    "sceneConfiguration": {
+      "baseLayer": false,
+      "skyBoxPresent": false,
+      "skyAtmospherePresent": false,
+      "imageryLayerCount": 0,
+      "globeShow": true,
+      "globeEnableLighting": true,
+      "globeDepthTestAgainstTerrain": true,
+      "backgroundColor": {
+        "red": 0,
+        "green": 0,
+        "blue": 0,
+        "alpha": 1
+      },
+      "terrainProviderIsProduct": true,
+      "terrainProviderName": "CustomHeightmapTerrainProvider"
+    },
+    "pageOverlayText": null,
+    "hash": "8f714ecd91eccf55"
+  },
+  "tolerance": [
+    {
+      "id": "anti-aliased-edge",
+      "what": "抗锯齿/亚像素边缘：光栅化边界在两次运行间落在像素内的不同位置（三角形覆盖率、MSAA 解析）",
+      "basis": "沿几何边缘**排除并计数**：3×3 亮度梯度 > 8/255（与仓库既有声明 `subpixel-edge` 同一判据与阈值，来源 experiments/gates/g6-precision/compare.mjs 的 DECLARED_DIFFERENCES[0]），在参考帧与实际帧上分别计算后取**并集**（只在其中一帧上存在的梯度正是亚像素差异），再做半径 1 的膨胀：边界在像素内的位移不确定性 ≤ 1 px，故膨胀 1 px 覆盖边界两侧；被排除的像素数与占比写入证据，MUST NOT 用作放宽其余像素判据的理由 —— 排除带内的几何由 silhouette-* 判据在整帧上独立约束。",
+      "tolerance": {
+        "excluded": true,
+        "gradientThreshold": 8,
+        "dilationRadius": 1,
+        "computedOn": "union(reference, actual)"
+      }
+    },
+    {
+      "id": "unorm8-quantisation",
+      "what": "同一管线两次运行的 8 位 UNORM 量化：比较区域内每个像素每通道的最大允许差",
+      "basis": "上界 = 1 LSB：两次运行走同一条管线、同一台 GPU、同一浏览器与同一个合成器截图路径，像素值可表示的最小差就是 1 LSB；实测跨运行最大差写入 `record.measurements.crossRun.maxChannelDelta` 与 artifacts 下的统计 JSON（实测为 0 时本上界仍是一个可表示量子，而不是放宽判据）。",
+      "tolerance": {
+        "perChannelMaxDelta": 1
+      }
+    },
+    {
+      "id": "differing-pixel-budget",
+      "what": "允许落在 unorm8-quantisation 上界之内的像素比例",
+      "basis": "0.1 % 上限（320×200 → 最多 64 个像素）：吸收极少数恰好落在判据边界上的像素，同时不允许「整片都差 1 LSB」。仓库既有先例更宽（G-6 的 `wgsl-precision-modifiers`：2 LSB + 1 %），本案例取更紧的界。",
+      "tolerance": {
+        "maxDifferingFraction": 0.001
+      }
+    },
+    {
+      "id": "msaa-resolve",
+      "what": "MSAA 解析：两次运行对多采样附件的解析",
+      "basis": "解析是逐样本平均：边缘像素落在 anti-aliased-edge 的排除带内，其余像素的样本颜色相同因而解析结果相同。实测样本数写入 `record.fixedConditions.context.sampleCount`；样本数一变即为条件变更（MUST 重新生成参考帧），而不是靠加容差糊过去。",
+      "tolerance": {
+        "applicable": "edge-band-only"
+      }
+    },
+    {
+      "id": "screencap-alignment",
+      "what": "sRGB / 交换链通道顺序 / 窗口原点：参考帧与实际帧都是**同一条路径**的 `page.screenshot()` PNG",
+      "basis": "两侧都取自同一个 `#contract-canvas` 区域的合成器截图（同一 backend、同一 canvas、同一 clip），编解码与通道顺序、Y 原点都是同一约定 → 属对齐性质而非容许差异，容差 0，比较时不做任何翻转或通道重排；跨 backend 的差异一律离线比较（本套件在同一进程内只读一个 backend 的参考帧，MUST NOT 同帧对比）。",
+      "tolerance": {
+        "perChannel": 0,
+        "flip": false,
+        "swizzle": false
+      }
+    },
+    {
+      "id": "silhouette-geometry",
+      "what": "轮廓几何：排除抗锯齿带之后，画面里承载地形几何的结构是地形轮廓（背景为清屏色）",
+      "basis": "若只做「排除边缘 + 比较颜色」，均匀表面上的几何变化（相机移动、瓦片缺失）会被排除带吞掉，比较就永不失真 —— 故轮廓另设独立判据：前景覆盖率差 ≤ 0.5 个百分点、逐行前景像素计数差 ≤ 4 px（= 4 × 膨胀半径），两者都在**包含排除带**的整帧上计算。实测值写入统计 JSON。",
+      "tolerance": {
+        "coverageDeltaMax": 0.005,
+        "rowCountDeltaMax": 4
+      }
+    }
+  ],
+  "frameContentBounds": {
+    "foregroundRule": "alpha > 8 && r + g + b > 24 (same rule as png-reader.mjs regionStatistics.nonBackground)",
+    "minForegroundFraction": 0.15,
+    "minUniqueColours": 16,
+    "maxExcludedFraction": 0.3,
+    "minComparedFraction": 0.5
+  },
+  "measurements": {
+    "actualFrame": {
+      "width": 320,
+      "height": 200,
+      "pixels": 64000,
+      "foregroundPixels": 64000,
+      "foregroundFraction": 1,
+      "uniqueColours": 757,
+      "dominantColour": [
+        0,
+        0,
+        127
+      ],
+      "dominantFraction": 0.9505
+    },
+    "crossRun": null,
+    "note": "crossRun is filled by the comparison runs; the generation run compares nothing (two-stage protocol)"
+  },
+  "baselineState": {
+    "elevationShading": "explicitly deferred (起伏显式后置): upstream fade = clamp((far - near)/(...), 0, 1) = 0 at this camera, so finalColor = color * lightColor and the terrain renders as the unmodulated base colour",
+    "sourceOfBaselineReading": "tasks.md T092 baseline note + T094 note (plan 的起伏决策与实测)",
+    "mayBeReadAs": "MUST NOT be read as 'relief/elevation shading verified'",
+    "measuredConsistency": "dominant colour rgb(0, 0, 127) covers 95.05 % of the frame — consistent with the deferred-elevation state (base colour blue 0.5 = 8-bit 127)",
+    "regenerationPolicy": {
+      "triggers": [
+        "introducing the relief/elevation-shading increment (fade != 0 or any lighting modulation of the base colour)",
+        "any change of dataset, camera, instant, viewport, pixel ratio, sample count or scene configuration",
+        "any change of the tolerance table below (the comparison refuses to run against a stale record)"
+      ],
+      "requiredAction": "regenerate BOTH backends' reference frames (VISUAL_TERRAIN_BASELINE=regenerate) and write '因起伏增量而重生成' (regenerated because of the relief increment) into this record's regenerationReason",
+      "regenerationReason": null
+    }
+  }
+}
