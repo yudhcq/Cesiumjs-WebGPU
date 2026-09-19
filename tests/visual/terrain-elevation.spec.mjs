@@ -164,7 +164,9 @@ test("visual:terrain-elevation — the rendered terrain's elevation agrees with 
       imageBitmapNonBlackPixels: coverage.imageBitmapOfPresentedCanvas.nonBlackPixels,
       datasetInterval: [dataset.floor, dataset.ceiling],
       frameInterval: result.frameEvidence.interval === null ? null : [result.frameEvidence.interval.floor, result.frameEvidence.interval.ceiling],
-      residualMedianMetres: result.consistency.nearestTexel?.p50 ?? null,
+      ecefInterval: result.frameEvidence.ecef.interval === null ? null : [result.frameEvidence.ecef.interval.floor, result.frameEvidence.ecef.interval.ceiling],
+      residualMedianMetres: result.consistency.bestIn5x5Neighbourhood?.p50 ?? null,
+      residualRoundedTexelMetres: result.consistency.nearestTexel?.p50 ?? null,
       onGridVertices: result.consistency.verticesOnGrid,
       offGridVertices: result.consistency.verticesOffGrid,
       matchedTiles: result.consistency.matchedTiles,
@@ -235,7 +237,7 @@ test("visual:terrain-elevation — the rendered terrain's elevation agrees with 
     // --- the two intervals, side by side -------------------------------------------------------
     const datasetInterval = [dataset.floor, dataset.ceiling];
     const frameInterval = [evidence.interval.floor, evidence.interval.ceiling];
-    const ecefInterval = evidence.ecef.interval === null ? null : [evidence.ecef.floor, evidence.ecef.ceiling];
+    const ecefInterval = evidence.ecef.interval === null ? null : [evidence.ecef.interval.floor, evidence.ecef.interval.ceiling];
     console.log(`terrain-elevation[${run.backend}]: dataset ${JSON.stringify(datasetInterval)} m | vertex-lane evidence ${JSON.stringify(frameInterval)} m | ECEF-inverse evidence ${JSON.stringify(ecefInterval)} m`);
 
     // (i) containment: the rendered geometry lives inside the dataset's own vertical range, allowing

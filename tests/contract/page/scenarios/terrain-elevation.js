@@ -81,8 +81,6 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
    */
   const TIGHT_AGREEMENT_METRES = 5;
   const WIDE_AGREEMENT_METRES = 250;
-  /** NEGATIVE CONTROL (temporary): read lane 0 instead of the height lane. */
-  const HEIGHT_LANE = 0;
 
   // ----------------------------------------------------------------------------------------------
   // 1. the dataset — read over the same HTTP path the product adapter uses
@@ -349,7 +347,11 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
         positions[row * 3] = floats[base];
         positions[row * 3 + 1] = floats[base + 1];
         positions[row * 3 + 2] = floats[base + 2];
-        heights[row] = floats[base + HEIGHT_LANE];
+        // Lane 3 of the row is `position3DAndHeight.w` — the height in metres the encoder wrote
+        // (`TerrainEncoding.js:268-273`). The two independent paths that check this choice are the ECEF
+        // inverse below and the per-vertex comparison with the dataset; both were validated against a
+        // deliberate wrong-lane run (lane 0), which turned the elevation assertions red.
+        heights[row] = floats[base + 3];
       }
       nonFiniteFloats += drawNonFinite;
 
