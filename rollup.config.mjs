@@ -16,6 +16,7 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import commonjs from "@rollup/plugin-commonjs";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import typescript from "@rollup/plugin-typescript";
 import { dts } from "rollup-plugin-dts";
@@ -41,10 +42,24 @@ const demoEntryAlias = () => ({
   },
 });
 
+/**
+ * CommonJS interop, in the same position the contract-suite bundler uses
+ * (`tests/support/backend-build.mjs`: alias → nodeResolve → commonjs → typescript).
+ *
+ * Required as soon as **any** module in the graph reaches `@cesium/engine`: the engine's
+ * `Source/Core/Math.js` does `import MersenneTwister from "mersenne-twister"`, and that dependency is
+ * CommonJS, so Rollup reports `"default" is not exported by mersenne-twister` and the whole build
+ * fails. `src/terrain/source.ts` (T086) is the first module to import the engine, which is why this
+ * gap only surfaced then — the failure is about the engine being in the graph at all, not about that
+ * particular file.
+ */
+const commonjsInterop = () => commonjs({ include: [/node_modules/], transformMixedEsModules: true });
+
 const packagePlugins = () => [
   enginePatch(),
   buildProvenance({ label: "cesium-webgpu-package" }),
   nodeResolve({ exportConditions: ["import"] }),
+  commonjsInterop(),
   typescript({
     tsconfig: path.join(PACKAGE_ROOT, "tsconfig.json"),
     declaration: false,
@@ -94,8 +109,17 @@ export default [
       buildProvenance({ label: "demo" }),
       demoEntryAlias(),
       nodeResolve({ exportConditions: ["import"] }),
+      commonjsInterop(),
+      // The patch layer is reached from `apps/demo` only through the alias plugin
+      // (`@cesium/engine/Source/Renderer/*.js` → `packages/cesium-webgpu/backend-webgpu/Renderer/*.ts`).
+      // `@rollup/plugin-typescript` decides whether to **transform** a module from its tsconfig's
+      // `include`, and `apps/demo/tsconfig.json` only lists `src/**/*.ts` — so those aliased TypeScript
+      // files arrived at Rollup untransformed ("Expected ',', got 'ident' … you need plugins to import
+      // files that are not JavaScript"). `tsconfig.build.json` is the bundling-only view that also lists
+      // the package's `src/**`, `backend-webgpu/**` and `types/**`; `tsc --noEmit (apps/demo)` keeps
+      // using `apps/demo/tsconfig.json`, so this changes bundling only, not the typecheck gate.
       typescript({
-        tsconfig: path.join(DEMO_ROOT, "tsconfig.json"),
+        tsconfig: path.join(DEMO_ROOT, "tsconfig.build.json"),
         declaration: false,
         declarationMap: false,
         noEmitOnError: true,

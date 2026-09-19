@@ -1,0 +1,15 @@
+{
+  "//": "Bundling-only view of the demo. It exists because `@rollup/plugin-typescript` decides whether to transform a module from its tsconfig's `include`, while the patch layer reaches the demo only through the alias plugin (`@cesium/engine/Source/Renderer/*.js` → `packages/cesium-webgpu/backend-webgpu/Renderer/*.ts`). Those files are outside `apps/demo`, so without this config they arrive at Rollup untransformed and the build dies with `Expected ',', got 'ident'`.",
+  "//types": "`@webgpu/types` is required here (the demo's own tsconfig sets `types: []`) because the patch layer references WebGPU globals; the package tsconfig does the same for the contract-suite bundler.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["@webgpu/types"],
+    "declaration": false
+  },
+  "include": [
+    "src/**/*.ts",
+    "../../packages/cesium-webgpu/src/**/*.ts",
+    "../../packages/cesium-webgpu/backend-webgpu/**/*.ts",
+    "../../packages/cesium-webgpu/types/**/*.d.ts"
+  ]
+}
