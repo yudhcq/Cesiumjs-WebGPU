@@ -71,12 +71,26 @@ export function dataUnavailable(message: string, options: { backend?: BackendKin
   return new DiagnosticError({ category: "data-unavailable", message, ...options });
 }
 
-/** Narrowing helper for consumers that receive `unknown` (event handlers, promise rejections). */
+/**
+ * Narrowing helper for consumers that receive `unknown` (event handlers, promise rejections).
+ *
+ * The test is the **shape**, not the constructor: a diagnostic produced in another realm (a worker,
+ * an iframe, a bundled copy) cannot satisfy `instanceof`, and `DiagnosticInit` above is documented as
+ * "structurally identical to the public `DiagnosticError` interface".
+ *
+ * Requiring `name === "DiagnosticError"` instead of the shape was a defect, not a stricter guard:
+ * `Diagnostics.report(error: DiagnosticError)` is typed with the **interface**, so a value that type
+ * allows MUST NOT be rejected at runtime. Rejecting it replaced the real category with `internal` and
+ * an unreadable `[object Object]` message — which silently destroyed exactly the
+ * `data-unavailable`-vs-`render-failed` distinction the public diagnostics channel exists to expose
+ * (FR-004/FR-009), and surfaced as a console error in every acceptance run that used a handle.
+ */
 export function isDiagnosticError(value: unknown): value is DiagnosticError {
   if (value instanceof DiagnosticError) return true;
   if (typeof value !== "object" || value === null) return false;
-  const candidate = value as { name?: unknown; category?: unknown; message?: unknown };
-  return candidate.name === "DiagnosticError" && typeof candidate.category === "string" && typeof candidate.message === "string";
+  const candidate = value as { category?: unknown; message?: unknown };
+  if (typeof candidate.message !== "string" || candidate.message.length === 0) return false;
+  return typeof candidate.category === "string" && (DIAGNOSTIC_CATEGORIES as readonly string[]).includes(candidate.category);
 }
 
 /**

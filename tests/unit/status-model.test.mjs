@@ -145,6 +145,38 @@ test("with no subscriber the diagnostic reaches the sink instead of disappearing
   assert.equal(sunk[0].category, "not-implemented");
 });
 
+test("an interface-shaped diagnostic is delivered as itself, never rewritten into an unreadable internal", async () => {
+  const { createDiagnostics } = await loadTypeScriptModule(`${SRC}/api/diagnostics.ts`);
+  const sunk = [];
+  const received = [];
+  const diagnostics = createDiagnostics({ sink: (error) => sunk.push(error) });
+  diagnostics.onError((error) => received.push(error));
+
+  // `Diagnostics.report(error: DiagnosticError)` is typed with the **interface** in `api/types.ts`, so
+  // this plain object is exactly what the declared parameter allows. The old guard required
+  // `instanceof` or `name === "DiagnosticError"`, so it rejected this value and replaced the real
+  // category with `internal: received a non-diagnostic value: [object Object]`. That destroyed the
+  // `data-unavailable`-vs-`render-failed` distinction the channel exists to expose (FR-004/FR-009) and
+  // showed up as a console error in every acceptance run that used a handle (measured: 2 in
+  // `contract:terrain-ready`, 33 in `contract:device-lost-terrain`).
+  diagnostics.report({ category: "data-unavailable", message: "tile 9/532/124.hgt is missing" });
+
+  assert.equal(received.length, 1, "the subscriber MUST receive an interface-shaped diagnostic");
+  assert.equal(received[0].category, "data-unavailable", "the ORIGINAL category MUST survive");
+  assert.equal(received[0].message, "tile 9/532/124.hgt is missing");
+  assert.equal(sunk.length, 0, "nothing MUST be sunk as a non-diagnostic value");
+
+  // The guard still rejects what is genuinely not a diagnostic — the relaxation is not a blanket accept.
+  diagnostics.report({ category: "no-such-category", message: "typo" });
+  diagnostics.report({ category: "render-failed" });
+  diagnostics.report("plain string");
+  assert.equal(sunk.length, 3, "a bad category, a missing message and a string MUST all still be surfaced");
+  assert.ok(
+    sunk.every((error) => error.category === "internal"),
+    "each rejected value MUST become an internal failure rather than disappear",
+  );
+});
+
 test("a throwing subscriber cannot hide the diagnostic from the others", async () => {
   const { createDiagnostics } = await loadTypeScriptModule(`${SRC}/api/diagnostics.ts`);
   const { notImplemented } = await loadTypeScriptModule(`${SRC}/api/errors.ts`);
