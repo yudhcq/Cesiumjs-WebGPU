@@ -1982,10 +1982,33 @@ function instrumentContextClear(bundle, log, limit = 12) {
  * a colour-only read-back cannot tell those apart (W5). It requires a single-sampled canvas pass,
  * because a multisampled depth texture cannot be copied.
  */
-async function readCanvasDepth(context, canvas, createStaging) {
+async function readCanvasDepth(context, canvas, createStaging, options = {}) {
   const device = context.device;
   const texture = context.canvasDepthTexture();
   if (texture === undefined || texture === null) return { skipped: "no canvas depth texture" };
+  // MEASURED LIMITATION, and the reason this is gated rather than attempted (Chrome 153, Windows,
+  // RTX 4080 SUPER): **no** legal copy exists for the canvas depth attachment of this scene.
+  //   - multisampled path (the MVP default): "sample count (4) is not 1 when copying to or from a
+  //     buffer" — a validation rule, independent of driver;
+  //   - single-sampled path (`?samples=1`): "The depth aspect of [Texture
+  //     \"cesium-webgpu:canvas-depth-stencil\"] format TextureFormat::Depth24PlusStencil8 cannot be
+  //     selected in a texture to buffer copy." — the spec allows it, this Chrome does not implement it.
+  // Attempting the copy anyway raises an *uncaptured* WebGPU error, which the backend reports at frame
+  // end by design (research §6.2: a GPU error is never swallowed), and that in turn made every suite
+  // running this probe fail on a page error the probe itself provoked. Verified as the cause, not
+  // assumed: the error message is a texture-copy validation message and the two paths were measured
+  // separately (see `docs/gate-g*-conclusion.md` for the depth evidence actually used, which is the
+  // depth-test indicator below — `createDepthIndicatorResources`).
+  // The copy is kept behind an explicit opt-in so a future browser that implements the depth-aspect
+  // copy needs no new code, only `{ attempt: true }`.
+  if (options.attempt !== true) {
+    return {
+      measurable: false,
+      reason: "copyTextureToBuffer cannot select the depth aspect of this canvas texture on Chrome 153 (measured); depth presence is proven through the depth test instead",
+      sampleCount: context.sampleCount,
+      textureFormat: texture.format ?? null,
+    };
+  }
   const width = canvas.width;
   const height = canvas.height;
   const bytesPerRow = Math.ceil((width * 4) / 256) * 256;
@@ -3026,6 +3049,96 @@ const SCENARIOS = {
   "texture-origin": scenarioTextureOrigin,
 };
 
+/**
+ * Scenarios that live in their **own file** under `tests/contract/page/scenarios/`.
+ *
+ * `SCENARIOS` above is one 3000-line file because the W2/W3 scenarios share a great deal of inline
+ * instrumentation. The Phase 7 acceptance suites do not need to edit this file at all: each one owns
+ * `scenarios/<name>.js`, whose default export is `(bundle, canvas, ctx) => result`. Two suites can
+ * therefore be written **in parallel without touching a common file** — and a missing module fails
+ * loudly as an import error instead of silently degrading to "unknown scenario".
+ *
+ * The map is explicit (rather than a filename convention probed with `fetch`) so that a typo, a syntax
+ * error or a missing file inside a scenario module is never mistaken for "no such scenario".
+ */
+const SCENARIO_MODULES = {
+  "terrain-offline": "./scenarios/terrain-offline.js",
+  "terrain-unavailable": "./scenarios/terrain-unavailable.js",
+  "terrain-ready": "./scenarios/terrain-ready.js",
+  "terrain-interaction": "./scenarios/terrain-interaction.js",
+  "device-lost-terrain": "./scenarios/device-lost-terrain.js",
+  "offscreen-depth": "./scenarios/offscreen-depth.js",
+  "terrain-multitile": "./scenarios/terrain-multitile.js",
+  "terrain-geometry": "./scenarios/terrain-geometry.js",
+  "terrain-elevation": "./scenarios/terrain-elevation.js",
+  "cross-equivalence": "./scenarios/cross-equivalence.js",
+  handle: "./scenarios/handle.js",
+  status: "./scenarios/status.js",
+  "whole-switch": "./scenarios/whole-switch.js",
+  demo: "./scenarios/demo.js",
+  fallback: "./scenarios/fallback.js",
+};
+
+/**
+ * Everything a scenario module may use, passed in explicitly.
+ *
+ * Scenario modules import **nothing** from this file (that would re-run `main()`), so the helper set is
+ * handed over as a single object. All entries are the very functions this page uses for its own
+ * scenarios — there is no second copy to drift out of sync.
+ */
+function scenarioContext() {
+  return {
+    report,
+    params,
+    backend,
+    step,
+    partitionTrace,
+    createCanvas,
+    describeContext,
+    readPresentedCanvas,
+    prefetchDevice,
+    createTriangleResources,
+    drawInputsFor,
+    buildTerrainScene,
+    renderUntilTilesLoaded,
+    heightmapTileRectangle,
+    analyticHeightmap,
+    instrumentFramebufferManager,
+    instrumentShaderEmission,
+    instrumentContextDraw,
+    instrumentContextClear,
+    recordFramePasses,
+    instrumentPassEncoders,
+    instrumentBufferUploads,
+    instrumentPipelines,
+    instrumentUniformValues,
+    enableFrameReadback,
+    enableBufferReadback,
+    readCanvasDepth,
+    overridePipelineState,
+    createDepthIndicatorResources,
+    depthIndicatorInputs,
+    decodeMember,
+    decodeBlock,
+    multiplyMatrix4Vector,
+    remapClipDepth,
+  };
+}
+
+/** Resolve one scenario to its runner, preferring the in-file registry. */
+async function resolveScenario(name) {
+  const inline = SCENARIOS[name];
+  if (inline !== undefined) return { runner: inline, source: "probe.js" };
+  const modulePath = SCENARIO_MODULES[name];
+  if (modulePath === undefined) return { runner: undefined, source: null };
+  const module = await import(modulePath);
+  const runner = module.default;
+  if (typeof runner !== "function") {
+    throw new Error(`scenario module ${modulePath} MUST default-export a function (got ${typeof runner})`);
+  }
+  return { runner, source: modulePath };
+}
+
 /** `backend-core` is the composite independent test: construct + whole-switch + dispatch/present.
  *
  * The present phase runs **last** and leaves its frame on screen, because the harness screenshots the
@@ -3055,9 +3168,12 @@ async function main() {
     if (scenario === "backend-core") {
       await runComposite(bundle, canvas);
     } else {
-      const runner = SCENARIOS[scenario];
-      if (runner === undefined) throw new Error(`unknown scenario "${scenario}" (known: ${Object.keys(SCENARIOS).join(", ")})`);
-      const outcome = await runner(bundle, canvas);
+      const { runner, source } = await resolveScenario(scenario);
+      if (runner === undefined) {
+        throw new Error(`unknown scenario "${scenario}" (in-file: ${Object.keys(SCENARIOS).join(", ")}; modules: ${Object.keys(SCENARIO_MODULES).join(", ")})`);
+      }
+      step("scenario-resolved", { scenario, source });
+      const outcome = await runner(bundle, canvas, scenarioContext());
       report.result[scenario] = outcome !== null && typeof outcome === "object" && "result" in outcome ? outcome.result : outcome;
     }
   } catch (error) {

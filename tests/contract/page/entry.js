@@ -55,6 +55,14 @@ import * as framebufferManagerModule from "../../../packages/cesium-webgpu/backe
 import * as renderStateModule from "../../../packages/cesium-webgpu/backend-webgpu/Renderer/RenderState.js";
 import * as vertexArrayModule from "../../../packages/cesium-webgpu/backend-webgpu/Renderer/VertexArray.js";
 import * as sceneOptions from "../../../packages/cesium-webgpu/src/scene-options.js";
+// The package entry itself (T089's `createTerrainScene`). Bundled through the same TypeScript plugin as
+// the rest of `src/`, so a page scenario can drive the **public** API rather than re-assembling a scene
+// by hand. Importing it is what makes "the acceptance suite exercises the shipped entry point" true.
+import * as terrainScene from "../../../packages/cesium-webgpu/src/index.ts";
+// The terrain adapter itself (T086). The contract suites need the **product** adapter rather than a
+// hand-rolled provider, so that "missing tile / fetch failure / timeout" is exercised through the code
+// that ships: an injectable `readTile` is how a suite simulates a failure without a broken server.
+import * as terrainSource from "../../../packages/cesium-webgpu/src/terrain/source.ts";
 
 export {
   Buffer,
@@ -96,6 +104,8 @@ export {
   samplerMap,
   sceneOptions,
   swapchain,
+  terrainScene,
+  terrainSource,
   textureUpload,
   uniformWriter,
   vertexArrayModule,

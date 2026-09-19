@@ -41,6 +41,23 @@ export const SUITE_SCENARIOS = {
   "terrain:probe": "terrain-probe",
   "terrain:raster-probe": "terrain-raster-probe",
   "terrain:canvas-depth-probe": "canvas-depth-probe",
+  // Phase 7-11 suites. Each scenario lives in its own module under `tests/contract/page/scenarios/`
+  // (`probe.js`'s `SCENARIO_MODULES`), so adding a suite never edits a shared in-file registry.
+  "contract:terrain-ready": "terrain-ready",
+  "contract:terrain-offline": "terrain-offline",
+  "contract:terrain-unavailable": "terrain-unavailable",
+  "contract:interaction": "terrain-interaction",
+  "contract:device-lost-terrain": "device-lost-terrain",
+  "contract:offscreen-depth": "offscreen-depth",
+  "contract:fallback": "fallback",
+  "contract:handle": "handle",
+  "contract:status": "status",
+  "contract:whole-switch": "whole-switch",
+  "contract:cross-equivalence": "cross-equivalence",
+  "contract:demo": "demo",
+  "visual:terrain": "terrain-multitile",
+  "visual:terrain-geometry": "terrain-geometry",
+  "visual:terrain-elevation": "terrain-elevation",
 };
 
 /** The backend of this run — one run, one backend, never a list. */
