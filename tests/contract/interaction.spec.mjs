@@ -38,6 +38,16 @@
  *     expected count, i.e. it catches "the loop stopped", not "the loop is slow" (which (a) measures).
  *   - `MIN_FRAME_SAMPLES = 30` — non-vacuity of the sampler window itself.
  *
+ * ## Anti-vacuity: "the interaction reached the renderer" (not "the pixels changed")
+ *
+ * Pixel difference alone is **not** a usable instrument for this increment: with no imagery and the
+ * near-ground lighting fade the MVP scene draws one unmodulated colour, so a 45° rotation and a 2x zoom
+ * of a flat-shaded globe legitimately produce an identical image (measured on WebGL2: `differencePreToPost
+ * = 0`, `uniqueColorCount` 2 -> 1). The claim is therefore carried by (1) the recorded input trajectory —
+ * 60 steps, each with its exact camera values and timestamp — plus (2) **at least one** renderer-side
+ * response: the pixel difference, the colour composition, the draw-call count or the tile count. All four
+ * instruments are recorded, and the assertion says which one responded.
+ *
  * ## Known blockers of individual instruments (asserted in the strict direction anyway)
  *
  *   - `triangleCount` is structurally 0 in the current backend (the command tally never sees a TRIANGLES
@@ -100,6 +110,37 @@ const UNIQUE_COLOUR_HIGH_FACTOR = 4;
 const MIN_FRAMES_PER_PHASE = 5;
 const MIN_FRAME_SAMPLES = 30;
 const MIN_FRAME_DIFFERENCE_RATIO = 0.001;
+
+/**
+ * Did the camera change reach the renderer? See the header: on a flat-shaded scene the pixels may
+ * legitimately be identical, so four independent renderer-side instruments are consulted and the one(s)
+ * that responded are reported.
+ */
+function rendererResponse(pre, post, preOwn, postOwn, differencePreToPost) {
+  const indicators = {
+    pixelDifference: differencePreToPost,
+    pixelDifferenceOverThreshold: typeof differencePreToPost === "number" && differencePreToPost > MIN_FRAME_DIFFERENCE_RATIO,
+    uniqueColorCount: [pre.uniqueColorCount, post.uniqueColorCount],
+    uniqueColorCountChanged: pre.uniqueColorCount !== post.uniqueColorCount,
+    drawCallCount: [pre.drawCallCount, post.drawCallCount],
+    drawCallCountChanged: pre.drawCallCount !== post.drawCallCount,
+    tileCount: [pre.tileCount, post.tileCount],
+    tileCountChanged: pre.tileCount !== post.tileCount,
+  };
+  indicators.responded =
+    indicators.pixelDifferenceOverThreshold || indicators.uniqueColorCountChanged || indicators.drawCallCountChanged || indicators.tileCountChanged;
+  indicators.respondedVia = Object.entries({
+    pixelDifference: indicators.pixelDifferenceOverThreshold,
+    uniqueColorCount: indicators.uniqueColorCountChanged,
+    drawCallCount: indicators.drawCallCountChanged,
+    tileCount: indicators.tileCountChanged,
+  })
+    .filter(([, value]) => value === true)
+    .map(([name]) => name);
+  void preOwn;
+  void postOwn;
+  return indicators;
+}
 
 /** Counter-example arm: the injected freeze and the tolerances used to recognise it. */
 const INJECTED_STALL_MS = 1200;
@@ -311,25 +352,35 @@ function assertInteractionArm(run, label) {
     `${label}: the requestAnimationFrame counter did not grow across the interaction window (${firstSample.rafInvokedTotal} -> ${lastSample.rafInvokedTotal})`,
   );
 
-  // The interaction really moved the camera: every probe frame differs from the pre-interaction frame.
-  assert.ok(
-    result.captures.differencePreToPost > MIN_FRAME_DIFFERENCE_RATIO,
-    `${label}: the settled frame is indistinguishable from the pre-interaction frame (difference ratio ${result.captures.differencePreToPost}), so the interaction never reached the renderer`,
-  );
-  for (const probe of result.captures.probes) {
-    assert.equal(probe.skipped, undefined, `${label}: the capture at the end of "${probe.phase}" was skipped: ${probe.skipped}`);
-    assert.equal(probe.error, null, `${label}: the capture at the end of "${probe.phase}" failed: ${probe.error}`);
-    assert.ok(
-      probe.differenceFromPreCapture > MIN_FRAME_DIFFERENCE_RATIO,
-      `${label}: the frame at the end of "${probe.phase}" is indistinguishable from the pre-interaction frame (difference ratio ${probe.differenceFromPreCapture})`,
-    );
-  }
-
-  // (c) THE SETTLED FRAME IS IN THE SAME INTERVAL AS THE PRE-INTERACTION FRAME.
+  // The interaction really moved the camera *and* the renderer responded. The input side is already
+  // pinned above (60 steps with exact camera values, ~3 s window); this is the response side. See the
+  // header: a flat-shaded frame can be pixel-identical after a camera move, so four renderer-side
+  // instruments are consulted and at least one MUST have responded.
   const pre = result.captures.pre.stats;
   const post = result.captures.post.stats;
   const preOwn = result.captures.pre.own;
   const postOwn = result.captures.post.own;
+  const response = rendererResponse(pre, post, preOwn, postOwn, result.captures.differencePreToPost);
+  assert.ok(
+    response.responded,
+    `${label}: no renderer-side instrument responded to 60 camera steps — the interaction never reached the renderer. Indicators: ${JSON.stringify(response)}`,
+  );
+  for (const probe of result.captures.probes) {
+    assert.equal(probe.skipped, undefined, `${label}: the capture at the end of "${probe.phase}" was skipped: ${probe.skipped}`);
+    assert.equal(probe.error, null, `${label}: the capture at the end of "${probe.phase}" failed: ${probe.error}`);
+    // The extreme pose of every phase MUST be a real, non-blank frame (a capture resolves inside
+    // `renderOnce()`, so a resolved probe is a product frame rendered at that pose).
+    assert.ok(
+      probe.own !== null && probe.own.nonBackgroundRatio >= COVERAGE_FLOOR,
+      `${label}: the frame at the end of "${probe.phase}" is blank (${JSON.stringify(probe.own)})`,
+    );
+    assert.ok(
+      probe.stats !== null && Number.isFinite(probe.stats.frameTimeMs.p50),
+      `${label}: the frame at the end of "${probe.phase}" carries no measured statistics (${JSON.stringify(probe.stats)})`,
+    );
+  }
+
+  // (c) THE SETTLED FRAME IS IN THE SAME INTERVAL AS THE PRE-INTERACTION FRAME.
   // Independent recomputation of the same pixels must agree with stats() (two code paths, one truth).
   assert.equal(preOwn.uniqueColorCount, pre.uniqueColorCount, `${label}: uniqueColorCount disagrees between stats() and the in-page reduction`);
   assert.equal(postOwn.uniqueColorCount, post.uniqueColorCount, `${label}: uniqueColorCount disagrees between stats() and the in-page reduction`);
@@ -475,6 +526,13 @@ function armVerdicts(run, result, distribution, stalls) {
     "c_coveragePreToPost": [pre.nonBackgroundRatio, post.nonBackgroundRatio],
     "c_compositorCoverage": coverage,
     "c_compositorCoverageAtOrAboveFloor": coverage !== null && coverage >= COVERAGE_FLOOR,
+    "x_interactionReachedTheRenderer": rendererResponse(
+      result.captures.pre.stats,
+      result.captures.post.stats,
+      result.captures.pre.own,
+      result.captures.post.own,
+      result.captures.differencePreToPost,
+    ),
     "d_frameCounterGrowing":
       INTERACTION_PHASES.every((phase) => framesByPhase[phase] >= MIN_FRAMES_PER_PHASE && result.frameCounts.capturesByPhase[phase] === 1) &&
       firstSample !== null &&
@@ -563,6 +621,7 @@ function armEvidence(run, label, result, distribution, stalls, extra = {}) {
         requestedAtMs: probe.requestedAtMs,
         resolvedAtMs: probe.resolvedAtMs,
         own: probe.own,
+        stats: probe.stats ?? null,
         differenceFromPreCapture: probe.differenceFromPreCapture,
         error: probe.error ?? null,
       })),

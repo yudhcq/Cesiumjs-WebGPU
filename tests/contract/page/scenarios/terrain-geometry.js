@@ -51,11 +51,19 @@
  *   `fail:<level>/<x>/<y>`   that tile's read rejects   → adapter degrades it to a flat floor tile
  *   `zeros:<level>/<x>/<y>`  that tile reads all-zero bytes → decodes to −32768 m **legal** samples
  *                            (`manifest.sampleGrid.noDataRule`: RGB(0,0,0) is legal, never no-data)
+ *   `spike:<level>/<x>/<y>`  every 32nd sample of that tile is moved to the coding floor — a field of
+ *                            legal-looking values with ~35 km internal steps (an "anomalous vertex")
  *   `fail-level:<L>`         every tile of level `L` rejects
- *   `camera-edge`            the fixed camera is moved onto the dataset's western edge, so part of the
- *                            frame has no dataset coverage at all (a hole that really is a hole)
+ *   `camera-edge`            the fixed camera is moved onto the dataset's western edge
+ *   `no-coverage`            every tile answers "not available": no geometry is producible anywhere,
+ *                            the one input under which this product presents no surface at all
  *
- * The default (`inject` absent) is the green run the suite asserts on.
+ * The default (`inject` absent) is the green run the suite asserts on. Measured 2026-09-19: `fail:` turns
+ * arms A (5.08 % of the frame is the clear colour), B (8752/9597 m seam steps) and C (constant field,
+ * outside the declared interval) red in one run; `spike:` turns B and C red (its seam step passes the
+ * *ratio* test at ~1.0 local cell only because the spike inflates the local scale too, which is why the
+ * absolute ceiling exists); `no-coverage` fails the coverage precondition (nothing rendered ⇒ nothing
+ * measurable) before any arm runs.
  *
  * ## Module rules
  *

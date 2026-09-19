@@ -71,7 +71,13 @@ import { decodePng } from "../support/png-reader.mjs";
 // exceeds Playwright's 30 s default.
 test.setTimeout(300_000);
 
-/** The fixed viewport of the terrain suites (T087/T088); it also fixes the canvas backing store. */
+/**
+ * The viewport the terrain suites (T087/T088) pin. It is **not** treated as the canvas backing store:
+ * T157 measured that `viewport.devicePixelRatio` only applies while the canvas is unlaid-out, and the
+ * swapchain recomputes the backing store from the client box. Every pixel statistic below is therefore
+ * asserted against the size the **page measured** (`presentation.canvas`), and that measurement is
+ * written into criteria.json.
+ */
 const VIEWPORT = { width: 384, height: 288 };
 const SUITE = "visual:terrain-geometry";
 

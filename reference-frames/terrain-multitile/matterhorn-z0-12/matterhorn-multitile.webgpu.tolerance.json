@@ -4,10 +4,10 @@
   "datasetId": "matterhorn-z0-12",
   "backend": "webgpu",
   "referenceFrame": "reference-frames/terrain-multitile/matterhorn-z0-12/matterhorn-multitile.webgpu.png",
-  "generatedAt": "2026-09-19T03:04:18.680Z",
+  "generatedAt": "2026-09-19T03:09:44.581Z",
   "generatedBy": "node tests/support/backend-runner.mjs --backend=webgpu --suite=visual:terrain (VISUAL_TERRAIN_BASELINE=1)",
   "overwrotePrevious": false,
-  "runId": "webgpu-16912-1789787057035",
+  "runId": "webgpu-40228-1789787383178",
   "sourceScreenshot": "artifacts/terrain/webgpu-canvas.png",
   "fixedConditions": {
     "caseId": "matterhorn-multitile",
@@ -65,8 +65,8 @@
       "terrainProviderIsProduct": true,
       "terrainProviderName": "CustomHeightmapTerrainProvider"
     },
-    "pageOverlayText": null,
-    "hash": "8f714ecd91eccf55"
+    "pageOverlayText": "Data attributionData provided by:×Terrain Tiles (terrarium) by Mapzen/Joerd (AWS Open Data)",
+    "hash": "20c8a4e08c5328c4"
   },
   "tolerance": [
     {
@@ -83,7 +83,7 @@
     {
       "id": "unorm8-quantisation",
       "what": "同一管线两次运行的 8 位 UNORM 量化：比较区域内每个像素每通道的最大允许差",
-      "basis": "上界 = 1 LSB：两次运行走同一条管线、同一台 GPU、同一浏览器与同一个合成器截图路径，像素值可表示的最小差就是 1 LSB；实测跨运行最大差写入 `record.measurements.crossRun.maxChannelDelta` 与 artifacts 下的统计 JSON（实测为 0 时本上界仍是一个可表示量子，而不是放宽判据）。",
+      "basis": "上界 = 1 LSB：两次运行走同一条管线、同一台 GPU、同一浏览器与同一个合成器截图路径，像素值可表示的最小差就是 1 LSB；每次比对实测的最大差、差异像素数与直方图写入 `artifacts/terrain/multitile-<backend>-compare.json` 的 `metrics.colour`；生成运行不比较任何东西，所以本记录的 `measurements.crossRun` 在生成时为 null，实测为 0 时本上界仍是一个可表示量子，而不是放宽判据。",
       "tolerance": {
         "perChannelMaxDelta": 1
       }
@@ -147,7 +147,7 @@
       "dominantFraction": 0.9505
     },
     "crossRun": null,
-    "note": "crossRun is filled by the comparison runs; the generation run compares nothing (two-stage protocol)"
+    "note": "the generation run compares nothing (two-stage protocol); each comparison run records its measured deltas in artifacts/terrain/multitile-<backend>-compare.json (metrics.colour / metrics.silhouette / metrics.mask)"
   },
   "baselineState": {
     "elevationShading": "explicitly deferred (起伏显式后置): upstream fade = clamp((far - near)/(...), 0, 1) = 0 at this camera, so finalColor = color * lightColor and the terrain renders as the unmodulated base colour",

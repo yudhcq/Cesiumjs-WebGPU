@@ -570,35 +570,50 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
   let depthIndicator = { skipped: "the depth-test indicator is a WebGPU-path instrument" };
   if (isWebgpu && readback !== null) {
     const resources = createDepthIndicatorResources(context.device, context.swapchainFormat, context.sampleCount);
-    const state = { depthTest: { enabled: false }, depthMask: false, cull: { enabled: false } };
-    const indicatorFrame = async (depthCompare, options = {}) => {
-      const inputs = depthIndicatorInputs(resources, { depthCompare, sampleCount: context.sampleCount, format: context.swapchainFormat });
+    /**
+     * Depth comparison functions, as upstream's `RenderState` names them (`gl.DEPTH_FUNC_*`,
+     * `RenderState.ts:88-98`). The marker MUST carry `depthTest.enabled: true`: the render state maps a
+     * disabled depth test onto `depthCompare: "always"` (`RenderState.ts:527-529`), which is exactly the
+     * trap the first version of this indicator fell into — `ctx.depthIndicatorInputs`'s `depthCompare`
+     * argument is inert while its own render state disables the test, so both the `greater` and the
+     * `less` marker painted the whole viewport (measured: 153 600/153 600 each).
+     */
+    const DEPTH_FUNC_LESS = 0x0201;
+    const DEPTH_FUNC_GREATER = 0x0204;
+    const DEPTH_FUNC_ALWAYS = 0x0207;
+    const indicatorFrame = async (func, options = {}) => {
+      const inputs = depthIndicatorInputs(resources, { depthCompare: "greater", sampleCount: context.sampleCount, format: context.swapchainFormat });
+      const renderState = {
+        depthTest: { enabled: true, func },
+        depthMask: false,
+        cull: { enabled: false },
+        colorFormats: [context.swapchainFormat],
+        depthFormat: "depth24plus-stencil8",
+        sampleCount: context.sampleCount,
+      };
       readback.arm();
       context.beginFrame();
       if (options.clearOnly === true) {
-        // A frame that only clears (colour and depth), so the attachment holds exactly its clear value:
-        // the `greater` marker over it should paint nothing if the indicator really tests stored depth.
         context.clear({ color: { red: 0, green: 0, blue: 0, alpha: 1 }, depth: 1, stencil: 0 }, {});
       } else {
-        context.draw({ __webgpu: inputs, count: 3, renderState: state }, {});
+        context.draw({ __webgpu: { ...inputs, renderState }, count: 3, renderState }, {});
       }
       context.endFrame();
       await context.awaitFrameErrors().catch((error) => ({ error: String(error?.message ?? error).slice(0, 200) }));
       const pixels = await readback.read();
       return pixels === null ? null : { width: pixels.width, height: pixels.height, viewportPixels: pixels.width * pixels.height, markerPixels: pixels.nonTransparentPixels, centre: pixels.centre };
     };
-    const always = await indicatorFrame("always");
-    const greaterOverTerrain = await indicatorFrame("greater");
+    const always = await indicatorFrame(DEPTH_FUNC_ALWAYS);
+    const greaterOverTerrain = await indicatorFrame(DEPTH_FUNC_GREATER);
     // The discriminating control. The terrain's own depth is in the attachment in this frame (the marker
     // frames are `depthWriteEnabled: false`), so a `less` marker at clip depth 1.0 MUST paint **nothing**:
-    // if it painted, the attachment would be holding the clear value rather than rendered depth and the
-    // `greater` count above would mean nothing. (The clear-only arm is reported separately: on this
-    // platform it paints the full viewport, which is why the control is taken against the terrain's depth
-    // instead of against a cleared buffer.)
-    const lessOverTerrain = await indicatorFrame("less");
-    const clearOnlyGreater = await indicatorFrame("greater", { clearOnly: true });
+    // if it painted, the attachment would be holding the clear value and the `greater` count would mean
+    // nothing. (The clear-only arm is reported separately: on this platform it paints the full viewport,
+    // which is why the control is taken against the terrain's depth instead of a cleared buffer.)
+    const lessOverTerrain = await indicatorFrame(DEPTH_FUNC_LESS);
+    const clearOnlyGreater = await indicatorFrame(DEPTH_FUNC_GREATER, { clearOnly: true });
     depthIndicator = {
-      instrument: "full-viewport triangle at clip depth 1.0 drawn through the same Context, counted in the canvas-texture read-back (probe.js:2407-2474)",
+      instrument: "full-viewport triangle at clip depth 1.0 drawn through the same Context with an explicit depth-tested render state, counted in the canvas-texture read-back (probe.js:2407-2474, corrected: `depthTest.enabled: true`)",
       always: always === null ? null : { markerPixels: always.markerPixels, viewportPixels: always.viewportPixels },
       greaterOverTerrain: greaterOverTerrain === null ? null : { markerPixels: greaterOverTerrain.markerPixels, viewportPixels: greaterOverTerrain.viewportPixels },
       lessOverTerrain: lessOverTerrain === null ? null : { markerPixels: lessOverTerrain.markerPixels, viewportPixels: lessOverTerrain.viewportPixels },
