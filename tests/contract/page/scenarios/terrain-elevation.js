@@ -81,6 +81,8 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
    */
   const TIGHT_AGREEMENT_METRES = 5;
   const WIDE_AGREEMENT_METRES = 250;
+  /** NEGATIVE CONTROL (temporary): read lane 0 instead of the height lane. */
+  const HEIGHT_LANE = 0;
 
   // ----------------------------------------------------------------------------------------------
   // 1. the dataset — read over the same HTTP path the product adapter uses
@@ -249,7 +251,7 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
     return originalRequestTileGeometry(x, y, level, request);
   };
 
-  const terrain = await buildTerrainScene(bundle, canvas, { provider, readback: true, bufferReadback: true, pipelineLog: true, camera: { longitude: 6.8652, latitude: 45.8326, height: 200000, heading: 0, pitch: 60, roll: 0 } });
+  const terrain = await buildTerrainScene(bundle, canvas, { provider, readback: true, bufferReadback: true, pipelineLog: true });
   const load = await renderUntilTilesLoaded(terrain, 30000);
   step("tiles-loaded", load);
   // The compositor needs more than one frame on this canvas, and the harness screenshots the canvas
@@ -347,7 +349,7 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
         positions[row * 3] = floats[base];
         positions[row * 3 + 1] = floats[base + 1];
         positions[row * 3 + 2] = floats[base + 2];
-        heights[row] = floats[base + 3];
+        heights[row] = floats[base + HEIGHT_LANE];
       }
       nonFiniteFloats += drawNonFinite;
 

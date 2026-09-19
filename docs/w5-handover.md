@@ -8,8 +8,12 @@
 
 ## 1. 任务进度
 
-`tasks.md` 共 **160** 条任务行，已完成 **91**。MVP（US1）剩余：T092–T096（五套件收尾）、
-T097、T098a、T098b；另有沉淀出的缺陷任务 T152/T154/T155/T156/T157/T158/T159。
+`tasks.md` 共 **164** 条任务行，已完成 **95**。已勾选的 US1 验收任务：**T091**（Independent Test，
+两臂各 exit 0）、**T092**（多瓦片视觉回归，两臂 exit 0，负例两式均变红）、**T093**（几何数值化断言，
+两臂 exit 0，"删瓦片必红"已实测）、**T095**（交互契约：WebGL2 臂通过、WebGPU 臂按实测判红）、
+**T096**（设备丢失恢复，套件 exit 0，入口 Agent 独立复跑确认）。
+**仍在收尾**：**T094**（高程帧证据）——两臂产物已落盘，最终汇报未到；T097/T098a/T098b 未启动。
+另沉淀出 **11 条产品缺陷任务**：T152/T154/T155/T156/T157/T158/T159/T160/T161/T162/T163。
 
 ## 2. 已核实（入口 Agent 自己跑过、可复现）
 
@@ -41,6 +45,16 @@ T097、T098a、T098b；另有沉淀出的缺陷任务 T152/T154/T155/T156/T157/T
 | **T154** | D2-a"整体委派 WebGL2"兜底路线**一用就崩** | `vendor/upstream-webgl2/Context.js:409` 的 GL 三参 `RenderState.apply(gl, rs, ps)` 打到补丁层两参 `Renderer/RenderState.ts:501`（无 `typeof` 守卫）⇒ `gl` 被当 `renderState`。**这条兜底路线是 W6 自动兜底的前提** |
 | **T155** | `report.errors` 不携带内层 `cause`/`stack` | 根因定位被迫依赖 console 文本（入口 Agent 曾因此误归因一次，见 T153 勘误） |
 | **T159** | `captureFrame()` 读回纯色 vs 合成器 256 色 | 待判定：GPU 回读仪器特性（`uniqueColoursGpuReadback`）还是**读回通道丢信息**（后者会使所有基于 `captureFrame().pixels` 的公开统计建立在盲通道上） |
+| **T160** | 设备丢失的**顶层**诊断分类失真（顶层 `render-failed`，`device-lost` 只在 `cause.category`） | `src/compose/scene-runtime.ts#reportRenderFailure` 把所有非地形 cause 一律归 `render-failed`。调用方按顶层 `category` 分支就会把"设备丢失"当普通渲染失败 |
+| **T161** | FR-017 资源账本销毁/重建后**不归零** | 实测 `ledgerBefore.live=18 → afterDispose.live=18(released=0) → afterRebuild.live=**36**`；T096 用 `_tileReplacementQueue.trimTiles(0)` **否证**了"只是没 trim"（36→36）。修法：W6 装新设备时 `GpuResourceRegistry.reset()`，或 `scene.destroy()` 前释放瓦片资源 |
+| **T162** | **"数据不可用"在画面上真的留洞** | T093 的 `fail:<level>/<x>/<y>` 反例实测：删掉一块瓦片后画面 **5.08% 变清屏色**（`surfaceShare` 94.58%）。`degrade()` 给的 −6883 m 平地**没有入帧**。FR-004 的"其余瓦片继续渲染"成立，但"**不出现空洞**"不成立 |
+| **T163** | `DEFAULT_COMMAND_SLOTS=8` 装不下多瓦片帧；近地细化超出数据集层数 | `backend-webgpu/webgpu/uniform-writer.ts:395`：`uniform ring buffer is full: 9216 bytes hold 9 slot(s)` → **1498 条 render error** + 合成器帧近空白（前景仅 1461 px = credit 覆盖层）；且近地细化到 **level 13** 而固定数据集只有 **0–12** ⇒ `tilesLoaded` 30 s 内**永不为真**。**修好后 MUST 按 `regenerationPolicy` 重生成两路参考帧** |
+
+**复核纪律（本会话已因此失误三次，务必照做）**：harness 每次 `runContractSuite` 都**覆写同名产物**
+`artifacts/<suite>/<backend>.json`；**一个 spec 里的多个 `test`（多臂）会互相覆盖**。因此
+**看产物前 MUST 先确认它属于哪条臂**（对照该次运行的 `url`/`runId`/`scenario` 或套件自报的臂别），
+否则会把反例臂的数值当成测量结果——本会话就是这样把 T095 注入的 1200 ms busy-wait 误读成
+"SC-004 被违反"。建议把臂别写进产物文件名。
 
 **约束提醒**：修 T154/T156/T157/T158 都会改 `backend-webgpu/**` 或 `src/compose/**`，即会进入契约
 bundle 的依赖图。按 `AGENTS.md` §7，**同一时刻只允许一个"改产品代码"的代理在飞**，且在其编译通过
