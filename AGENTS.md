@@ -76,4 +76,12 @@ headless 下零参数即拿到硬件 WebGPU 适配器；Node 22；单测必须�
   helper 由 `ctx` 显式传入，套件→场景映射在 `tests/support/contract-harness.mjs` 的 `SUITE_SCENARIOS`。
 - **别人的在飞状态导致的失败**：不要改别人的文件、不要放宽自己的断言；等 60–90 s 原样重试（≤3 次），
   并把"该臂未取得独立证据 + 原因"如实写进汇报，**不得**标成通过。
+- **宿主页场景的前置条件（实测教训）**：替换版 `Context` 从 hand-off 槽取设备；**槽为空时它会在构造期
+  一次性整体委派给上游 WebGL2**（plan D2-a）。若页面忘了 `prefetchDevice()` + `deviceHandoff.install()`，
+  该次运行会**静默变成一条 WebGL2 运行**并在 `new Scene()` 处崩于
+  `vendor/upstream-webgl2/Context.js:409` 的 GL 三参 `RenderState.apply(gl, …)`。
+  因此每个页面侧场景 MUST：① 装 hand-off 前断言槽状态、装后断言 `onStatus` 的 `active === backend`；
+  ② 调用 `assertOtherBackendUntouched(run, assert)`（webgpu 臂断言 WebGL2 上下文请求数为 0）——
+  这条既有防线本来就能当场抓住"静默换路径"，**不要漏调**。
+
 
