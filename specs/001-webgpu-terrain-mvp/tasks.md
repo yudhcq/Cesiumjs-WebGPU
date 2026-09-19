@@ -331,7 +331,15 @@ description: "Task list for WebGPU Terrain MVP — 渲染后端替换（CesiumJS
   - 交互窗口帧时间 `p50=10 ms / p95=10.2 ms / p99=15.4 ms / **max=1201.3 ms**`，那一次 **1201.3 ms 连续卡顿**落在 `pan` 阶段第 10 步 ⇒ **SC-004（无 >1000 ms 连续卡顿）被违反**；
   - 结束帧几乎全黑（harness 截图 `nonBackground=1461/110592`，中心 `[0,0,0,255]`），而交互前捕获帧是 100% 覆盖（`nonBackgroundRatio=1`）⇒ **场景在交互过程中停止出像素**。
   - **因果留痕**：这条错误在上一轮诊断缺陷修复前会显示为不可读的 `internal … [object Object]`，正是被掩盖的；修好诊断通道后才显形。定位锚点：`Renderer/Buffer.ts:283-292`（`_getGpuIndexFormat()` 的守卫）与 `:269`（只有 `createIndexBuffer` 会挂上 `indexDatatype` 自有属性）、调用点 `Renderer/VertexArray.ts:242`、以及 `:434` 的 `fromGeometry` 路径。
-  要求：(a) **先定位**是哪个绘制/哪条路径拿到"非索引缓冲区"当索引用（把诊断的 `extra`/`entryPoint` 与绘制日志对上），**MUST NOT** 先加默认值掩盖；(b) 修好后重跑并断言：无该诊断、无 `scopes still open`、交互窗口 `max` 不超阈值、结束帧覆盖率与交互前同量级；(c) 反例自检：让某个索引缓冲区不带 `indexDatatype`，该断言必须变红。`层=单元` + `层=契约`（`contract:interaction`）。`→ FR-030, SC-004, T152/T158 同源验证`
+  要求：(a) **先定位**是哪个绘制/哪条路径拿到"非索引缓冲区"当索引用（把诊断的 `extra`/`entryPoint` 与绘制日志对上），**MUST NOT** 先加默认值掩盖；(b) 修好后重跑并断言：无该诊断、无 `scopes still open`、交互窗口 `max` 不超阈值、结束帧覆盖率与交互前同量级；(c) 反例自检：让某个索引缓冲区不带 `indexDatatype`，该断言必须变红。`层=单元` + `层=契约`（`contract:interaction`）。`→ FR-030, SC-004, T152/T158 同源验证` —— **触发绘制的精确签名（由 T096 的仪表捕获，`artifacts/device-lost-terrain/webgpu.json` 的 `drawFailures`，把搜索面从"地形网格"缩到"非索引绘制"）**：
+  ```
+  drawFailures = { contextIndex: 0, frame: 33, category: "internal",
+    message: "Buffer._getGpuIndexFormat: this buffer is not an index buffer (it carries no indexDatatype)…",
+    command: { commandName: "DrawCommand", count: 15, indexCount: null,
+               vertexArrayVertices: 6, primitiveType: 4, framebuffer: null } }
+  ```
+  **`indexCount: null` ⇒ 这是一次非索引绘制（`draw`，不是 `drawIndexed`）；6 个顶点 + `primitiveType: 4`(TRIANGLES) = 一个四边形——不可能是地形网格（每片上万顶点）。** 而 `VertexArray.toGpuIndexBuffer()`（`Renderer/VertexArray.ts:238-243`）对 `_indexBuffer === undefined` 是**正确返回 `null`** 的，所以现场必然是"`_indexBuffer` 有值、但那个 `Buffer` 不带 `indexDatatype`"。据此优先排查：① 由**探针/场景侧 helper**（如 `probe.js` 的 `createTriangleResources`/`createDepthIndicatorResources` 一类手工几何）构造的 VAO，是否把**普通 `Buffer`** 当 `indexBuffer` 传；② 逻辑层是否有"先 `Buffer.create` 再当索引缓冲用"的路径（只有 `Buffer.createIndexBuffer` 会在 `Buffer.ts:269` 挂上 `indexDatatype` 自有属性）。**修法必须让"非索引绘制"与"带索引缓冲的 VAO"这两件事不再互相矛盾，而不是给缺失的 `indexDatatype` 补一个默认值。**
+
 
 
 
