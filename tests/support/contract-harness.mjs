@@ -131,8 +131,7 @@ async function captureCanvasRegion(page, viewport, suiteName, backend, samplePoi
  */
 export async function runContractSuite(suiteName, options = {}) {
   const scenario = SUITE_SCENARIOS[suiteName];
-  if (scenario === undefined) throw new Error(`unknown contract suite "${suiteName}"; known: ${Object.keys(SUITE_SCENARIOS).join(", ")}`);
-  const backend = activeBackend();
+  if (scenario === undefined) throw new Error(`unknown contract suite "${suiteName}"; known: ${Object.keys(SUITE_SCENARIOS).join(", ")}`);  const backend = activeBackend();
   const build = await ensureBundle({ backend, force: options.force === true });
 
   const server = createStaticServer({ root: REPO_ROOT });
@@ -165,6 +164,25 @@ export async function runContractSuite(suiteName, options = {}) {
     if (response.status() >= 400) badResponses.push({ url: response.url(), status: response.status() });
   });
 
+  // "Forced offline" arm for the offline contract (`contract:terrain-offline`, T087 / FR-012).
+  //
+  // Asserting "zero external requests were made" is a measurement of a run that *could* have reached
+  // the network; this option removes the possibility instead, so the suite proves the scenario
+  // completes with every non-local request refused. Loopback stays reachable because the bundle, the
+  // fixture tiles and upstream's `Assets/`/workers are served by this run's own static server; the
+  // assertion is about *external* requests, not about local ones.
+  const blockedExternalRequests = [];
+  if (options.blockExternal === true) {
+    await context.route("**/*", (route) => {
+      const url = new URL(route.request().url());
+      if (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.protocol === "data:" || url.protocol === "blob:") {
+        return route.continue();
+      }
+      blockedExternalRequests.push({ url: url.href, resourceType: route.request().resourceType() });
+      return route.abort("internetdisconnected");
+    });
+  }
+
   const query = [
     `bundle=/${bundleRelativePath(backend)}`,
     `backend=${backend}`,
@@ -192,6 +210,7 @@ export async function runContractSuite(suiteName, options = {}) {
     requestFailures,
     requests,
     badResponses,
+    blockedExternalRequests,
     report: null,
     error: null,
     startedAt: new Date().toISOString(),
