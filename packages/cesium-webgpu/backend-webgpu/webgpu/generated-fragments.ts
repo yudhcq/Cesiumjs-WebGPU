@@ -103,7 +103,7 @@ export type UniformElementAccess = (name: string, index: number) => string;
  *   widened) array element is read as `.x`/`.xy` without hard-coding the suffix here.
  */
 export function emitComputeDayColorWgsl({ maxTextureUnits, apply = {}, access = (name: string, index: number) => `czm.${name}[${index}]` }: { maxTextureUnits: number; apply?: Partial<ApplyFlags>; access?: UniformElementAccess }): string {
-  if (!Number.isInteger(maxTextureUnits) || maxTextureUnits < 1) throw new Error(`generated-fragments: maxTextureUnits must be a positive integer (got ${String(maxTextureUnits)}) — the bind layout declares no u_dayTextures binding`);
+  if (!Number.isInteger(maxTextureUnits) || maxTextureUnits < 0) throw new Error(`generated-fragments: maxTextureUnits must be a non-negative integer (got ${String(maxTextureUnits)})`);
   const lines = [
     "// Mirror of `GlobeSurfaceShaderSet.js:419-472` (`computeDayColor`), emitted by",
     "// packages/cesium-webgpu/backend-webgpu/webgpu/generated-fragments.ts.",
@@ -111,9 +111,23 @@ export function emitComputeDayColorWgsl({ maxTextureUnits, apply = {}, access = 
     "// `TEXTURE_UNITS` is a pipeline-overridable constant (`numberOfDayTextures`) here, not a",
     "// preprocessor define: the chain is emitted once at its maximum length and every step is guarded,",
     "// so the module text does not depend on the tile's imagery layer count (G-6/T025).",
-    "fn computeDayColor(initialColor: vec4<f32>, textureCoordinates: vec3<f32>, nightBlend: f32, fragCoordX: f32) -> vec4<f32> {",
-    "  var color = initialColor;",
   ];
+  if (maxTextureUnits === 0) {
+    // `numberOfDayTextures === 0` is upstream's **zero-iteration** case: `GlobeSurfaceShaderSet`
+    // emits the loop body zero times and the function returns the initial colour unchanged
+    // (`GlobeSurfaceShaderSet.js:421-472`). It is *the* MVP configuration — `baseLayer: false` means
+    // the tile has no imagery layer — and the bind layout then declares no `u_dayTextures` binding at
+    // all, so there is no step that could be guarded. Emitting the empty chain is the exact mirror;
+    // the first W5 run instead refused the program ("the layout declares no u_dayTextures binding"),
+    // which stopped every terrain tile.
+    lines.push(
+      "//",
+      "// `maxTextureUnits === 0`: the tile has no imagery layer, so the chain has no steps and the",
+      "// function is the identity — exactly what upstream's zero-iteration unroll produces.",
+    );
+  }
+  lines.push("fn computeDayColor(initialColor: vec4<f32>, textureCoordinates: vec3<f32>, nightBlend: f32, fragCoordX: f32) -> vec4<f32> {");
+  lines.push("  var color = initialColor;");
   const step = (body: readonly string[]): string[] => body.map((line) => (line.length === 0 ? line : `  ${line}`));
   for (let i = 0; i < maxTextureUnits; i += 1) {
     lines.push(`  if (numberOfDayTextures > ${i}u) {`);
@@ -233,8 +247,14 @@ export interface GeneratedFragmentCoverage {
 /**
  * Count coverage over the **reachable parameter combinations** (R6 acceptance criterion).
  *
- * `textureUnits ∈ {1..maxTextureUnits}` (0 is not a rendering configuration — `GlobeSurfaceShaderSet`
- * only builds the chain for a tile that has imagery) × every one of the `2^9` `APPLY_*` flag subsets.
+ * `textureUnits ∈ {0..maxTextureUnits}` × every one of the `2^9` `APPLY_*` flag subsets.
+ *
+ * **W5 correction:** the first version started at `1` with the rationale "0 is not a rendering
+ * configuration". The MVP scene is `baseLayer: false`, i.e. *no imagery layer at all*, so
+ * `numberOfDayTextures === 0` is the configuration the acceptance runs actually use — and the W5
+ * opening probe measured the program being refused for exactly that reason. Upstream produces the
+ * zero-iteration body for it (`GlobeSurfaceShaderSet.js:421-472`), so the mirror must too.
+ *
  * A combination whose mirror cannot be produced is reported in `uncovered` **with its reason**; the
  * caller MUST treat a non-empty `uncovered` as a failure rather than as a skip.
  */
@@ -243,7 +263,7 @@ export function coverage({ maxTextureUnits = 3 }: { maxTextureUnits?: number } =
   let combinations = 0;
   let covered = 0;
   const flagMasks: number[] = [];
-  for (let textureUnits = 1; textureUnits <= maxTextureUnits; textureUnits += 1) {
+  for (let textureUnits = 0; textureUnits <= maxTextureUnits; textureUnits += 1) {
     for (let mask = 0; mask < 2 ** APPLY_FLAG_DEFINES.length; mask += 1) {
       combinations += 1;
       const apply: Record<string, boolean> = {};

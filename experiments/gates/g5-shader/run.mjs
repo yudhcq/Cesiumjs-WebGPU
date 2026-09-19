@@ -125,8 +125,8 @@ async function main() {
   );
 
   // Varying pairing must come from the real GLSL, and must reproduce the spike's E1 phenomenon.
-  const daynight = variants.find((variant) => variant.id === "textureUnits=1|quantization=float|lighting=daynight|groundAtmosphere=none|fog=none|ocean=none|imageryOps=none|tileLimitRectangle=none|geodetic=none");
-  const vertexLighting = variants.find((variant) => variant.id === "textureUnits=1|quantization=float|lighting=vertex|groundAtmosphere=none|fog=none|ocean=none|imageryOps=none|tileLimitRectangle=none|geodetic=none");
+  const daynight = variants.find((variant) => variant.id === "textureUnits=1|quantization=float|lighting=daynight|groundAtmosphere=none|dynamicAtmosphereLighting=none|fog=none|ocean=none|imageryOps=none|tileLimitRectangle=none|geodetic=none");
+  const vertexLighting = variants.find((variant) => variant.id === "textureUnits=1|quantization=float|lighting=vertex|groundAtmosphere=none|dynamicAtmosphereLighting=none|fog=none|ocean=none|imageryOps=none|tileLimitRectangle=none|geodetic=none");
   const daynightGlsl = assembleGlslForVariant(daynight);
   const daynightPairs = deriveVaryingPairs({ vertexSource: daynightGlsl.vertexSource, fragmentSource: daynightGlsl.fragmentSource, defines: daynight.defines });
   const vertexLightingGlsl = assembleGlslForVariant(vertexLighting);

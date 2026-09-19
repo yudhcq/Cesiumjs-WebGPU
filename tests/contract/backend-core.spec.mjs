@@ -16,6 +16,11 @@ import { test } from "playwright/test";
 
 import { assertCleanRun, assertOtherBackendUntouched, runContractSuite } from "../support/contract-harness.mjs";
 
+// Three scenarios in one page plus a real bundle build no longer fit Playwright's 30 s default
+// (measured in W5, after the terrain work grew the bundle and the page instrumentation); every other
+// contract spec pins the same cap.
+test.setTimeout(300_000);
+
 test("backend core: construct, dispatch, present and whole-switch, with zero GL objects", async () => {
   const run = await runContractSuite("contract-backend-core");
   assertCleanRun(run, assert);

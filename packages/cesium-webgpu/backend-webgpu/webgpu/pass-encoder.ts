@@ -186,7 +186,7 @@ export class PassStateMachine {
    */
   beginWork(
     key: RenderPassKey,
-    work: { kind: "clear" | "draw"; seq: number; drawKind?: "draw" | "drawIndexed"; clearValue?: GPUColor },
+    work: { kind: "clear" | "draw"; seq: number; drawKind?: "draw" | "drawIndexed"; clearValue?: GPUColor; clearColor?: boolean; clearDepthStencil?: boolean },
   ): { encoder: GPURenderPassEncoder; pass: DerivedPassRecord; openedByThisOp: boolean; clearMechanism?: ClearMechanism } {
     if (!this.#frameOpen) {
       throw new DiagnosticError(
@@ -196,6 +196,13 @@ export class PassStateMachine {
         { backend: "webgpu", requirementRef: "FR-030", entryPoint: "pass-encoder.beginWork" },
       );
     }
+    // A `clear` command names the attachment(s) it clears: upstream's `ClearCommand` carries `color`,
+    // `depth` and `stencil` independently (`Renderer/ClearCommand.js`), and a depth-only clear MUST NOT
+    // touch the colour attachment. Getting this wrong is invisible until a real frame has both kinds:
+    // the W5 terrain frame's third clear is depth-only, it reopened the pass with `loadOp: "clear"`, and
+    // the whole canvas — background included — became transparent black while 7 tile draws were issued.
+    const clearColor = work.kind !== "clear" || work.clearColor !== false;
+    const clearDepthStencil = work.kind !== "clear" || work.clearDepthStencil !== false;
     let openedByThisOp = false;
     if (this.#current !== null && !passKeyEquals(this.#current.record.key, key)) {
       this.closePass("identity-change");
@@ -214,13 +221,18 @@ export class PassStateMachine {
         closedBy: "endFrame",
         sampleCount: key.sampleCount,
       };
+      // Opening a pass **establishes every attachment**: the first work operation clears the colour and
+      // the depth-stencil (a fresh target's content is otherwise undefined, which made the depth test
+      // read garbage in the W2 workload). The per-attachment intent applies to a clear that arrives
+      // *inside* an open pass — that is the case the W5 terrain frame measured (a depth-only clear used
+      // to wipe the colour attachment).
       const descriptor = this.#descriptorFor(key, work.kind === "clear", work.clearValue);
       this.#passes.push(record);
       this.#current = { record, encoder: this.#openEncoder(descriptor), descriptor };
     }
     const record = this.#current!.record;
     if (work.kind === "clear") {
-      const mechanism = this.#clearMechanism(work.clearValue);
+      const mechanism = this.#clearMechanism(work.clearValue, clearColor, clearDepthStencil);
       record.workOps.push({ kind: "clear", seq: work.seq, clearMechanism: mechanism });
       record.clearOps += 1;
       return { encoder: this.#current!.encoder, pass: snapshot(record), openedByThisOp, clearMechanism: mechanism };
@@ -272,10 +284,10 @@ export class PassStateMachine {
   // -----------------------------------------------------------------------------------------------
 
   /** Build the pass descriptor for `key`; `firstOpIsClear` decides every attachment's `loadOp`. */
-  #descriptorFor(key: RenderPassKey, firstOpIsClear: boolean, clearValue: GPUColor | undefined): GPURenderPassDescriptor {
+  #descriptorFor(key: RenderPassKey, firstOpIsClear: boolean, clearValue: GPUColor | undefined, clearColor = true, clearDepthStencil = true): GPURenderPassDescriptor {
     const targets = this.#targets(key);
     const colorAttachments = targets.colorAttachments.map((attachment) =>
-      firstOpIsClear
+      firstOpIsClear && clearColor
         ? {
             ...attachment,
             loadOp: "clear" as const,
@@ -289,7 +301,7 @@ export class PassStateMachine {
         ? undefined
         : {
             ...targets.depthStencilAttachment,
-            ...(firstOpIsClear
+            ...(firstOpIsClear && clearDepthStencil
               ? {
                   depthLoadOp: "clear" as const,
                   depthClearValue: targets.depthStencilAttachment.depthClearValue ?? 1,
@@ -307,15 +319,15 @@ export class PassStateMachine {
   }
 
   /** Clear the current pass's attachments, opening a new GPU pass first when necessary. */
-  #clearMechanism(clearValue: GPUColor | undefined): ClearMechanism {
+  #clearMechanism(clearValue: GPUColor | undefined, clearColor = true, clearDepthStencil = true): ClearMechanism {
     const current = this.#current!;
     const record = current.record;
     if (record.clearOps === 0 && record.openedWithLoadOpClear) return "loadOp";
     const native = (current.encoder as unknown as ClearBufferCapable).clearBuffer;
     if (typeof native === "function") {
       const attachments = [...(current.descriptor.colorAttachments ?? [])];
-      for (let index = 0; index < attachments.length; index += 1) native.call(current.encoder, "color", index);
-      if (current.descriptor.depthStencilAttachment !== undefined) {
+      if (clearColor) for (let index = 0; index < attachments.length; index += 1) native.call(current.encoder, "color", index);
+      if (clearDepthStencil && current.descriptor.depthStencilAttachment !== undefined) {
         native.call(current.encoder, "depth", 0);
         if (current.descriptor.depthStencilAttachment.stencilLoadOp !== undefined) native.call(current.encoder, "stencil", 0);
       }
@@ -325,7 +337,7 @@ export class PassStateMachine {
     // No in-pass clear is available: close this GPU pass and reopen the SAME derived pass with loadOp.
     // The derived record is reused, so the derived sequence G-3/T047 assert on is unchanged.
     current.encoder.end();
-    const descriptor = this.#descriptorFor(record.key, true, clearValue);
+    const descriptor = this.#descriptorFor(record.key, true, clearValue, clearColor, clearDepthStencil);
     const encoder = this.#openEncoder(descriptor);
     record.gpuPassCount += 1;
     this.#current = { record, encoder, descriptor };

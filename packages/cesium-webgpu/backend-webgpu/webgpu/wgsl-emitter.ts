@@ -82,6 +82,13 @@ export const SUPPORTED_DEFINES: ReadonlySet<string> = new Set([
   "ENABLE_DAYNIGHT_SHADING",
   "GROUND_ATMOSPHERE",
   "PER_FRAGMENT_GROUND_ATMOSPHERE",
+  // Reachable in the **default** MVP scene (W5 correction): `Globe.dynamicAtmosphereLighting` is
+  // `true` by default (`Globe.js:185`), so `GlobeSurfaceShaderSet.js:336-344` pushes
+  // `DYNAMIC_ATMOSPHERE_LIGHTING` for every terrain tile; `..._FROM_SUN` follows
+  // `Globe.dynamicAtmosphereLightingFromSun` (default `false`, public). Both have WGSL regions in the
+  // leaves, so supporting them is the honest fix — the first version listed them as excluded.
+  "DYNAMIC_ATMOSPHERE_LIGHTING",
+  "DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN",
   "FOG",
   "INCLUDE_WEB_MERCATOR_Y",
   "APPLY_ALPHA",
@@ -318,6 +325,26 @@ export function emitTerrainWgsl(request: WgslEmissionRequest): WgslEmissionResul
   const uniforms = [layout.wgslStruct, emitBindings(layout)].join("\n\n");
   const overrides = overrideValuesForVariant({ defines });
   const overridesWgsl = emitOverrideDeclarations();
+  // The WGSL leaf library covers the **globe pair** only (`GlobeVS`/`GlobeFS` + the runtime-generated
+  // `computeDayColor`). The family test upstream of this function is a *negative* one ("not
+  // model/voxel/gaussian-splat"), so a scene program outside the globe pair (measured in W5: the
+  // upstream `DepthPlane`, whose VS/FS define no `computeDayColor`) reaches here too. Its assembled
+  // GLSL has no `computeDayColor`, so emitting the globe library for it would produce a module that
+  // ignores the program's own source — refuse by name instead of failing later on a bind-layout
+  // detail (the first W5 run reported "the layout declares no u_dayTextures binding", which named
+  // neither the program nor the reason).
+  const runtimeFragment = /(?:^|[^\w])vec4\s+computeDayColor\s*\(/m.test(request.fragmentGlsl);
+  if (!runtimeFragment) {
+    diagnostics.push({
+      severity: "error",
+      message:
+        "the assembled fragment source does not define the runtime-generated `computeDayColor`: this program is not part of the " +
+        "globe pair (`GlobeVS`/`GlobeFS`), and the MVP WGSL closure covers that pair only. The scene configuration MUST keep " +
+        "non-globe programs out of the MVP path (see `packages/cesium-webgpu/src/scene-options.ts`).",
+      defineSet: variantKey,
+    });
+    return { ok: false, vertexModule: null, fragmentModule: null, varyingSet: contract.varyingSet, bindLayout: null, attributeBindings: contract.attributes, diagnostics, contract, structure: null };
+  }
   const computeDayColor = emitComputeDayColorWgsl({
     maxTextureUnits: maxTextureUnitsFromLayout(layout),
     apply: typeof request.flags === "number" ? applyFlagsFromMask(request.flags) : request.flags,

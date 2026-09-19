@@ -60,8 +60,13 @@ const SHADER_MODEL = path.join(REPO_ROOT, "tools", "shader-model.mjs");
 
 /**
  * The golden MVP selection (T022/T078): one texture unit, float attributes, day-night lighting, no
- * ground atmosphere, no fog, no ocean, no imagery operations, no cartographic limit rectangle, no
- * geodetic surface normals.
+ * ground atmosphere, no fog, no dynamic atmosphere lighting, no ocean, no imagery operations, no
+ * cartographic limit rectangle, no geodetic surface normals.
+ *
+ * `dynamicAtmosphereLighting: "none"` was added in W5: `Globe.dynamicAtmosphereLighting` defaults to
+ * `true` (`Globe.js:185`), so the dimension is reachable in the default MVP scene and the golden
+ * selection has to name a value for it. The golden module pair itself still covers the variant the
+ * T078 gate recorded (see the `// Variant:` comment in `webgpu/wgsl/globe-vs.wgsl`).
  */
 const GOLDEN_SELECTION = {
   textureUnits: "1",
@@ -69,6 +74,7 @@ const GOLDEN_SELECTION = {
   lighting: "daynight",
   groundAtmosphere: "none",
   fog: "none",
+  dynamicAtmosphereLighting: "none",
   ocean: "none",
   imageryOps: "none",
   tileLimitRectangle: "none",
@@ -76,7 +82,7 @@ const GOLDEN_SELECTION = {
 };
 
 /** The canonical dimension order of a selection id (`terrain-variants.ts:REACHABLE_DIMENSIONS`). */
-const SELECTION_ORDER = ["textureUnits", "quantization", "lighting", "groundAtmosphere", "fog", "ocean", "imageryOps", "tileLimitRectangle", "geodetic"];
+const SELECTION_ORDER = ["textureUnits", "quantization", "lighting", "groundAtmosphere", "fog", "dynamicAtmosphereLighting", "ocean", "imageryOps", "tileLimitRectangle", "geodetic"];
 
 /** The blind spot, quoted verbatim from `contracts/verification-and-benchmark.md` §8. */
 export const BLIND_SPOT = "naga WGSL 校验不覆盖 WebGPU 管线校验";

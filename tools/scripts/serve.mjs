@@ -39,6 +39,32 @@ function contentType(file) {
   return MIME_TYPES[path.extname(file).toLowerCase()] ?? "application/octet-stream";
 }
 
+const ENGINE_ROOT = path.join(DEFAULT_ROOT, "node_modules", "@cesium", "engine");
+
+/**
+ * Upstream engine runtime assets, served from the installed package.
+ *
+ * The terrain logic layer generates its meshes inside a `TaskProcessor` **worker**
+ * (`Core/HeightmapTerrainData.js:236` → `Core/createVerticesFromHeightmap.js`: "Workers/" +
+ * `createVerticesFromHeightmap.js`), and `Transforms`/`CreditDisplay` fetch `Assets/**`
+ * (`Assets/IAU2006_XYS/IAU2006_XYS_<n>.json`, `Assets/Images/ion-credit.png`). All of those resolve
+ * through `buildModuleUrl`, i.e. against `CESIUM_BASE_URL` / the importing module's URL.
+ *
+ * Measured in the W5 opening probe: without these routes every one of them 404s, the task processor
+ * never settles, and the globe keeps its root tiles in `_tileLoadQueueHigh` forever — the scene
+ * renders (1447 passes) but draws **nothing**. Serving them keeps the whole verification run
+ * same-origin (T087 asserts "zero *external* requests", which stays exactly true) and lets the
+ * upstream scheduling code run unmodified.
+ *
+ * `Build/Workers/**` is the packaged worker bundle (the `Source/Workers/**` files are unbundled ESM
+ * that a classic-or-module worker cannot resolve); `Source/Assets/**` is the only place the assets
+ * ship in `@cesium/engine`.
+ */
+export const DEFAULT_ALIASES = [
+  { prefix: "/engine/Workers/", directory: path.join(ENGINE_ROOT, "Build", "Workers") },
+  { prefix: "/engine/Assets/", directory: path.join(ENGINE_ROOT, "Source", "Assets") },
+];
+
 /** Map a request URL path to a file inside `root`, or null when it escapes the root. */
 export function resolveRequestPath(root, requestPath) {
   const decoded = decodeURIComponent(requestPath.split("?")[0]);
@@ -53,10 +79,26 @@ export function resolveRequestPath(root, requestPath) {
   return candidate;
 }
 
-export function createStaticServer({ root = DEFAULT_ROOT, onRequest = null } = {}) {
+/** Resolve one request against the alias table; `null` when no alias matches. */
+export function resolveAliasPath(aliases, requestPath) {
+  const decoded = decodeURIComponent(requestPath.split("?")[0]);
+  for (const alias of aliases) {
+    if (!decoded.startsWith(alias.prefix)) continue;
+    const rest = decoded.slice(alias.prefix.length);
+    if (rest.length === 0) return null;
+    const candidate = path.resolve(alias.directory, rest);
+    const normalised = path.resolve(alias.directory);
+    if (candidate !== normalised && !candidate.startsWith(normalised + path.sep)) return null;
+    return candidate;
+  }
+  return null;
+}
+
+export function createStaticServer({ root = DEFAULT_ROOT, onRequest = null, aliases = DEFAULT_ALIASES } = {}) {
   return http.createServer((request, response) => {
     if (onRequest) onRequest(request);
-    const target = resolveRequestPath(root, request.url ?? "/");
+    const aliased = resolveAliasPath(aliases, request.url ?? "/");
+    const target = aliased ?? resolveRequestPath(root, request.url ?? "/");
     if (target === null || !fs.existsSync(target)) {
       response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       response.end(`404 ${request.url ?? "/"}\n`);

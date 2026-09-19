@@ -45,7 +45,7 @@ import VertexArray from "@cesium/engine/Source/Renderer/VertexArray.js";
 
 import UpstreamWebGL2Context from "../vendor/upstream-webgl2/Context.js";
 import { applyContextLimits, composeCapabilities, MVP_SLICE, type BackendCapabilities, type ContextLimitsSnapshot } from "../webgpu/capability.js";
-import { createDefaultTexture, type DefaultTexture } from "../webgpu/default-resources.js";
+import { createDefaultCubeMap, createDefaultTexture, type DefaultCubeMap, type DefaultTexture } from "../webgpu/default-resources.js";
 import { HANDOFF_CATEGORY, peek, take, type DeviceHandoff } from "../webgpu/device-handoff.js";
 import { DiagnosticError } from "../webgpu/errors.js";
 import { ErrorScopeCollector, type CollectedGpuError } from "../webgpu/error-scope.js";
@@ -65,7 +65,7 @@ import {
   type RenderStateLike,
   type VertexAttributeLike,
 } from "../webgpu/pipeline-cache.js";
-import { Swapchain, type CanvasLike } from "../webgpu/swapchain.js";
+import { CANVAS_DEPTH_FORMAT, Swapchain, type CanvasLike } from "../webgpu/swapchain.js";
 import RenderState from "./RenderState.js";
 import Texture from "./Texture.js";
 
@@ -85,7 +85,17 @@ export interface WebgpuDrawInputs {
   readonly shaderProgramId?: string;
   readonly pipeline?: GPURenderPipeline;
   readonly bindGroups?: readonly GPUBindGroup[];
+  /** Dynamic offsets, index-aligned with `bindGroups` (the uniform block's per-command slot, T076). */
+  readonly dynamicOffsets?: readonly number[];
   readonly vertexBuffers?: readonly { readonly slot: number; readonly buffer: GPUBuffer; readonly offset?: number; readonly size?: number }[];
+  /**
+   * The `GPUVertexBufferLayout`s of the bound vertex buffers (W5).
+   *
+   * A draw whose pipeline is built by the replaced `ShaderProgram` MUST describe the buffer it binds;
+   * these come from the replaced `VertexArray` (`toGpuVertexBuffers()`), which is the only place that
+   * knows the real `arrayStride`/attribute formats of the terrain geometry.
+   */
+  readonly gpuVertexBuffers?: readonly GPUVertexBufferLayout[];
   readonly indexBuffer?: { readonly buffer: GPUBuffer; readonly format: GPUIndexFormat; readonly offset?: number; readonly size?: number } | null;
   readonly renderState?: RenderStateLike;
   readonly topology?: string;
@@ -108,6 +118,17 @@ export interface WebgpuFramebufferRef {
   readonly colorAttachments: readonly { readonly id: string; readonly view: GPUTextureView; readonly resolveTarget?: GPUTextureView; readonly clearValue?: GPUColor }[];
   readonly depthStencilAttachment?: GPURenderPassDepthStencilAttachment | undefined;
   readonly sampleCount?: number | undefined;
+  /**
+   * The `GPUTextureFormat` of each colour attachment, in attachment order (W5).
+   *
+   * A pipeline's `fragment.targets[i].format` MUST equal the attachment's format, and the format is a
+   * property of the attachment — not of the render state — so the target is the only place the draw
+   * path can read it. The replaced `Framebuffer` publishes it (`Texture#formatMapping.format` /
+   * `Renderbuffer#gpuFormat`).
+   */
+  readonly colorFormats?: readonly string[] | undefined;
+  /** The `GPUTextureFormat` of the depth-stencil attachment, or `null` when there is none (W5). */
+  readonly depthFormat?: string | null | undefined;
 }
 
 export interface ContextOptions {
@@ -119,6 +140,13 @@ export interface ContextOptions {
   slice?: "A" | "B";
   /** Backend-only: disable the asynchronous error-scope collection (declared blind spot). */
   errorScope?: boolean;
+  /**
+   * Backend-only: force the canvas pass's sample count (1 or 4).
+   *
+   * Production always uses 4 when the adapter supports MSAA; `1` exists for the read-back suites,
+   * because a multisampled depth texture cannot be copied (`webgpu/swapchain.ts` `depthTexture`).
+   */
+  msaaSamples?: 1 | 4;
   [key: string]: unknown;
 }
 
@@ -132,10 +160,24 @@ interface CommandLike {
   readonly count?: number;
   readonly offset?: number;
   readonly instanceCount?: number;
+  /** `command.uniformMap` — the per-command uniforms (`Context.js:1440 uniformMap = uniformMap ?? drawCommand._uniformMap`). */
+  readonly uniformMap?: Record<string, unknown> | null;
+  readonly _uniformMap?: Record<string, unknown> | null;
   /** The replaced `VertexArray` (W3 / T060); it carries the geometry half of the draw inputs. */
-  readonly vertexArray?: { readonly indexBuffer?: unknown; readonly numberOfVertices?: number; readonly __webgpu?: GeometryDrawInputs };
+  readonly vertexArray?: { readonly indexBuffer?: unknown; readonly numberOfVertices?: number; readonly __webgpu?: GeometryDrawInputs };  /**
+   * The replaced `ShaderProgram` (W4 / T075) — the source of the pipeline half.
+   *
+   * `DrawCommand.execute` calls `context.draw(this, passState)` with no program argument
+   * (`DrawCommand.js:670`), so upstream's own fallback (`Context.js:1439`) is the normal path.
+   * `shaderProgram` is the public name, `_shaderProgram` the field the kept `DrawCommand` stores.
+   */
+  readonly shaderProgram?: { readonly __webgpu?: WebgpuDrawInputs } | null;
+  readonly _shaderProgram?: { readonly __webgpu?: WebgpuDrawInputs } | null;
   readonly color?: { readonly red?: number; readonly green?: number; readonly blue?: number; readonly alpha?: number };
   readonly clearColor?: { readonly red?: number; readonly green?: number; readonly blue?: number; readonly alpha?: number };
+  /** `ClearCommand.depth` / `.stencil` — present ⇒ that attachment is cleared (W5). */
+  readonly depth?: number;
+  readonly stencil?: number;
 }
 
 /**
@@ -147,6 +189,7 @@ interface CommandLike {
  */
 export interface GeometryDrawInputs {
   readonly vertexBuffers?: WebgpuDrawInputs["vertexBuffers"];
+  readonly gpuVertexBuffers?: WebgpuDrawInputs["gpuVertexBuffers"];
   readonly indexBuffer?: WebgpuDrawInputs["indexBuffer"];
   readonly vertexLayout?: WebgpuDrawInputs["vertexLayout"];
   readonly indexed?: boolean;
@@ -238,6 +281,7 @@ export default class Context {
   #deviceLostReason: string | null = null;
   #viewportQuadVertexArray: unknown = null;
   #defaultEmissiveTexture: Texture | undefined;
+  #defaultCubeMap: DefaultCubeMap | undefined;
   #defaultNormalTexture: Texture | undefined;
   #deviceLostUnsubscribe: (() => void) | null = null;
   readonly #registeredTargets = new Map<string, WebgpuFramebufferRef>();
@@ -289,7 +333,7 @@ export default class Context {
     this.#swapchain = new Swapchain({
       canvas,
       device: this.device,
-      sampleCount: this.capabilities.msaa === true ? 4 : 1,
+      sampleCount: options.msaaSamples ?? (this.capabilities.msaa === true ? 4 : 1),
       alphaMode: "opaque",
     });
     this.#swapchain.configure();
@@ -464,6 +508,20 @@ export default class Context {
     this.counters.frames += 1;
   }
 
+  /** The frame counter (`ShaderProgram` uses it to rewind its uniform ring exactly once per frame). */
+  get frameNumber(): number {
+    return this.counters.frames;
+  }
+
+  /**
+   * The canvas depth-stencil texture of this frame (diagnostics / depth read-back).
+   *
+   * Only copyable while `sampleCount === 1` (see `ContextOptions.msaaSamples`).
+   */
+  canvasDepthTexture(): GPUTexture | null {
+    return this.#swapchain.depthTexture();
+  }
+
   /**
    * Close the pass, finish the command buffer and submit it. Presentation is automatic in WebGPU.
    *
@@ -532,6 +590,26 @@ export default class Context {
     const renderState = (inputs.renderState ?? command.renderState ?? EMPTY_RENDER_STATE) as RenderStateLike;
     assertPipelineSupported(renderState);
 
+    // Upstream `Context.continueDraw` calls `shaderProgram._setUniforms(uniformMap, uniformState)` and
+    // then binds the uniform buffer (`Context.js:1440,1444`). Without the first call the uniform block is
+    // never written and every vertex is clipped: the first W5 terrain frame had 98 healthy draw calls,
+    // zero validation errors and not one painted pixel (FR-033 — a plausible frame that draws nothing).
+    const programLike = (program ?? command.shaderProgram ?? command._shaderProgram) as
+      | {
+          __webgpu?: WebgpuDrawInputs;
+          _setUniforms?: (uniformMap: unknown, uniformState: unknown, validate?: boolean) => void;
+          uniformDynamicOffset?: number;
+          createPipeline?: (request: unknown) => GPURenderPipeline;
+          pipeline?: GPURenderPipeline;
+        }
+      | undefined;
+    if (programLike !== undefined && typeof programLike._setUniforms === "function") {
+      programLike._setUniforms((uniformMap ?? command.uniformMap ?? command._uniformMap) ?? null, this.uniformState);
+    }
+    const programInputs = programLike?.__webgpu;
+    const bindGroups = programInputs?.bindGroups ?? inputs.bindGroups ?? [];
+    const dynamicOffsets = programInputs?.dynamicOffsets ?? inputs.dynamicOffsets ?? [];
+
     const target = resolveTarget(command, passState);
     const viewport = viewportOf(renderState, passState, this.#swapchain);
     const scissor = scissorOf(renderState, passState);
@@ -550,9 +628,13 @@ export default class Context {
     });
     const encoder = work.encoder;
 
-    const pipeline = this.#pipelineFor(inputs, renderState, target);
+    const pipeline = this.#pipelineFor(inputs, renderState, target, programLike, passState);
     encoder.setPipeline(pipeline);
-    for (const [index, group] of (inputs.bindGroups ?? []).entries()) encoder.setBindGroup(index, group);
+    for (const [index, group] of bindGroups.entries()) {
+      const offset = dynamicOffsets[index];
+      if (offset === undefined) encoder.setBindGroup(index, group);
+      else encoder.setBindGroup(index, group, [offset]);
+    }
     for (const binding of inputs.vertexBuffers ?? []) {
       if (binding.size === undefined) encoder.setVertexBuffer(binding.slot, binding.buffer, binding.offset ?? 0);
       else encoder.setVertexBuffer(binding.slot, binding.buffer, binding.offset ?? 0, binding.size);
@@ -574,7 +656,6 @@ export default class Context {
       this.counters.drawCalls += 1;
     }
     this.counters.draws += 1;
-    void uniformMap;
   }
 
   /** Execute one clear command. Returns the clear mechanism the state machine used (T044 evidence). */
@@ -590,6 +671,11 @@ export default class Context {
     const scissor = scissorOf(renderState, passState);
     const color = command.color ?? command.clearColor;
     const clearValue: GPUColor = color === undefined ? { r: 0, g: 0, b: 0, a: 0 } : { r: color.red ?? 0, g: color.green ?? 0, b: color.blue ?? 0, a: color.alpha ?? 0 };
+    // Upstream's `ClearCommand` names the attachment(s) to clear (`color` / `depth` / `stencil` are
+    // independent), and the pass machine MUST clear exactly those: a depth-only clear that also cleared
+    // the colour attachment erased a whole terrain frame in W5 (transparent black, 7 draws, no error).
+    const clearColor = color !== undefined;
+    const clearDepthStencil = command.depth !== undefined || command.stencil !== undefined;
     const key: RenderPassKey = {
       colorTargets: target === null ? ["swapchain"] : [target.id],
       depthStencilTarget: target === null || target.depthStencilAttachment === undefined ? null : `${target.id}:depth`,
@@ -599,7 +685,7 @@ export default class Context {
     };
     // The state machine owns the mechanism: `loadOp` when the clear opens the pass, the runtime's
     // native `clearBuffer` when it exists, else a GPU-pass reopen that keeps the derived pass intact.
-    const work = this.#machine.beginWork(key, { kind: "clear", seq: this.counters.clears + 1, clearValue });
+    const work = this.#machine.beginWork(key, { kind: "clear", seq: this.counters.clears + 1, clearValue, clearColor, clearDepthStencil });
     const mechanism = work.clearMechanism ?? "loadOp";
     if (mechanism === "loadOp") this.counters.clearsByLoadOp += 1;
     else this.counters.clearsByClearBuffer += 1;
@@ -661,8 +747,20 @@ export default class Context {
   getObjectByPickColor(): never {
     throw sliceCNotImplemented("getObjectByPickColor");
   }
-  get defaultCubeMap(): never {
-    throw sliceCNotImplemented("defaultCubeMap");
+
+  /**
+   * The 1×1-per-face white cube-map placeholder upstream publishes (`Context.js` `defaultCubeMap`).
+   *
+   * `Renderer/UniformState.js:1558-1559` reads it on **every** frame
+   * (`this._environmentMap = frameState.environmentMap ?? frameState.context.defaultCubeMap`), and
+   * that module is byte-identical upstream, so the terrain MVP cannot render a single frame without
+   * it. The `CubeMap` **class** stays a slice-C stub — this is the default resource only, and it is a
+   * real six-face cube texture, so a shader that samples it gets upstream's exact white value.
+   */
+  get defaultCubeMap(): DefaultCubeMap {
+    this.#assertAlive("defaultCubeMap");
+    this.#defaultCubeMap ??= createDefaultCubeMap(this.device);
+    return this.#defaultCubeMap;
   }
 
   /**
@@ -730,6 +828,7 @@ export default class Context {
     return (
       (this.#swapchain.isDestroyed() ? 0 : 1) +
       1 +
+      (this.#defaultCubeMap === undefined ? 0 : 1) +
       (this.#defaultEmissiveTexture === undefined ? 0 : 1) +
       (this.#defaultNormalTexture === undefined ? 0 : 1) +
       this.#registeredTargets.size
@@ -755,6 +854,8 @@ export default class Context {
     this.#errors.destroy();
     this.#swapchain.destroy();
     this.defaultTexture.destroy();
+    this.#defaultCubeMap?.destroy();
+    this.#defaultCubeMap = undefined;
     this.#defaultEmissiveTexture?.destroy();
     this.#defaultEmissiveTexture = undefined;
     this.#defaultNormalTexture?.destroy();
@@ -781,9 +882,18 @@ export default class Context {
   }
 
   /** Resolve the pipeline for one draw; always through the cache so hits/misses are counted (T048). */
-  #pipelineFor(inputs: WebgpuDrawInputs, renderState: RenderStateLike, target: WebgpuFramebufferRef | null): GPURenderPipeline {
-    const colorFormats = inputs.colorFormats ?? [this.#swapchain.format];
-    const depthFormat = inputs.depthFormat ?? (target === null || target.depthStencilAttachment === undefined ? null : "depth24plus-stencil8");
+  #pipelineFor(inputs: WebgpuDrawInputs, renderState: RenderStateLike, target: WebgpuFramebufferRef | null, program?: unknown, passState?: PassStateLike): GPURenderPipeline {
+    const colorFormats = inputs.colorFormats ?? target?.colorFormats ?? [this.#swapchain.format];
+    const depthFormat =
+      inputs.depthFormat !== undefined
+        ? inputs.depthFormat
+        : target !== null && target.depthFormat !== undefined
+          ? target.depthFormat
+          : target === null
+            ? CANVAS_DEPTH_FORMAT
+            : target.depthStencilAttachment === undefined
+              ? null
+              : CANVAS_DEPTH_FORMAT;
     const sampleCount = inputs.sampleCount ?? target?.sampleCount ?? this.#swapchain.sampleCount;
     const key: PipelineCacheKey = {
       shaderProgramId: inputs.shaderProgramId ?? "anonymous",
@@ -794,8 +904,35 @@ export default class Context {
       depthFormat,
       sampleCount,
     };
-    const provided = inputs.pipeline;
-    return getOrCreatePipeline(key, provided === undefined ? null : () => provided).pipeline as GPURenderPipeline;
+    // The pipeline half belongs to the replaced `ShaderProgram` (W4/T075): it owns the emitted WGSL
+    // modules and the pipeline cache key, and `ShaderProgram#createPipeline` is the documented seam
+    // (`ShaderProgram.ts` `ProgramPipelineRequest`). The first W5 terrain frame measured what happens
+    // without this call: the program never built a pipeline, so every tile draw was refused.
+    const programLike = program as
+      | { __webgpu?: WebgpuDrawInputs; createPipeline?: (request: unknown) => GPURenderPipeline; pipeline?: GPURenderPipeline }
+      | undefined;
+    const provided = inputs.pipeline ?? (programLike === undefined ? undefined : programLike.pipeline);
+    if (provided !== undefined) {
+      return getOrCreatePipeline(key, () => provided).pipeline as GPURenderPipeline;
+    }
+    if (programLike !== undefined && typeof programLike.createPipeline === "function") {
+      return programLike.createPipeline({
+        renderState,
+        passState: passState ?? null,
+        vertexLayout: inputs.vertexLayout ?? [],
+        ...(inputs.gpuVertexBuffers === undefined ? {} : { vertexBuffers: inputs.gpuVertexBuffers }),
+        topology: key.topology,
+        colorFormats,
+        depthFormat,
+        sampleCount,
+      });
+    }
+    throw new DiagnosticError(
+      "not-implemented",
+      `Context: a render pipeline is required for cache key [${pipelineKeyToString(key)}] but the command names neither a pipeline nor a ` +
+        "replaced `ShaderProgram` that can build one. Skipping the draw would silently draw nothing while the frame looks plausible (FR-033).",
+      { backend: "webgpu", upstreamModule: "Renderer/ShaderProgram.js", requirementRef: "FR-030", entryPoint: "Context#pipelineFor" },
+    );
   }
 
   #createPipeline(key: PipelineCacheKey): GPURenderPipeline {
@@ -859,6 +996,7 @@ export default class Context {
       );
     }
     const color = this.#swapchain.colorTarget();
+    const depth = this.#swapchain.depthStencilTarget();
     return {
       colorAttachments: [
         {
@@ -868,6 +1006,21 @@ export default class Context {
           storeOp: "store",
         },
       ],
+      // Upstream's GL default framebuffer always carries depth+stencil; the canvas pass does too, so a
+      // terrain command's `depthTest.enabled` render state has an attachment to test against.
+      ...(depth === null
+        ? {}
+        : {
+            depthStencilAttachment: {
+              view: depth.view,
+              depthClearValue: 1,
+              depthLoadOp: "clear" as const,
+              depthStoreOp: "store" as const,
+              stencilClearValue: 0,
+              stencilLoadOp: "clear" as const,
+              stencilStoreOp: "store" as const,
+            },
+          }),
     };
   }
 }
@@ -912,16 +1065,24 @@ function resolveTarget(command: CommandLike, passState: PassStateLike): WebgpuFr
  */
 function resolveDrawInputs(command: CommandLike, program: unknown): WebgpuDrawInputs {
   const fromCommand = command.__webgpu;
-  const fromProgram = (program as { __webgpu?: WebgpuDrawInputs } | undefined)?.__webgpu;
+  // Upstream `Context.js:1439`: `shaderProgram = shaderProgram ?? drawCommand._shaderProgram`, and
+  // `DrawCommand.js:670` calls `context.draw(this, passState)` with **no** program argument — so the
+  // command's own program is the normal source, not an optional extra. (The first W5 terrain frame
+  // measured the consequence of missing it: every globe tile draw failed with "the command carries no
+  // render pipeline" even though the replaced `ShaderProgram` had published one.)
+  const programLike = (program ?? command.shaderProgram ?? command._shaderProgram) as { __webgpu?: WebgpuDrawInputs } | undefined;
+  const fromProgram = programLike?.__webgpu;
   const fromVertexArray = command.vertexArray?.__webgpu;
   const base: WebgpuDrawInputs = fromCommand ?? fromProgram ?? {};
 
   const vertexBuffers = base.vertexBuffers ?? fromVertexArray?.vertexBuffers;
+  const gpuVertexBuffers = base.gpuVertexBuffers ?? fromVertexArray?.gpuVertexBuffers;
   const indexBuffer = base.indexBuffer ?? fromVertexArray?.indexBuffer ?? null;
   const vertexLayout = base.vertexLayout ?? fromVertexArray?.vertexLayout;
   const merged: WebgpuDrawInputs = {
     ...base,
     ...(vertexBuffers === undefined ? {} : { vertexBuffers }),
+    ...(gpuVertexBuffers === undefined ? {} : { gpuVertexBuffers }),
     indexBuffer,
     ...(vertexLayout === undefined ? {} : { vertexLayout }),
     indexed: base.indexed ?? fromVertexArray?.indexed ?? indexBuffer !== null,
@@ -929,17 +1090,21 @@ function resolveDrawInputs(command: CommandLike, program: unknown): WebgpuDrawIn
 
   if (merged.pipeline !== undefined) return merged;
 
+  // A replaced `ShaderProgram` builds its pipeline through `createPipeline` (the W4/T075 seam), so a
+  // command that names its program is complete without a pre-built pipeline (W5).
+  if (programLike !== undefined && typeof (programLike as { createPipeline?: unknown }).createPipeline === "function") return merged;
+
   throw new DiagnosticError(
     "not-implemented",
-    "Context.draw: the command carries no render pipeline. The geometry half is resolved from the replaced `VertexArray` " +
-      "(W3 / T060) and the render state from the replaced `RenderState` (W2 / T049), but the pipeline and its bind groups come from " +
-      "the WGSL emission front-end, which lands in W4 (T073/T075). Skipping the draw would yield a plausible but wrong frame (FR-033).",
+    "Context.draw: the command carries no render pipeline and no replaced `ShaderProgram` that could build one. The geometry half is " +
+      "resolved from the replaced `VertexArray` (W3 / T060), the render state from the replaced `RenderState` (W2 / T049), and the pipeline " +
+      "from the replaced `ShaderProgram` (W4 / T075) — a command with none of them cannot be drawn, and skipping it would yield a plausible " +
+      "but wrong frame (FR-033).",
     {
       backend: "webgpu",
       upstreamModule: UPSTREAM_MODULE,
       requirementRef: "FR-030",
       entryPoint: "Context#draw",
-      plannedPhase: "W4 (T073/T075)",
       extra: {
         hasVertexBuffers: vertexBuffers !== undefined,
         hasIndexBuffer: indexBuffer !== null,

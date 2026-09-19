@@ -183,13 +183,26 @@ export function collectDeclaredUniforms(source: string, defines: DefineList, aut
   return found;
 }
 
-/** Identifiers the *active* code references (used to check that a declared uniform is really used). */
+/**
+ * Identifiers the *active* code **uses** (used to check that a declared uniform is really used).
+ *
+ * A uniform's own declaration line does not count as a use: `AtmosphereCommon.glsl:1` declares
+ * `uniform vec3 u_radiiAndDynamicAtmosphereColor;` and the globe's fragment closure includes that file,
+ * but the globe's uniform map never provides the value (only `SkyAtmosphere`/`DynamicEnvironmentMapManager`
+ * do). GL drops such a uniform as *inactive*, so the GL path never asked for it — and the W5 terrain run
+ * measured what a declaration-only "reference" costs: `ShaderProgram._setUniforms` threw
+ * `DeveloperError: Unknown uniform: u_radiiAndDynamicAtmosphereColor` on the first real tile draw.
+ *
+ * The declaration line is therefore skipped when collecting uses. That is exactly the rule GL applies
+ * (a uniform that cannot affect the output has no location), just computed from the source text.
+ */
 export function collectReferencedIdentifiers(source: string, defines: DefineList): Set<string> {
   const active = activeLines(source, defines);
   const lines = source.split("\n");
   const referenced = new Set<string>();
   lines.forEach((line, index) => {
     if (active[index] !== true) return;
+    if (DECLARATION.test(line)) return;
     for (const match of line.matchAll(/\b([A-Za-z_]\w*)\b/g)) referenced.add(match[1] ?? "");
   });
   return referenced;
@@ -515,9 +528,16 @@ export function buildBindLayout({ vertexSource, fragmentSource, defines, structN
   return layout;
 }
 
-/** The number of `u_dayTextures` bindings the layout declares: the blend chain can never exceed it. */
+/**
+ * The number of `u_dayTextures` bindings the layout declares: the blend chain can never exceed it.
+ *
+ * `0` is a legitimate — and for the MVP the *expected* — answer: with `baseLayer: false` the tile has
+ * no imagery layer, upstream writes `uniform sampler2D u_dayTextures[TEXTURE_UNITS]` with
+ * `TEXTURE_UNITS 0` (`Source/Shaders/GlobeFS.glsl:4`), and no sampler binding is reflected. The
+ * mirror then emits the zero-step chain (`generated-fragments.ts`), which is upstream's own
+ * zero-iteration unroll. The first version threw here, which refused every terrain tile program in
+ * the W5 opening probe.
+ */
 export function maxTextureUnitsFromLayout(layout: BindLayoutResult): number {
-  const units = layout.samplers.filter((sampler) => sampler.glslName === "u_dayTextures").length;
-  if (units < 1) throw new Error("bind-layout: the layout declares no u_dayTextures binding — cannot size computeDayColor");
-  return units;
+  return layout.samplers.filter((sampler) => sampler.glslName === "u_dayTextures").length;
 }

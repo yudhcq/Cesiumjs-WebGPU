@@ -1,0 +1,6 @@
+# Terrain fixture samples are raw little-endian Uint16 grids. They MUST be committed and checked
+# out byte-for-byte: with `core.autocrlf=true` a text-ish payload would be rewritten to CRLF on
+# checkout and every recorded sha256 in packages/cesium-webgpu/fixtures/**/manifest.json would stop
+# matching. Marking the extension binary removes the guesswork (git's content sniffing would
+# usually get this right, but "usually" is not a property CI can rely on).
+*.hgt binary

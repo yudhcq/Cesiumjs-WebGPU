@@ -387,6 +387,12 @@ test("the shader front end is device-free, and the device half is lazy", () => {
     created.bindGroupLayouts.push(descriptor);
     return { label: descriptor.label };
   };
+  // W5: the replaced `Context.draw` now assembles the program's uniform bind group, so the device
+  // double has to cover the buffer/bind-group calls that path makes.
+  device.createBuffer = (descriptor) => ({ ...descriptor, destroy() {} });
+  device.createBindGroup = (descriptor) => ({ label: descriptor.label, layout: descriptor.layout });
+  device.queue = { writeBuffer() {}, submit() {} };
+
   device.createPipelineLayout = (descriptor) => {
     created.pipelineLayouts.push(descriptor);
     return { label: descriptor.label };

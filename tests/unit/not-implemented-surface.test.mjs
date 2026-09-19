@@ -86,8 +86,17 @@ test("the Context face rejects the slice-C entry points and leaves defaultFrameb
   for (const capability of ["createPickId", "getObjectByPickColor"]) {
     assert.throws(() => context[capability](), (error) => assertDiagnostic(error, "not-implemented", `Context#${capability}()`));
   }
-  for (const property of ["defaultCubeMap"]) {
-    assert.throws(() => context[property], (error) => assertDiagnostic(error, "not-implemented", `Context#${property}`));
+  // W5: `defaultCubeMap` is a default **resource**, not the slice-C `CubeMap` class, and
+  // `Renderer/UniformState.js:1558` reads it on every frame — so a context without it cannot render a
+  // single frame (measured: every `Scene.render()` threw before the terrain work started). It is now a
+  // real six-face 1x1 cube texture, which is why it no longer appears in this list; the slice-C
+  // `CubeMap` class is still a stub.
+  assert.notEqual(typeof context.defaultCubeMap, "function", "defaultCubeMap MUST be a resource, not a call");
+  {
+    const cubeMap = context.defaultCubeMap;
+    assert.ok(cubeMap !== undefined && cubeMap !== null, "the default cube map MUST exist");
+    assert.equal(cubeMap.faces, 6);
+    assert.equal(cubeMap.size, 1);
   }
   await assert.rejects(context.readPixels(), (error) => assertDiagnostic(error, "not-implemented", "Context#readPixels()"));
   await assert.rejects(context.readPixelsToPBO(), (error) => assertDiagnostic(error, "not-implemented", "Context#readPixelsToPBO()"));
@@ -120,7 +129,10 @@ test("a draw without backend inputs fails loudly and names the owning tasks", as
     assertDiagnostic(error, "not-implemented", "Context#draw without inputs");
     // W3 landed the geometry half (the replaced `VertexArray` publishes it), so what is still missing
     // is the pipeline itself — W4 / T073+T075. The attribution MUST follow the implementation.
-    assert.equal(error.details?.plannedPhase, "W4 (T073/T075)", "the failure MUST name the tasks that will make the draw real");
+    // W5: W4 landed the pipeline seam (`ShaderProgram#createPipeline`), so what is missing now is a
+    // command that names neither a pipeline nor a replaced program — the message names the component
+    // that could supply it instead of a phase.
+    assert.match(error.message, /no replaced `ShaderProgram` that could build one/, "the failure MUST name what could supply the pipeline");
     assert.equal(error.details?.extra?.hasVertexBuffers, false, "the failure MUST report which half of the payload is missing");
     return true;
   });

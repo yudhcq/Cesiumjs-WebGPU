@@ -90,6 +90,16 @@ export interface GpuVertexBufferBinding {
 /** The payload the replacement `VertexArray` hands to the draw path. */
 export interface VertexArrayDrawPayload {
   readonly vertexBuffers: readonly { readonly slot: number; readonly buffer: GPUBuffer; readonly offset?: number; readonly size?: number }[];
+  /**
+   * The `GPUVertexBufferLayout`s of those bindings, in the same order (W5).
+   *
+   * The draw path hands these to `ShaderProgram#createPipeline`, so the pipeline's attribute formats and
+   * `arrayStride` are the ones the bound buffer actually has. Deriving them from the shader emission
+   * instead is only correct when the two agree, and for the real terrain vertex layout they do not
+   * (`TerrainEncoding` with `hasVertexNormals === false` is 28 bytes/vertex with `float32x3` at
+   * location 1, while the assembled GLSL declares `vec4 textureCoordAndEncodedNormals`).
+   */
+  readonly gpuVertexBuffers: readonly GPUVertexBufferLayout[];
   readonly indexBuffer: { readonly buffer: GPUBuffer; readonly format: GPUIndexFormat; readonly offset?: number; readonly size?: number } | null;
   readonly vertexLayout: readonly VertexAttributeLike[];
   readonly indexed: boolean;
@@ -246,6 +256,12 @@ export default class VertexArray {
         offset: binding.offset,
         ...(binding.size === undefined ? {} : { size: binding.size }),
       })),
+      // The `GPUVertexBufferLayout`s themselves (W5): the pipeline MUST describe the buffer that will
+      // actually be bound. The first W5 terrain frame built its pipelines from the *emission contract*
+      // instead (stride 32, `float32x4` at location 1) while the terrain buffer is 28 bytes with
+      // `float32x3` at location 1 (`TerrainEncoding`, no vertex normals) — every vertex after the
+      // first was read four bytes out of phase.
+      gpuVertexBuffers: bindings.map((binding) => binding.layout),
       indexBuffer,
       vertexLayout: this.toVertexLayoutLike(),
       indexed: indexBuffer !== null,

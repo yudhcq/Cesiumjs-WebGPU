@@ -14,6 +14,17 @@
  */
 import { partitionTrace } from "/experiments/gates/g3-pass-trace/partition.mjs";
 
+/**
+ * Upstream's engine assets/workers live outside the bundle (the terrain logic layer generates its
+ * meshes in a `TaskProcessor` worker and `Transforms` fetches the IAU2006 XYS tables). Pointing
+ * `buildModuleUrl` at the served upstream directory keeps every one of those requests same-origin —
+ * the offline contract (T087) forbids *external* requests, not local ones. MUST be set before the
+ * bundle is imported, because `buildModuleUrl` caches its base on first use.
+ */
+globalThis.CESIUM_BASE_URL = "/engine/";
+
+globalThis.__probeCullNone = true; // TEMPORARY W5 bisect switch
+
 const params = new URLSearchParams(globalThis.location.search);
 const scenario = params.get("scenario") ?? "backend-core";
 const backend = params.get("backend") ?? "webgpu";
@@ -128,14 +139,19 @@ const TRIANGLE_INDICES = new Uint16Array([0, 1, 2, 0]);
 
 function createTriangleResources(device, format) {
   const module_ = device.createShaderModule({ label: "contract-triangle", code: TRIANGLE_WGSL });
-  // WebGPU bakes the sample count into the pipeline, so the workload needs one pipeline per
-  // (format, sampleCount) pair — exactly what the W4 front-end will do through the pipeline cache.
+  // WebGPU bakes the sample count **and the depth-stencil state** into the pipeline, so the workload
+  // needs one pipeline per (format, sampleCount, depth) triple — exactly what the W4 front-end does
+  // through the pipeline cache. `withDepth` matters because the canvas pass carries a depth-stencil
+  // attachment (upstream's GL default framebuffer does, and the terrain's depth test needs it, W5),
+  // while the offscreen colour-only target of this workload does not: a pipeline whose declared depth
+  // state disagrees with the pass is a validation error, not a warning.
   const pipelines = new Map();
-  const pipelineFor = (sampleCount) => {
-    let pipeline = pipelines.get(sampleCount);
+  const pipelineFor = (sampleCount, withDepth = true) => {
+    const key = `${sampleCount}:${withDepth}`;
+    let pipeline = pipelines.get(key);
     if (pipeline === undefined) {
       pipeline = device.createRenderPipeline({
-        label: `contract-triangle-samples${sampleCount}`,
+        label: `contract-triangle-samples${sampleCount}${withDepth ? "-depth" : ""}`,
         layout: "auto",
         vertex: {
           module: module_,
@@ -145,8 +161,9 @@ function createTriangleResources(device, format) {
         fragment: { module: module_, entryPoint: "fs_main", targets: [{ format }] },
         primitive: { topology: "triangle-list" },
         multisample: { count: sampleCount },
+        ...(withDepth ? { depthStencil: { format: "depth24plus-stencil8", depthWriteEnabled: true, depthCompare: "less" } } : {}),
       });
-      pipelines.set(sampleCount, pipeline);
+      pipelines.set(key, pipeline);
     }
     return pipeline;
   };
@@ -159,9 +176,10 @@ function createTriangleResources(device, format) {
 
 function drawInputsFor(resources, overrides = {}) {
   const sampleCount = overrides.sampleCount ?? 1;
+  const withDepth = overrides.withDepth ?? true;
   return {
-    shaderProgramId: `contract-triangle-${sampleCount}`,
-    pipeline: resources.pipelineFor(sampleCount),
+    shaderProgramId: `contract-triangle-${sampleCount}${withDepth ? "-depth" : ""}`,
+    pipeline: resources.pipelineFor(sampleCount, withDepth),
     vertexBuffers: [{ slot: 0, buffer: resources.vertexBuffer }],
     indexBuffer: { buffer: resources.indexBuffer, format: "uint16" },
     indexed: true,
@@ -309,7 +327,7 @@ async function scenarioDrawDispatch(bundle, canvas, options = {}) {
 
   const resources = createTriangleResources(device, context.swapchainFormat);
   const swapchainInputs = drawInputsFor(resources, { sampleCount: context.sampleCount });
-  const offscreenInputs = drawInputsFor(resources, { sampleCount: 1 });
+  const offscreenInputs = drawInputsFor(resources, { sampleCount: 1, withDepth: false });
   const offscreen = device.createTexture({
     label: "contract-offscreen-colour",
     size: { width: canvas.width, height: canvas.height, depthOrArrayLayers: 1 },
@@ -361,8 +379,7 @@ async function scenarioPresent(bundle, canvas) {
   const { result: dispatch } = await scenarioDrawDispatch(bundle, canvas, { keepContext: true });
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   // Best-effort in-page read-back. `createImageBitmap` on a WebGPU canvas is not guaranteed, so the
-  // authoritative presentation evidence is the harness screenshot taken right after this scenario —
-  // which is also why the backend is left alive and the last frame stays presented.
+  // authoritative presentation evidence is the harness screenshot taken right after this scenario —  // which is also why the backend is left alive and the last frame stays presented.
   let presented;
   try {
     presented = await readPresentedCanvas(canvas);
@@ -385,7 +402,7 @@ async function scenarioPresent(bundle, canvas) {
   return { ...dispatch, presented };
 }
 
-/** T051: `device.destroy()` → stop, destroy, re-probe, rebuild; the record is the evidence. */
+/** T051: `device.destroy()` — stop, destroy, re-probe, rebuild; the record is the evidence. */
 async function scenarioDeviceLost(bundle, canvas) {
   const { adapter, device } = await prefetchDevice();
   report.environment = { adapterInfo: adapter.info ?? null };
@@ -584,7 +601,7 @@ async function scenarioPassSequence(bundle, canvas) {
   const context = scene.context;
   const resources = createTriangleResources(device, context.swapchainFormat);
   const swapchainInputs = drawInputsFor(resources, { sampleCount: context.sampleCount });
-  const offscreenInputs = drawInputsFor(resources, { sampleCount: 1 });
+  const offscreenInputs = drawInputsFor(resources, { sampleCount: 1, withDepth: false });
   const offscreen = device.createTexture({
     label: "contract-offscreen-colour",
     size: { width: canvas.width, height: canvas.height, depthOrArrayLayers: 1 },
@@ -640,8 +657,7 @@ function createGlTriangleProgram(gl) {
 /**
  * The interleaved vertex layout both paths use: `position` (float32x3) | `colour` (float32x4).
  *
- * The colour travels **through the vertex buffer**, so the drawn pixel proves what the buffer holds —
- * which is what makes "buffer upload ordering" observable rather than assumed.
+ * The colour travels **through the vertex buffer**, so the drawn pixel proves what the buffer holds — * which is what makes "buffer upload ordering" observable rather than assumed.
  */
 const W3_VERTEX_STRIDE = 28;
 /** The colour the **second** upload carries; the pixel MUST show this one (last write wins). */
@@ -734,14 +750,17 @@ const W3_EXPECTED_FLIPPED = { topLeft: [255, 0, 0], topRight: [0, 255, 0], botto
 const W3_EXPECTED_UNFLIPPED = { topLeft: [0, 0, 255], topRight: [255, 255, 0], bottomLeft: [255, 0, 0], bottomRight: [0, 255, 0] };
 
 /** WebGPU pipelines for the two W3 workloads, cached per (format, sampleCount). */
-function createW3GpuPipelines(device, format, sampleCount) {
+function createW3GpuPipelines(device, format, sampleCount, withDepth = true) {
   const vertexModule = device.createShaderModule({ label: "w3-vertex-colour", code: W3_VERTEX_WGSL });
   const texturedModule = device.createShaderModule({ label: "w3-textured-quad", code: W3_TEXTURED_WGSL });
+  // The canvas pass carries a depth-stencil attachment (W5), the offscreen MSAA pair of this workload
+  // does not — and WebGPU requires a pipeline's declared depth state to match its pass.
+  const depthStencil = withDepth ? { depthStencil: { format: "depth24plus-stencil8", depthWriteEnabled: true, depthCompare: "less" } } : {};
   return {
     vertexModule,
     texturedModule,
     vertexPipeline: device.createRenderPipeline({
-      label: `w3-vertex-colour-${format}-${sampleCount}`,
+      label: `w3-vertex-colour-${format}-${sampleCount}${withDepth ? "-depth" : ""}`,
       layout: "auto",
       vertex: {
         module: vertexModule,
@@ -759,9 +778,10 @@ function createW3GpuPipelines(device, format, sampleCount) {
       fragment: { module: vertexModule, entryPoint: "fs_main", targets: [{ format }] },
       primitive: { topology: "triangle-list" },
       multisample: { count: sampleCount },
+      ...depthStencil,
     }),
     texturedPipeline: device.createRenderPipeline({
-      label: `w3-textured-quad-${format}-${sampleCount}`,
+      label: `w3-textured-quad-${format}-${sampleCount}${withDepth ? "-depth" : ""}`,
       layout: "auto",
       vertex: {
         module: texturedModule,
@@ -779,6 +799,7 @@ function createW3GpuPipelines(device, format, sampleCount) {
       fragment: { module: texturedModule, entryPoint: "fs_main", targets: [{ format }] },
       primitive: { topology: "triangle-list" },
       multisample: { count: sampleCount },
+      ...depthStencil,
     }),
   };
 }
@@ -914,8 +935,8 @@ async function scenarioResources(bundle, canvas) {
   // ---- the frame: an ordered-buffer triangle on the left, the resolved image on the right -----
   const msaaTarget = isWebgpu ? renderFramebuffer : renderFramebuffer;
   if (isWebgpu) {
-    const swapchain = createW3GpuPipelines(context.device, context.swapchainFormat, context.sampleCount);
-    const offscreen = createW3GpuPipelines(context.device, "rgba8unorm", 4);
+    const swapchain = createW3GpuPipelines(context.device, context.swapchainFormat, context.sampleCount, true);
+    const offscreen = createW3GpuPipelines(context.device, "rgba8unorm", 4, false);
     // The bind group layout MUST come from the very pipeline it will be used with: an "auto" layout
     // belongs to its pipeline, and mixing two of them is a validation error (which the backend
     // correctly surfaced at frame end).
@@ -1298,7 +1319,799 @@ function createGlProgram(gl, vertexSource, fragmentSource) {
   return program;
 }
 
+// ------------------------------------------------------------------------------------------------
+// W5 terrain (tasks.md T089-T096) — the real MVP scene, built from the production composition
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Instrument `FramebufferManager.update` so every attachment request of this run is recorded.
+ *
+ * This is the **ordering evidence** the W5 phase opens with (tasks.md Phase 7, T097/T098a): the
+ * replacement's slice-A degradation turns the "multisampled pass with a depth-stencil attachment but
+ * no depth-stencil *texture*" case into a diagnosable failure, and the question is whether the MVP
+ * terrain scene reaches it. Recording every call — and every thrown error — answers that by
+ * measurement instead of by reading the request path.
+ */
+function instrumentFramebufferManager(bundle, log) {
+  const prototype = bundle.framebufferManagerModule?.default?.prototype;
+  if (prototype === undefined) return false;
+  const original = prototype.update;
+  prototype.update = function instrumentedUpdate(context, width, height, numSamples, pixelDatatype, pixelFormat) {
+    const record = {
+      numSamples: numSamples ?? null,
+      resolvedSamples: context?.msaa === true ? (numSamples ?? 1) : 1,
+      contextMsaa: context?.msaa === true,
+      contextDepthTexture: context?.depthTexture === true,
+      depthStencil: this._depthStencil === true,
+      depth: this._depth === true,
+      supportsDepthTexture: this._supportsDepthTexture === true,
+      createDepthAttachments: this._createDepthAttachments !== false,
+      width,
+      height,
+    };
+    try {
+      const result = original.call(this, context, width, height, numSamples, pixelDatatype, pixelFormat);
+      log.push({ ...record, ok: true });
+      return result;
+    } catch (error) {
+      log.push({ ...record, ok: false, category: error?.category ?? null, message: String(error?.message ?? error).slice(0, 300) });
+      throw error;
+    }
+  };
+  return true;
+}
+
+/**
+ * Instrument `WgslEmission.emit`, so a rejected variant is reported with the *request* that produced
+ * it (define list, texture-unit count, layout samplers) instead of only the exception text.
+ */
+function instrumentShaderEmission(bundle, log) {
+  const emission = bundle.wgslEmitter?.WgslEmission;
+  if (emission === undefined || typeof emission.emit !== "function") return false;
+  const original = emission.emit.bind(emission);
+  emission.emit = (request) => {
+    const record = {
+      variantKey: request?.variantKey ?? null,
+      defines: [...(request?.defines ?? [])],
+      textureUnits: request?.textureUnits ?? null,
+      samplerNames: (request?.layout?.samplers ?? []).map((sampler) => sampler.glslName ?? sampler.name ?? null),
+      uniformFieldCount: request?.layout?.uniformBlock?.fields?.length ?? null,
+      vertexTextBytes: request?.vertexGlsl?.length ?? null,
+      fragmentTextBytes: request?.fragmentGlsl?.length ?? null,
+      fragmentHead: String(request?.fragmentGlsl ?? "").replace(/\s+/g, " ").slice(0, 220),
+      vertexHead: String(request?.vertexGlsl ?? "").replace(/\s+/g, " ").slice(0, 160),
+    };
+    try {
+      const result = original(request);
+      log.push({ ...record, ok: result?.ok === true, diagnostics: (result?.diagnostics ?? []).map((diagnostic) => String(diagnostic.message).slice(0, 200)) });
+      return result;
+    } catch (error) {
+      log.push({ ...record, ok: false, error: String(error?.message ?? error).slice(0, 300) });
+      throw error;
+    }
+  };
+  return true;
+}
+
+/**
+ * Wrap `Context.draw` so the **real terrain draws** can be inspected: which pipeline (if any), which
+ * vertex layout, and which render state the logic layer actually asked for.
+ */
+function instrumentContextDraw(bundle, log, uniformTargets = [], limit = 8) {
+  const prototype = bundle.contextModule?.default?.prototype;
+  if (prototype === undefined || typeof prototype.draw !== "function") return false;
+  const original = prototype.draw;
+  prototype.draw = function instrumentedDraw(command, passState, program, uniformMap) {
+    if (log.length < limit) {
+      const renderState = command?.renderState ?? {};
+      log.push({
+        commandName: command?.constructor?.name ?? null,
+        hasShaderProgram: command?.shaderProgram !== undefined || command?._shaderProgram !== undefined,
+        shaderProgramVariant: (command?.shaderProgram ?? command?._shaderProgram)?.variantKey ?? null,
+        pipelinePublished: (command?.shaderProgram ?? command?._shaderProgram)?.pipeline !== undefined,
+        vertexArray: command?.vertexArray === undefined ? null : {
+          numberOfVertices: command.vertexArray.numberOfVertices ?? null,
+          layout: (command.vertexArray.__webgpu?.vertexLayout ?? []).map((attribute) => ({ loc: attribute.index ?? attribute.location, comps: attribute.componentsPerAttribute, type: attribute.componentDatatype, offset: attribute.offsetInBytes, stride: attribute.strideInBytes, normalized: attribute.normalized })),
+          indexed: command.vertexArray.__webgpu?.indexed ?? null,
+        },
+        count: command?.count ?? null,
+        offset: command?.offset ?? null,
+        renderState: {
+          cull: renderState.cull ?? null,
+          frontFace: renderState.frontFace ?? null,
+          depthTest: renderState.depthTest ?? null,
+          depthMask: renderState.depthMask ?? null,
+          topology: renderState.topology ?? null,
+          depthFormat: renderState.depthFormat ?? null,
+          colorFormats: renderState.colorFormats ?? null,
+          sampleCount: renderState.sampleCount ?? null,
+        },
+        passState: passState === undefined || passState === null ? null : { framebuffer: passState.framebuffer === undefined ? null : String(passState.framebuffer?.id ?? typeof passState.framebuffer), viewport: passState.viewport ?? null },
+        rawVertexBuffers: (command?.vertexArray?.__webgpu?.vertexBuffers ?? []).map((binding) => ({ slot: binding.slot, buffer: binding.buffer, offset: binding.offset ?? 0, size: binding.size ?? null })),
+        rawGpuVertexBuffers: (command?.vertexArray?.__webgpu?.gpuVertexBuffers ?? []).map((layout) => ({ arrayStride: layout.arrayStride, stepMode: layout.stepMode, attributes: layout.attributes.map((attribute) => ({ shaderLocation: attribute.shaderLocation, offset: attribute.offset, format: attribute.format })) })),
+        rawIndexBuffer: command?.vertexArray?.__webgpu?.indexBuffer ?? null,
+        uniformMapKeys: Object.keys(command?._uniformMap ?? command?.uniformMap ?? {}).slice(0, 16),
+        programDynamicOffset: (command?.shaderProgram ?? command?._shaderProgram)?.uniformDynamicOffset ?? null,
+      });
+      // Non-serializable handles (the uniform ring's `GPUBuffer`) live in a side list: putting them in
+      // the report would make it circular (measured: `JSON.stringify` on the program object fails).
+      const probeProgram = command?.shaderProgram ?? command?._shaderProgram;
+      if (uniformTargets.length < 4 && typeof probeProgram?.gpuUniformStaging === "function") {
+        const staging = probeProgram.gpuUniformStaging();
+        uniformTargets.push({
+          buffer: staging.buffer,
+          label: String(probeProgram.id),
+          members: (probeProgram.layout?.members ?? []).filter((member) => /ModelViewProjection|Projection|ModelView/i.test(member.name)).map((member) => ({ name: member.name, offset: member.byteOffset, glslType: member.glslType })),
+          structSize: probeProgram.layout?.structSize ?? null,
+          // Live references; the scenario snapshots their state **after** the frames, because this wrapper
+          // runs before `Context.draw` and would otherwise only see pre-draw values.
+          program: probeProgram,
+          gpuStaging: staging,
+        });
+      }
+    }
+    return original.call(this, command, passState, program, uniformMap);
+  };
+  return true;
+}
+
+/**
+ * Read the presented frame back **on the GPU side** (`copyTextureToBuffer` of the resolved canvas
+ * texture), bypassing `createImageBitmap`, which W2 measured to be a platform blind spot on a WebGPU
+ * canvas. This is debug evidence for the W5 terrain work: it distinguishes "the compositor did not
+ * show the frame" from "the frame really is black".
+ */
+function enableFrameReadback(bundle, canvas, context) {
+  const gpuContext = canvas.getContext("webgpu");
+  const device = context.device;
+  if (gpuContext === null || device === undefined) return null;
+  // Tag every texture the canvas hands out, so "the frame was rendered into the texture we copied" is a
+  // measured fact rather than an assumption.
+  const originalGetCurrentTexture = gpuContext.getCurrentTexture.bind(gpuContext);
+  let textureCounter = 0;
+  gpuContext.getCurrentTexture = () => {
+    const texture = originalGetCurrentTexture();
+    if (texture !== undefined && texture !== null && texture.__probeTextureId === undefined) {
+      Object.defineProperty(texture, "__probeTextureId", { value: (textureCounter += 1), enumerable: false });
+    }
+    return texture;
+  };
+  const textureIds = [];
+  const width = canvas.width;
+  const height = canvas.height;
+  const bytesPerRow = Math.ceil((width * 4) / 256) * 256;
+  const buffer = device.createBuffer({ label: "probe-frame-readback", size: bytesPerRow * height, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  let pending = null;
+  let armed = false;
+  const original = context.endFrame.bind(context);
+  context.endFrame = () => {
+    if (armed) {
+      armed = false;
+      try {
+        const texture = gpuContext.getCurrentTexture();
+        textureIds.push({ id: texture.__probeTextureId ?? null, frames: context.counters.frames, passes: context.counters.passes, submits: context.counters.submittedCommandBuffers });
+        const encoder = device.createCommandEncoder({ label: "probe-frame-copy" });
+        encoder.copyTextureToBuffer({ texture }, { buffer, bytesPerRow, rowsPerImage: height }, { width, height, depthOrArrayLayers: 1 });
+        // The copy MUST be submitted **after** the frame's own commands: submitting it first reads the
+        // texture before anything has been rendered into it (the first version did exactly that and
+        // reported an all-zero frame for a canvas that was in fact fully covered).
+        const finish = () => {
+          device.queue.submit([encoder.finish()]);
+          pending = buffer.mapAsync(GPUMapMode.READ);
+        };
+        original();
+        finish();
+        return;
+      } catch (error) {
+        step("frame-readback-failed", { message: String(error?.message ?? error).slice(0, 200) });
+      }
+    }
+    return original();
+  };
+  return {
+    textureIds,
+    arm() {
+      armed = true;
+    },
+    async read() {
+      if (pending === null) return null;
+      await pending;
+      await context.device.queue.onSubmittedWorkDone();
+      const range = new Uint8Array(buffer.getMappedRange().slice(0));
+      buffer.unmap();
+      pending = null;
+      let nonBlack = 0;
+      let nonTransparent = 0;
+      let maxChannel = 0;
+      const colours = new Set();
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const offset = y * bytesPerRow + x * 4;
+          const r = range[offset];
+          const g = range[offset + 1];
+          const b = range[offset + 2];
+          const a = range[offset + 3];
+          if (r + g + b > 24) nonBlack += 1;
+          if (a > 8) nonTransparent += 1;
+          if (Math.max(r, g, b) > maxChannel) maxChannel = Math.max(r, g, b);
+          if (colours.size < 256) colours.add(`${r},${g},${b},${a}`);
+        }
+      }
+      const centreOffset = Math.floor(height / 2) * bytesPerRow + Math.floor(width / 2) * 4;
+      return {
+        width,
+        height,
+        nonBlackPixels: nonBlack,
+        nonTransparentPixels: nonTransparent,
+        maxChannel,
+        uniqueColours: colours.size,
+        centre: [range[centreOffset], range[centreOffset + 1], range[centreOffset + 2], range[centreOffset + 3]],
+      };
+    },
+  };
+}
+
+/**
+ * Temporary W5 bisect: force pipeline-state overrides so a black frame can be attributed
+ * (`cullMode:"none"` isolates winding/culling; `depthCompare:"always"` isolates the depth test).
+ */
+function overridePipelineState(bundle, { cullNone = false, depthAlways = false, log = null } = {}) {
+  const prototype = bundle.renderStateModule?.default?.prototype;
+  if (prototype === undefined || typeof prototype.toPipelineState !== "function") return false;
+  const original = prototype.toPipelineState;
+  prototype.toPipelineState = function instrumentedPipelineState(passState) {
+    const state = original.call(this, passState);
+    if (log !== null && log.length < 4) log.push({ cullMode: state.primitive.cullMode, frontFace: state.primitive.frontFace, depthCompare: state.depthStencil.depthCompare, depthWriteEnabled: state.depthStencil.depthWriteEnabled, depthFormat: state.depthStencil.format, samples: state.multisample.count, targets: state.targets.length, topology: state.primitive.topology });
+    if (!cullNone && !depthAlways) return state;
+    return {
+      ...state,
+      primitive: { ...state.primitive, ...(cullNone ? { cullMode: "none" } : {}) },
+      depthStencil: { ...state.depthStencil, ...(depthAlways ? { depthCompare: "always" } : {}) },
+    };
+  };
+  return true;
+}
+
+/**
+ * `canvas-depth-probe` — W5 sanity check of the **canvas pass**: a known triangle, drawn through the
+ * replacement `Context` with the depth-tested render state the terrain uses, read back on the GPU.
+ *
+ * It separates "the canvas pass cannot present a depth-tested draw" from "the terrain shader/geometry
+ * produces nothing" — indistinguishable from a black screenshot alone.
+ */
+async function scenarioCanvasDepthProbe(bundle, canvas) {
+  const { adapter, device } = await prefetchDevice();
+  report.environment = { adapterInfo: adapter.info ?? null, preferredFormat: navigator.gpu.getPreferredCanvasFormat() };
+  bundle.deviceHandoff.resetSlot();
+  bundle.deviceHandoff.install({ adapter, device, limits: adapter.limits, features: adapter.features, source: "canvas-depth-probe" });
+  const context = new bundle.Context(canvas, {});
+  step("construct-context", { constructor: context?.constructor?.name ?? null, sampleCount: context.sampleCount, swapchainFormat: context.swapchainFormat });
+
+  const readback = enableFrameReadback(bundle, canvas, context);
+  const resources = createTriangleResources(device, context.swapchainFormat);
+  const renderState = { depthTest: { enabled: true, func: 0x0201 }, depthMask: true, cull: { enabled: false } };
+  const inputs = { ...drawInputsFor(resources, { sampleCount: context.sampleCount, colorFormats: [context.swapchainFormat], depthFormat: "depth24plus-stencil8" }), renderState };
+
+  const renderFrame = () => {
+    context.beginFrame();
+    context.clear({ color: { red: 0.05, green: 0.05, blue: 0.15, alpha: 1 } }, {});
+    context.draw({ __webgpu: inputs, count: 3, renderState }, {});
+    context.endFrame();
+  };
+  renderFrame();
+  await context.awaitFrameErrors();
+  readback.arm();
+  renderFrame();
+  await context.awaitFrameErrors();
+  const frame = await readback.read();
+  step("canvas-depth-frame", { frame, frameErrors: context.frameErrors(), counters: { ...context.counters } });
+
+  const result = {
+    backend,
+    sampleCount: context.sampleCount,
+    swapchainFormat: context.swapchainFormat,
+    frame,
+    frameErrors: context.frameErrors(),
+    passes: context.lastFramePasses().map((pass) => ({ index: pass.index, keyText: pass.keyText, drawOps: pass.drawOps, clearOps: pass.clearOps, sampleCount: pass.sampleCount })),
+  };
+  return { result, context };
+}
+
+/**
+ * Record the derived pass/work order of every frame (W5 diagnosis): a clear that lands **after** the
+ * terrain draws reopens the GPU pass with `loadOp: "clear"` and erases them, which is invisible in a
+ * screenshot that only shows the final state.
+ */
+function recordFramePasses(context, log, limit = 6) {
+  const original = context.endFrame.bind(context);
+  context.endFrame = () => {
+    const result = original();
+    if (log.length < limit) {
+      log.push(
+        context.lastFramePasses().map((pass) => ({
+          clearOps: pass.clearOps,
+          drawOps: pass.drawOps,
+          gpuPassCount: pass.gpuPassCount,
+          workOrder: (pass.workOps ?? []).map((op) => op.kind).join(","),
+        })),
+      );
+    }
+    return result;
+  };
+  return true;
+}
+
+/**
+ * Force `COPY_SRC` on every buffer the backend creates, so a terrain vertex/index buffer can be read
+ * back and decoded (W5 diagnosis). Test-side only: it only widens the usage flags of the probe's own
+ * device.
+ */
+function enableBufferReadback(device) {
+  const original = device.createBuffer.bind(device);
+  device.createBuffer = (descriptor) => {
+    const usage = (descriptor?.usage ?? 0) | GPUBufferUsage.COPY_SRC;
+    return original({ ...descriptor, usage });
+  };
+  // The staging buffers are created through the **unpatched** entry point: a `MAP_READ | COPY_DST`
+  // buffer must not be forced to carry the readback flag as well.
+  const createStaging = (label, size) => original({ label, size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  const readFloats = async (buffer, floatCount, byteOffset = 0) => {
+    const byteLength = floatCount * 4;
+    const size = Math.ceil(byteLength / 4) * 4;
+    const staging = createStaging("probe-readback", size);
+    device.pushErrorScope("validation");
+    const encoder = device.createCommandEncoder({ label: "probe-buffer-copy" });
+    encoder.copyBufferToBuffer(buffer, byteOffset, staging, 0, size);
+    device.queue.submit([encoder.finish()]);
+    const scopeError = await device.popErrorScope();
+    if (scopeError !== null) throw new Error(`copyBufferToBuffer(${size} B from ${buffer.size} B buffer, usage ${buffer.usage}): ${scopeError.message}`);
+    await staging.mapAsync(GPUMapMode.READ);
+    const bytes = new Uint8Array(staging.getMappedRange().slice(0));
+    staging.unmap();
+    staging.destroy();
+    const view = new DataView(bytes.buffer);
+    return Array.from({ length: floatCount }, (_, index) => view.getFloat32(index * 4, true));
+  };
+  const readUint16 = async (buffer, count) => {
+    const size = Math.ceil((count * 2) / 4) * 4;
+    const staging = createStaging("probe-readback-index", size);
+    const encoder = device.createCommandEncoder({ label: "probe-buffer-copy-index" });
+    encoder.copyBufferToBuffer(buffer, 0, staging, 0, size);
+    device.queue.submit([encoder.finish()]);
+    await staging.mapAsync(GPUMapMode.READ);
+    const bytes = new Uint8Array(staging.getMappedRange().slice(0));
+    staging.unmap();
+    staging.destroy();
+    const view = new DataView(bytes.buffer);
+    return Array.from({ length: count }, (_, index) => view.getUint16(index * 2, true));
+  };
+  return { readFloats, readUint16, createStaging };
+}
+
+/**
+ * Record any uniform member whose value reaches the encoder as a **function** (W5 diagnosis): upstream
+ * stores `() => value` callbacks in `command.uniformMap`, so a function here means the callback was
+ * never invoked.
+ */
+function instrumentUniformValues(bundle, log, limit = 6) {
+  const target = bundle.uniformWriter?.MemberWriteTarget;
+  if (target?.prototype?.set === undefined) return false;
+  const original = target.prototype.set;
+  target.prototype.set = function instrumentedSet(value) {
+    if (typeof value === "function" && log.length < limit) {
+      log.push({ member: this.field?.name ?? null, kind: "function", source: String(value).replace(/\s+/g, " ").slice(0, 120) });
+    }
+    return original.call(this, value);
+  };
+  return true;
+}
+
+/** Record every clear of the frame (W5 diagnosis): the last one before the draws decides the pixels. */
+function instrumentContextClear(bundle, log, limit = 12) {
+  const prototype = bundle.contextModule?.default?.prototype;
+  if (prototype === undefined || typeof prototype.clear !== "function") return false;
+  const original = prototype.clear;
+  prototype.clear = function instrumentedClear(command, passState) {
+    if (log.length < limit) {
+      const color = command?.color ?? command?.clearColor ?? null;
+      log.push({
+        color: color === null ? null : { red: color.red ?? null, green: color.green ?? null, blue: color.blue ?? null, alpha: color.alpha ?? null },
+        depth: command?.depth ?? null,
+        stencil: command?.stencil ?? null,
+        mechanism: null,
+      });
+      const mechanism = original.call(this, command, passState);
+      log[log.length - 1].mechanism = mechanism;
+      return mechanism;
+    }
+    return original.call(this, command, passState);
+  };
+  return true;
+}
+
+/**
+ * Read the canvas depth buffer back and count the pixels any geometry reached.
+ *
+ * This is the measurement that separates "nothing rasterised" from "everything rasterised black":
+ * a colour-only read-back cannot tell those apart (W5). It requires a single-sampled canvas pass,
+ * because a multisampled depth texture cannot be copied.
+ */
+async function readCanvasDepth(context, canvas, createStaging) {
+  const device = context.device;
+  const texture = context.canvasDepthTexture();
+  if (texture === undefined || texture === null) return { skipped: "no canvas depth texture" };
+  const width = canvas.width;
+  const height = canvas.height;
+  const bytesPerRow = Math.ceil((width * 4) / 256) * 256;
+  const buffer = createStaging === null || createStaging === undefined
+    ? device.createBuffer({ label: "probe-depth-readback", size: bytesPerRow * height, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ })
+    : createStaging("probe-depth-readback", bytesPerRow * height);
+  const encoder = device.createCommandEncoder({ label: "probe-depth-copy" });
+  // A combined depth-stencil texture MUST be copied aspect by aspect (`"all"` is a validation error).
+  encoder.copyTextureToBuffer({ texture, aspect: "depth-only" }, { buffer, bytesPerRow, rowsPerImage: height }, { width, height, depthOrArrayLayers: 1 });
+  device.queue.submit([encoder.finish()]);
+  await buffer.mapAsync(GPUMapMode.READ);
+  const bytes = new Uint8Array(buffer.getMappedRange().slice(0));
+  buffer.unmap();
+  buffer.destroy();
+  const view = new DataView(bytes.buffer);
+  let pixelsWithGeometry = 0;
+  let nearestDepth = 1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = y * bytesPerRow + x * 4;
+      const word = view.getUint32(offset, true);
+      // depth24plus-stencil8: the depth occupies the low 24 bits of the word.
+      const depth = (word & 0xffffff) / 0xffffff;
+      if (depth < 0.999999) pixelsWithGeometry += 1;
+      if (depth < nearestDepth) nearestDepth = depth;
+    }
+  }
+  return { width, height, pixelsWithGeometry, nearestDepth: Number(nearestDepth.toFixed(6)), sampleCount: context.sampleCount };
+}
+
+/** Tile — degrees for the geographic scheme (level 0 = 2 tiles in x, 1 in y). */
+function heightmapTileRectangle(x, y, level) {
+  const width = 360 / 2 ** (level + 1);
+  const height = 180 / 2 ** level;
+  return { west: -180 + x * width, east: -180 + (x + 1) * width, north: 90 - y * height, south: 90 - (y + 1) * height };
+}
+
+/**
+ * An analytic height field over the fixture's coverage (Mont Blanc), used by the ordering probe so
+ * the scene's *configuration* and framebuffer request path are exercised without depending on the
+ * committed dataset (T084/T085 land it separately). Row 0 is the northernmost row, as upstream's
+ * `HeightmapTerrainData` expects.
+ */
+function analyticHeightmap(bundle, width, height, centre) {
+  const sample = new Float32Array(width * height);
+  return (x, y, level) => {
+    const rectangle = heightmapTileRectangle(x, y, level);
+    for (let row = 0; row < height; row += 1) {
+      const latitude = rectangle.north + ((rectangle.south - rectangle.north) * row) / (height - 1);
+      for (let column = 0; column < width; column += 1) {
+        const longitude = rectangle.west + ((rectangle.east - rectangle.west) * column) / (width - 1);
+        const east = (longitude - centre.longitude) * 77.6;
+        const north = (latitude - centre.latitude) * 111.2;
+        const distance = Math.sqrt(east * east + north * north);
+        sample[row * width + column] = Math.max(-120, 4810 - 32 * distance);
+      }
+    }
+    return sample;
+  };
+}
+
+/**
+ * The MVP terrain scene: the frozen scene configuration (`baseLayer:false`, `skyBox:false`,
+ * `skyAtmosphere:false`, no post-processing, `logarithmicDepthBuffer:false`) plus a real heightmap
+ * terrain provider, `globe.enableLighting = true`, a fixed camera and a manual render loop.
+ *
+ * The upstream `Scene` is constructed **directly** rather than through `CesiumWidget`: the widget
+ * also creates a `Sun` and a `Moon`, and `Moon` fetches `Assets/Textures/moonSmall.jpg` — an external
+ * asset request the offline contract (T087) forbids and whose failure is an uncaught
+ * `RequestErrorEvent` (measured). Building the scene directly means those objects are never created,
+ * which is the strongest form of the pinned `false` flags.
+ *
+ * Returns the report plus the live scene so a caller can keep rendering (the suites do).
+ */
+async function buildTerrainScene(bundle, canvas, options = {}) {
+  const isWebgpu = backend !== "webgl2";
+  const framebufferUpdates = [];
+  const requestedTiles = [];
+  const renderErrors = [];
+  const emissionLog = [];
+  const instrumented = instrumentFramebufferManager(bundle, framebufferUpdates);
+  const emissionInstrumented = instrumentShaderEmission(bundle, emissionLog);
+  const drawLog = [];
+  const uniformTargets = [];
+  const clearLog = [];
+  instrumentContextClear(bundle, clearLog, 12);
+  const drawInstrumented = instrumentContextDraw(bundle, drawLog, uniformTargets);
+  const pipelineStateLog = [];
+  const uniformValueLog = [];
+  instrumentUniformValues(bundle, uniformValueLog);
+  const pipelineOverridden = overridePipelineState(bundle, { cullNone: params.get("cull") === "none" || globalThis.__probeCullNone === true, depthAlways: params.get("depth") === "always", log: pipelineStateLog });
+
+  if (isWebgpu) {
+    const { adapter, device } = await prefetchDevice();
+    report.environment = { adapterInfo: adapter.info ?? null, preferredFormat: navigator.gpu.getPreferredCanvasFormat() };
+    bundle.deviceHandoff.resetSlot();
+    bundle.deviceHandoff.install({ adapter, device, limits: adapter.limits, features: adapter.features, source: "terrain" });
+  } else {
+    report.environment = { adapterInfo: null, preferredFormat: null };
+  }
+
+  const provider =
+    options.provider ??
+    (options.ellipsoidProvider === true
+      ? new bundle.EllipsoidTerrainProvider()
+      : new bundle.CustomHeightmapTerrainProvider({
+          width: 65,
+          height: 65,
+          tilingScheme: new bundle.GeographicTilingScheme(),
+          credit: "ordering probe: analytic height field (no external data source)",
+          callback: (x, y, level) => {
+            requestedTiles.push(`${level}/${x}/${y}`);
+            return analyticHeightmap(bundle, 65, 65, options.centre ?? { longitude: 6.8652, latitude: 45.8326 })(x, y, level);
+          },
+        }));
+
+  bundle.sceneOptions.assertMvpSceneOptions();
+  const widgetOptions = bundle.sceneOptions.MVP_SCENE_CONFIGURATION.widgetOptions;
+  const sceneOptions = bundle.sceneOptions.MVP_SCENE_CONFIGURATION.sceneOptions;
+  for (const flag of ["baseLayer", "skyBox", "skyAtmosphere"]) {
+    if (widgetOptions[flag] !== false) throw new Error(`${flag} MUST be pinned false`);
+  }
+  const scene = new bundle.Scene({
+    canvas,
+    contextOptions: options.singleSample === true ? { ...sceneOptions.contextOptions, msaaSamples: 1 } : sceneOptions.contextOptions,
+    scene3DOnly: sceneOptions.scene3DOnly,
+    requestRenderMode: false,
+  });
+  // `Scene` does not take `logarithmicDepthBuffer` as a constructor option (it starts from the static
+  // `Scene.defaultLogDepthBuffer`, which upstream sets to `true`, gated by `context.fragmentDepth`), so
+  // the pinned value is applied through the documented setter before the first frame.
+  scene.logarithmicDepthBuffer = sceneOptions.logarithmicDepthBuffer;
+  // The three pinned flags are realised by *not constructing* the corresponding objects; the globe is
+  // the only scene content, with lighting on (the MVP set).
+  const globe = new bundle.Globe();
+  scene.globe = globe;
+  if (options.globeHidden === true) globe.show = false;
+  globe.enableLighting = options.lightingOff === true ? false : bundle.sceneOptions.MVP_GLOBE_OPTIONS.enableLighting;
+  globe.depthTestAgainstTerrain = bundle.sceneOptions.MVP_GLOBE_OPTIONS.depthTestAgainstTerrain;
+  scene.terrainProvider = provider;
+  if (scene.logarithmicDepthBuffer !== false) throw new Error("the scene turned the logarithmic depth buffer back on");
+  const camera = options.camera ?? { longitude: 6.8652, latitude: 45.8326, height: 24000, heading: 0, pitch: -50, roll: 0 };
+  scene.camera.setView({
+    destination: bundle.Cartesian3.fromDegrees(camera.longitude, camera.latitude, camera.height),
+    orientation: {
+      heading: bundle.Math.toRadians(camera.heading),
+      pitch: bundle.Math.toRadians(camera.pitch),
+      roll: bundle.Math.toRadians(camera.roll),
+    },
+  });
+  step("construct-scene", { contextConstructor: scene.context?.constructor?.name ?? null, backend, latitude: camera.latitude });
+  const readback = options.readback === true && isWebgpu ? enableFrameReadback(bundle, canvas, scene.context) : null;
+  const bufferReadback = options.bufferReadback === true && isWebgpu ? enableBufferReadback(scene.context.device) : null;
+  const bufferReadbackStaging = bufferReadback?.createStaging ?? null;
+  const framePassLog = [];
+  if (isWebgpu) recordFramePasses(scene.context, framePassLog, options.recordFrames ?? 6);
+  scene.renderError.addEventListener((_scene, error) => {
+    renderErrors.push({ name: error?.name ?? "Error", category: error?.category ?? null, message: String(error?.message ?? error).slice(0, 400), stack: String(error?.stack ?? "").split("\n").slice(0, 6).join(" | ") });
+  });
+
+  const frameErrors = [];
+  const frameTimesMs = [];
+  const renderFrames = async (count, settleMs = 12) => {
+    for (let index = 0; index < count; index += 1) {
+      const started = performance.now();
+      try {
+        scene.initializeFrame();
+        scene.render(bundle.JulianDate.fromIso8601("2026-03-20T12:00:00Z"));
+      } catch (error) {
+        frameErrors.push({ frame: index, name: error?.name ?? "Error", category: error?.category ?? null, message: String(error?.message ?? error).slice(0, 400) });
+        throw error;
+      }
+      frameTimesMs.push(performance.now() - started);
+      if (settleMs > 0) await new Promise((resolve) => setTimeout(resolve, settleMs));
+    }
+  };
+
+  return { scene, globe, provider, renderFrames, frameErrors, renderErrors, frameTimesMs, framebufferUpdates, requestedTiles, emissionLog, emissionInstrumented, drawLog, drawInstrumented, pipelineStateLog, pipelineOverridden, framePassLog, readback, bufferReadback, bufferReadbackStaging, uniformValueLog, uniformTargets, clearLog, instrumented, isWebgpu };
+}
+
+/** Wait until the globe reports every visible tile loaded, or the budget runs out. */
+async function renderUntilTilesLoaded(terrain, budgetMs = 30000) {
+  const started = Date.now();
+  let frames = 0;
+  while (Date.now() - started < budgetMs) {
+    await terrain.renderFrames(1, 16);
+    frames += 1;
+    if (terrain.scene.globe.tilesLoaded === true && frames > 4) break;
+  }
+  return { frames, tilesLoaded: terrain.scene.globe.tilesLoaded === true, elapsedMs: Date.now() - started };
+}
+/**
+ * `terrain-probe` — the Phase 7 opening measurement plus the terrain-ready evidence.
+ *
+ * Reports: every `FramebufferManager.update` of the run (with its attachment shape and whether the
+ * slice-A degradation refused it), the tile statistics, the context counters, the elevation range
+ * actually handed to the globe, and the presented pixels.
+ */
+async function scenarioTerrainProbe(bundle, canvas) {
+  const cameraVariant = params.get("camera");
+  const camera =
+    cameraVariant === "far"
+      ? { longitude: 6.8652, latitude: 45.8326, height: 20000000, heading: 0, pitch: -90, roll: 0 }
+      : cameraVariant === "close"
+        ? { longitude: 6.8652, latitude: 45.8326, height: 3000, heading: 0, pitch: -30, roll: 0 }
+        : undefined;
+  const terrain = await buildTerrainScene(bundle, canvas, {
+    readback: true,
+    bufferReadback: true,
+    singleSample: params.get("samples") === "1",
+    cullNone: globalThis.__probeCullNone === true,
+    lightingOff: params.get("lighting") === "off",
+    globeHidden: params.get("globe") === "hidden",
+    ellipsoidProvider: params.get("provider") === "ellipsoid",
+    ...(camera === undefined ? {} : { camera }),
+  });
+  const load = await renderUntilTilesLoaded(terrain);
+  step("tiles-loaded", load);
+  // The compositor needs more than one frame on a WebGPU canvas (W2's measurement: "a single frame is
+  // not reliably composited into the screenshot — partial tiles stay black"), so settle before the
+  // harness takes its canvas screenshot.
+  await terrain.renderFrames(3, 16);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  let gpuFrame = null;
+  let depthFrame = null;
+  let overlayFrame = null;
+  if (terrain.readback !== null) {
+    terrain.readback.arm();
+    await terrain.renderFrames(1, 16);
+    gpuFrame = await terrain.readback.read();
+    depthFrame = await readCanvasDepth(terrain.scene.context, canvas, terrain.bufferReadbackStaging);
+    // Control experiment: draw a known full-viewport triangle through the **same** context right after
+    // the terrain frames. If it appears and the terrain does not, the canvas/present path is fine and the
+    // terrain draw itself produces nothing; if it does not appear either, the frame is not reaching the
+    // canvas at all.
+    const controlContext = terrain.scene.context;
+    const controlResources = createTriangleResources(controlContext.device, controlContext.swapchainFormat);
+    const controlRenderState = { depthTest: { enabled: false }, depthMask: false, cull: { enabled: false } };
+    const controlInputs = {
+      ...drawInputsFor(controlResources, { sampleCount: controlContext.sampleCount, colorFormats: [controlContext.swapchainFormat], depthFormat: "depth24plus-stencil8" }),
+      renderState: controlRenderState,
+    };
+    terrain.readback.arm();
+    controlContext.beginFrame();
+    controlContext.clear({ color: { red: 1, green: 0, blue: 0, alpha: 1 } }, {});
+    controlContext.draw({ __webgpu: controlInputs, count: 3, renderState: controlRenderState }, {});
+    controlContext.endFrame();
+    await controlContext.awaitFrameErrors();
+    overlayFrame = await terrain.readback.read();
+  }
+  step("settled", { frameTimes: terrain.frameTimesMs.slice(-3), gpuFrame, overlayFrame });
+
+  // Decode the first real terrain draw's vertex data, so "no fragments" can be attributed to the
+  // geometry rather than guessed at.
+  let geometry = null;
+  const firstDraw = terrain.drawLog.find((entry) => (entry.rawVertexBuffers ?? []).length > 0);
+  if (terrain.bufferReadback !== null && firstDraw !== undefined) {
+    try {
+      const stride = firstDraw.rawGpuVertexBuffers?.[0]?.arrayStride ?? 28;
+      const vertexCount = Math.min(6, Math.floor(4096 / Math.max(4, stride)));
+      const bytes = Math.min(4096, vertexCount * stride);
+      const floats = await terrain.bufferReadback.readFloats(firstDraw.rawVertexBuffers[0].buffer, Math.floor(bytes / 4));
+      const rows = [];
+      for (let vertex = 0; vertex < Math.floor(floats.length / (stride / 4)); vertex += 1) {
+        rows.push(floats.slice(vertex * (stride / 4), (vertex + 1) * (stride / 4)).map((value) => Number(value.toFixed(6))));
+      }
+      const indices = firstDraw.rawIndexBuffer === null || firstDraw.rawIndexBuffer === undefined ? null : await terrain.bufferReadback.readUint16(firstDraw.rawIndexBuffer.buffer, 12);
+      const uniformTarget = terrain.uniformTargets[0] ?? null;
+      const uniformOffset = firstDraw.programDynamicOffset ?? 0;
+      const uniformFloats = uniformTarget === null ? null : await terrain.bufferReadback.readFloats(uniformTarget.buffer, 240, uniformOffset);
+      const uniformSlotFloats = uniformTarget === null ? null : await terrain.bufferReadback.readFloats(uniformTarget.buffer, 240, 4096);
+      geometry = {
+        arrayStride: stride,
+        gpuVertexBuffers: firstDraw.rawGpuVertexBuffers,
+        numberOfVertices: firstDraw.vertexArray?.numberOfVertices ?? null,
+        firstVertices: rows,
+        firstIndices: indices,
+        indexFormat: firstDraw.rawIndexBuffer?.format ?? null,
+        count: firstDraw.count,
+        uniformMapKeys: firstDraw.uniformMapKeys,
+        uniformFloats,
+        uniformOffset,
+        uniformSlotFloats,
+        uniformMembers: uniformTarget?.members ?? null,
+        uniformDiagnostics: uniformTarget === null ? null : { uniformCount: uniformTarget.program?._uniforms?.length ?? null, automaticCount: uniformTarget.program?._automaticUniforms?.length ?? null, manualCount: uniformTarget.program?._manualUniforms?.length ?? null, stagingCounters: uniformTarget.gpuStaging?.counters() ?? null, stagingBytesWritten: uniformTarget.gpuStaging?.staging?.bytesWritten ?? null, stagingMissing: [...(uniformTarget.gpuStaging?.staging?.missingMembers ?? [])].slice(0, 10), dynamicOffset: uniformTarget.program?.uniformDynamicOffset ?? null },
+        uniformStructSize: uniformTarget?.structSize ?? null,
+        vertexShaderLines: (() => {
+          const module = uniformTarget?.program?.wgsl?.vertexModule;
+          if (typeof module !== "string") return null;
+          return module
+            .split("\n")
+            .filter((line) => /getPosition|vs_main|out\.position|modelViewProjection|czms_remapClipDepth|position3DAndHeight/i.test(line))
+            .slice(0, 40)
+            .map((line) => line.trim());
+        })(),
+      };
+    } catch (error) {
+      geometry = { error: String(error?.message ?? error).slice(0, 300) };
+    }
+  }
+  step("geometry-sample", geometry);
+
+  const context = terrain.scene.context;
+  const globe = terrain.scene.globe;
+  const surface = globe._surface;
+  const result = {
+    backend,
+    instrumentedFramebufferManager: terrain.instrumented,
+    framebufferUpdates: terrain.framebufferUpdates,
+    failingUpdates: terrain.framebufferUpdates.filter((entry) => entry.ok === false),
+    depthStencilTextureRequests: terrain.framebufferUpdates.filter((entry) => entry.depthStencil && entry.supportsDepthTexture && entry.resolvedSamples > 1),
+    frameErrors: terrain.frameErrors,
+    renderErrors: terrain.renderErrors,
+    emissionLog: terrain.emissionLog.filter((entry) => entry.ok === false),
+    emissionInstrumented: terrain.emissionInstrumented,
+    drawLog: terrain.drawLog,
+    drawInstrumented: terrain.drawInstrumented,
+    pipelineStateLog: terrain.pipelineStateLog,
+    pipelineOverridden: terrain.pipelineOverridden,
+    framePassLog: terrain.framePassLog,
+    clearLog: terrain.clearLog,
+    sceneBackgroundColor: { red: terrain.scene.backgroundColor?.red ?? null, green: terrain.scene.backgroundColor?.green ?? null, blue: terrain.scene.backgroundColor?.blue ?? null, alpha: terrain.scene.backgroundColor?.alpha ?? null },
+    uniformValueLog: terrain.uniformValueLog,
+    readbackTextureIds: terrain.readback?.textureIds ?? null,
+    geometry,
+    lastFramePasses: terrain.isWebgpu ? context.lastFramePasses().map((pass) => ({ index: pass.index, keyText: pass.keyText, clearOps: pass.clearOps, drawOps: pass.drawOps, sampleCount: pass.sampleCount, gpuPassCount: pass.gpuPassCount, workOrder: (pass.workOps ?? []).map((op) => op.kind).join(",") })) : null,
+    contextDepthTexture: context?.depthTexture ?? null,
+    contextMsaa: context?.msaa ?? null,
+    sceneMsaaSamples: terrain.scene.msaaSamples,
+    sceneLogarithmicDepthBuffer: terrain.scene.logarithmicDepthBuffer,
+    requestedTiles: terrain.requestedTiles,
+    globeDiagnostics: {
+      show: globe.show,
+      tilesLoaded: globe.tilesLoaded,
+      terrainProviderName: globe.terrainProvider?.constructor?.name ?? null,
+      terrainProviderIsOurs: globe.terrainProvider === terrain.provider,
+      surfaceStatistics: surface?._statistics === undefined ? null : {
+        numberOfTilesLoaded: surface._statistics.numberOfTilesLoaded ?? null,
+        numberOfCommands: surface._statistics.numberOfCommands ?? null,
+      },
+      queueHigh: surface?._tileLoadQueueHigh?.length ?? null,
+      queueLow: surface?._tileLoadQueueLow?.length ?? null,
+      queueMedium: surface?._tileLoadQueueMedium?.length ?? null,
+      tilesToRenderLength: surface?._tilesToRender?.length ?? null,
+      cameraHeight: terrain.scene.camera.positionCartographic?.height ?? null,
+    },
+    counts: terrain.isWebgpu
+      ? {
+          draws: context.counters.draws,
+          drawIndexedCalls: context.counters.drawIndexedCalls,
+          passes: context.counters.passes,
+          submittedCommandBuffers: context.counters.submittedCommandBuffers,
+          frameErrors: context.frameErrors(),
+          registry: bundle.gpuResourceRegistry.gpuResourceRegistry.stats(),
+        }
+      : { draws: null },
+    camera: {
+      longitude: 6.8652,
+      latitude: 45.8326,
+      height: 24000,
+    },
+    tilesLoad: load,
+    gpuFrame,
+    depthFrame,
+    overlayFrame,
+  };
+  return { result, context: terrain.isWebgpu ? context : null };
+}
+
 const SCENARIOS = {
+  "canvas-depth-probe": scenarioCanvasDepthProbe,
+  "terrain-probe": scenarioTerrainProbe,
   "scene-construct": scenarioSceneConstruct,
   "draw-dispatch": scenarioDrawDispatch,
   present: scenarioPresent,

@@ -188,7 +188,9 @@ test("4x MSAA passes resolve into the swap chain", async () => {
   const attachment = descriptor.colorAttachments[0];
   assert.ok(attachment.view !== undefined);
   assert.ok(attachment.resolveTarget !== undefined, "sampleCount 4 REQUIRES a resolveTarget (T050)");
-  assert.equal(adapter.device.__created.textures.filter((texture) => texture.descriptor?.sampleCount === 4).length, 1);
+  // W5: the canvas pass also carries the depth-stencil attachment (the terrain's depth test needs it, and
+  // upstream's GL default framebuffer always had one), so two 4x textures are created — colour + depth.
+  assert.equal(adapter.device.__created.textures.filter((texture) => texture.descriptor?.sampleCount === 4).length, 2);
   context.destroy();
   handoff.resetSlot();
 });

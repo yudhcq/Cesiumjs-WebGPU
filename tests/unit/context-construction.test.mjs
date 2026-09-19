@@ -110,7 +110,8 @@ test("construction takes the device synchronously and publishes everything befor
   const configureCalls = canvas.getContext("webgpu").__configureCalls;
   assert.equal(configureCalls.length, 1);
   assert.equal(configureCalls[0].device, adapter.device);
-  assert.equal(configureCalls[0].usage, globalThis.GPUTextureUsage.RENDER_ATTACHMENT);
+  // W5: `COPY_SRC` is what lets the presented frame be read back on the GPU (`copyTextureToBuffer`).
+  assert.equal(configureCalls[0].usage, globalThis.GPUTextureUsage.RENDER_ATTACHMENT | globalThis.GPUTextureUsage.COPY_SRC);
 
   // (f) the upstream collaborators exist (kept modules)
   assert.ok(context.uniformState !== undefined && context.shaderCache !== undefined && context.textureCache !== undefined);

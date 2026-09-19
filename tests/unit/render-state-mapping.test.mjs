@@ -91,7 +91,7 @@ test("the mapping table covers every field research §5.3 names", async () => {
   });
   const mapped = state.toPipelineState();
 
-  assert.equal(mapped.primitive.frontFace, "cw", "frontFace 0x0900 → cw");
+  assert.equal(mapped.primitive.frontFace, "ccw", "frontFace 0x0900 (GL CW) → WebGPU ccw: the y axes are mirrored");
   assert.equal(mapped.primitive.cullMode, "front", "cull.face 0x0404 → front");
   assert.equal(mapped.primitive.topology, "triangle-list");
   assert.equal(mapped.depthStencil.depthCompare, "less-equal", "depthTest.func 0x0203");
@@ -124,7 +124,7 @@ test("the mapping table covers every field research §5.3 names", async () => {
   assert.equal(BLEND_EQUATION_MAP[0x8007], "min");
   assert.equal(COMPARE_FUNCTION_MAP[0x0200], "never");
   assert.equal(STENCIL_OPERATION_MAP[0x0000], "zero");
-  assert.equal(FRONT_FACE_MAP[0x0901], "ccw");
+  assert.equal(FRONT_FACE_MAP[0x0901], "cw", "GL CCW is WebGPU cw (framebuffer y points down)");
   assert.equal(CULL_MODE_MAP[0x0408], "none");
 });
 

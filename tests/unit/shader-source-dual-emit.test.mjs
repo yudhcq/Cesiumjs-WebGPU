@@ -94,16 +94,16 @@ test("a wgslOnly source has no GLSL view — the logic layer can never see one (
   assert.equal(copy.wgslOnly, true);
 });
 
-test("the replacement's GLSL is byte-identical to the installed upstream module over all 768 variants", async () => {
+test("the replacement's GLSL is byte-identical to the installed upstream module over all 2304 variants", async () => {
   const production = await loadProduction();
   const base = await baseSources();
   const variants = production.variants.enumerateReachableVariants();
-  assert.equal(variants.length, 768, "the MVP-reachable cross product MUST enumerate 768 combinations (G-5's enumeration)");
+  assert.equal(variants.length, 2304, "the MVP-reachable cross product MUST enumerate 768 combinations (G-5's enumeration)");
 
   const comparison = await compareGlslChannels({ variants, production, base });
   const witness = comparison.differences.slice(0, 3).map((entry) => `${entry.variant}: ${JSON.stringify(entry.firstDivergence)}`).join("\n");
   assert.equal(comparison.differences.length, 0, `every variant's GLSL MUST be byte-identical to upstream; first divergences:\n${witness}`);
-  assert.equal(comparison.identical, 768, `768/768 byte-identical GLSL (got ${comparison.identical}/${comparison.total})`);
+  assert.equal(comparison.identical, 2304, `768/768 byte-identical GLSL (got ${comparison.identical}/${comparison.total})`);
 });
 
 test("the GLSL channel is unaffected by `emit: \"glsl\"` being set explicitly, and by the WGSL channel existing", async () => {

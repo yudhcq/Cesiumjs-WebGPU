@@ -121,8 +121,6 @@ export const EXCLUDED_DEFINES: readonly ExcludedDefine[] = [
   { define: "APPLY_IMAGERY_CUTOUT", why: "MVP has no imagery cutouts", source: "GlobeSurfaceShaderSet.js:280" },
   { define: "HIGHLIGHT_FILL_TILE", why: "debug fill-tile path", source: "GlobeSurfaceShaderSet.js:383" },
   { define: "COLOR_CORRECT", why: "globe hue/saturation/brightness shift is out of scope", source: "GlobeSurfaceShaderSet.js:379" },
-  { define: "DYNAMIC_ATMOSPHERE_LIGHTING", why: "atmosphere lighting effects are out of scope", source: "GlobeSurfaceShaderSet.js:337" },
-  { define: "DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN", why: "only pushed together with DYNAMIC_ATMOSPHERE_LIGHTING", source: "GlobeSurfaceShaderSet.js:340" },
   { define: "UNDERGROUND_COLOR", why: "underground colour is out of scope", source: "GlobeSurfaceShaderSet.js:319" },
   { define: "TRANSLUCENT", why: "translucency is out of scope for the MVP terrain slice", source: "GlobeSurfaceShaderSet.js:323" },
   { define: "HDR", why: "the HDR path is reserved for the HDR pipeline (never pushed for the globe)", source: "no `HDR` push in GlobeSurfaceShaderSet.js" },
@@ -192,6 +190,18 @@ export const REACHABLE_DIMENSIONS: readonly ReachableDimension[] = [
     defines: (value) => (value === "none" ? [] : [value]),
     justification: "GlobeSurfaceShaderSet.js:358-361 — `enableFog` (Scene.fog.enabled, true by default, togglable from the MVP API).",
     source: "GlobeSurfaceShaderSet.js:358",
+  },
+  {
+    id: "dynamicAtmosphereLighting",
+    values: ["none", "lighting", "lighting-from-sun"],
+    excludedValues: [],
+    defines: (value) =>
+      value === "none" ? [] : value === "lighting" ? ["DYNAMIC_ATMOSPHERE_LIGHTING"] : ["DYNAMIC_ATMOSPHERE_LIGHTING", "DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN"],
+    justification:
+      "GlobeSurfaceShaderSet.js:336-344 — `if (dynamicAtmosphereLighting) { push(DYNAMIC_ATMOSPHERE_LIGHTING); if (dynamicAtmosphereLightingFromSun) push(DYNAMIC_ATMOSPHERE_LIGHTING_FROM_SUN); }`. " +
+      "**Corrected in W5**: the first version of this list had both defines in `EXCLUDED_DEFINES` ('atmosphere lighting effects are out of scope'), but `Globe.dynamicAtmosphereLighting` defaults to **true** (Globe.js:185) and `dynamicAtmosphereLightingFromSun` to false (Globe.js:195), so the default MVP scene pushes `DYNAMIC_ATMOSPHERE_LIGHTING` on **every** terrain tile. " +
+      "The W5 opening probe measured the refusal (`unsupported define \"DYNAMIC_ATMOSPHERE_LIGHTING\": outside the MVP slice`) on the first real tile program; the WGSL leaves already carried regions for both defines (globe-vertex.wgsl:185,188 / globe-fragment-main.wgsl:89,98,131,143), so the fix was to declare them supported rather than to narrow the scene.",
+    source: "GlobeSurfaceShaderSet.js:336 / Globe.js:185",
   },
   {
     id: "ocean",
@@ -317,6 +327,10 @@ export const DEFAULT_APP_CONFIGURATION: Readonly<Record<string, string>> = {
   geodetic: "both",
   ocean: "none",
   tileLimitRectangle: "none",
+  // W5: `Globe.dynamicAtmosphereLighting` defaults to `true` (`Globe.js:185`) and the MVP does not expose
+  // it, so a session runs with `lighting` and the plan has to name it — every planned selection MUST be a
+  // reachable variant (`prewarmPlan` throws otherwise).
+  dynamicAtmosphereLighting: "lighting",
 };
 
 /** The analytically computed plan size (registered in `budget.json` as `maxPrewarmVariants`). */

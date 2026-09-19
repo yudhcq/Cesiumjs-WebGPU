@@ -14,7 +14,15 @@ import Buffer from "@cesium/engine/Source/Renderer/Buffer.js";
 import BufferUsage from "@cesium/engine/Source/Renderer/BufferUsage.js";
 import Context from "@cesium/engine/Source/Renderer/Context.js";
 import ContextLimits from "@cesium/engine/Source/Renderer/ContextLimits.js";
+import Cartesian3 from "@cesium/engine/Source/Core/Cartesian3.js";
+import CustomHeightmapTerrainProvider from "@cesium/engine/Source/Core/CustomHeightmapTerrainProvider.js";
+import EllipsoidTerrainProvider from "@cesium/engine/Source/Core/EllipsoidTerrainProvider.js";
+import GeographicTilingScheme from "@cesium/engine/Source/Core/GeographicTilingScheme.js";
+import Globe from "@cesium/engine/Source/Scene/Globe.js";
+import HeightmapTerrainData from "@cesium/engine/Source/Core/HeightmapTerrainData.js";
 import IndexDatatype from "@cesium/engine/Source/Core/IndexDatatype.js";
+import JulianDate from "@cesium/engine/Source/Core/JulianDate.js";
+import Math from "@cesium/engine/Source/Core/Math.js";
 import MultisampleFramebuffer from "@cesium/engine/Source/Renderer/MultisampleFramebuffer.js";
 import PixelDatatype from "@cesium/engine/Source/Renderer/PixelDatatype.js";
 import PixelFormat from "@cesium/engine/Source/Core/PixelFormat.js";
@@ -25,6 +33,7 @@ import Scene from "@cesium/engine/Source/Scene/Scene.js";
 import Texture from "@cesium/engine/Source/Renderer/Texture.js";
 import TextureWrap from "@cesium/engine/Source/Renderer/TextureWrap.js";
 import VertexArray from "@cesium/engine/Source/Renderer/VertexArray.js";
+import CesiumWidget from "@cesium/engine/Source/Widget/CesiumWidget.js";
 
 import * as capability from "../../../packages/cesium-webgpu/backend-webgpu/webgpu/capability.js";
 import * as defaultResources from "../../../packages/cesium-webgpu/backend-webgpu/webgpu/default-resources.js";
@@ -39,7 +48,10 @@ import * as samplerMap from "../../../packages/cesium-webgpu/backend-webgpu/webg
 import * as swapchain from "../../../packages/cesium-webgpu/backend-webgpu/webgpu/swapchain.js";
 import * as textureUpload from "../../../packages/cesium-webgpu/backend-webgpu/webgpu/texture-upload.js";
 import * as wholeSwitch from "../../../packages/cesium-webgpu/backend-webgpu/webgpu/whole-switch.js";
+import * as uniformWriter from "../../../packages/cesium-webgpu/backend-webgpu/webgpu/uniform-writer.js";
+import * as wgslEmitter from "../../../packages/cesium-webgpu/backend-webgpu/webgpu/wgsl-emitter.js";
 import * as contextModule from "../../../packages/cesium-webgpu/backend-webgpu/Renderer/Context.js";
+import * as framebufferManagerModule from "../../../packages/cesium-webgpu/backend-webgpu/Renderer/FramebufferManager.js";
 import * as renderStateModule from "../../../packages/cesium-webgpu/backend-webgpu/Renderer/RenderState.js";
 import * as vertexArrayModule from "../../../packages/cesium-webgpu/backend-webgpu/Renderer/VertexArray.js";
 import * as sceneOptions from "../../../packages/cesium-webgpu/src/scene-options.js";
@@ -47,9 +59,18 @@ import * as sceneOptions from "../../../packages/cesium-webgpu/src/scene-options
 export {
   Buffer,
   BufferUsage,
+  Cartesian3,
+  CesiumWidget,
   Context,
   ContextLimits,
+  CustomHeightmapTerrainProvider,
+  EllipsoidTerrainProvider,
+  GeographicTilingScheme,
+  Globe,
+  HeightmapTerrainData,
   IndexDatatype,
+  JulianDate,
+  Math,
   MultisampleFramebuffer,
   PixelDatatype,
   PixelFormat,
@@ -66,6 +87,7 @@ export {
   deviceHandoff,
   errorScope,
   formatMap,
+  framebufferManagerModule,
   gpuResourceRegistry,
   notImplemented,
   passEncoder,
@@ -75,7 +97,9 @@ export {
   sceneOptions,
   swapchain,
   textureUpload,
+  uniformWriter,
   vertexArrayModule,
+  wgslEmitter,
   wholeSwitch,
 };
 

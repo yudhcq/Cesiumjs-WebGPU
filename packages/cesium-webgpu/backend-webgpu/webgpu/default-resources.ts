@@ -30,7 +30,6 @@ export const TEXTURE_FILTER_LINEAR = 0x2601;
 
 /** The default texture's RGBA8 bytes — upstream's `Texture.defaultColor === Color.WHITE`. */
 export const DEFAULT_TEXTURE_RGBA8: readonly [number, number, number, number] = [255, 255, 255, 255];
-
 /** Everything the logic layer can observe about the default texture, plus the GPU handles. */
 export interface DefaultTexture {
   readonly texture: GPUTexture;
@@ -99,6 +98,90 @@ export function createDefaultTexture(device: GPUDevice, options: { label?: strin
       `the default texture (1×1 RGBA8, white, flipY:false) could not be created: ${(error as Error)?.message ?? String(error)}. ` +
         "The replacement Context MUST NOT publish a default texture that does not exist (T043).",
       { backend: "webgpu", upstreamModule: "Renderer/Context.js", requirementRef: "FR-030", entryPoint: "default-resources.createDefaultTexture", cause: error },
+    );
+  }
+}
+
+/** Everything the logic layer can observe about the default cube map, plus the GPU handles. */
+export interface DefaultCubeMap {
+  readonly texture: GPUTexture;
+  readonly view: GPUTextureView;
+  readonly sampler: GPUSampler;
+  readonly samplerDescriptor: GPUSamplerDescriptor;
+  /** Each face is 1×1 (upstream: "a cube map, where each face is a 1x1 RGBA texture"). */
+  readonly size: 1;
+  readonly faces: 6;
+  readonly pixelFormat: number;
+  readonly pixelDatatype: number;
+  readonly flipY: false;
+  readonly rgba8: readonly [number, number, number, number];
+  destroy(): void;
+}
+
+/**
+ * Create upstream's `defaultCubeMap`: **six 1×1 RGBA8 faces, all `[255, 255, 255, 255]`**.
+ *
+ * Why this is not slice C: upstream's `UniformState.update` reads `context.defaultCubeMap` on
+ * **every** frame (`Renderer/UniformState.js:1558-1559`
+ * `this._environmentMap = frameState.environmentMap ?? frameState.context.defaultCubeMap`), and
+ * `UniformState.js` is a *kept* module (byte-identical), so a replacement `Context` that does not
+ * publish this placeholder cannot render a single frame — terrain included. The `CubeMap` **class**
+ * (skyBox / IBL / model environment maps) stays a slice-C stub; this is only the default *resource*,
+ * and it is a real cube texture, so a shader that ever samples it gets upstream's exact white value
+ * instead of a fake.
+ *
+ * @throws a `DiagnosticError` when the device cannot create the resources (FR-033: never publish a
+ *   default resource that does not exist).
+ */
+export function createDefaultCubeMap(device: GPUDevice, options: { label?: string } = {}): DefaultCubeMap {
+  const label = options.label ?? "cesium-webgpu:default-cube-map";
+  try {
+    const texture = device.createTexture({
+      label,
+      size: { width: 1, height: 1, depthOrArrayLayers: 6 },
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    // One `writeTexture` per face; `bytesPerRow: 4` with a 1×1 face is the minimum WebGPU accepts.
+    for (let face = 0; face < 6; face += 1) {
+      device.queue.writeTexture(
+        { texture, origin: { x: 0, y: 0, z: face } },
+        new Uint8Array(DEFAULT_TEXTURE_RGBA8),
+        { bytesPerRow: 4, rowsPerImage: 1 },
+        { width: 1, height: 1, depthOrArrayLayers: 1 },
+      );
+    }
+    const samplerDescriptor: GPUSamplerDescriptor = {
+      label: `${label}:sampler`,
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
+      addressModeW: "clamp-to-edge",
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+    };
+    const sampler = device.createSampler(samplerDescriptor);
+    return {
+      texture,
+      view: texture.createView({ label: `${label}:view`, dimension: "cube" }),
+      sampler,
+      samplerDescriptor,
+      size: 1,
+      faces: 6,
+      pixelFormat: PIXEL_FORMAT_RGBA,
+      pixelDatatype: PIXEL_DATATYPE_UNSIGNED_BYTE,
+      flipY: false,
+      rgba8: DEFAULT_TEXTURE_RGBA8,
+      destroy(): void {
+        texture.destroy();
+      },
+    };
+  } catch (error) {
+    throw new DiagnosticError(
+      "render-failed",
+      `the default cube map (six 1×1 RGBA8 white faces, flipY:false) could not be created: ${(error as Error)?.message ?? String(error)}. ` +
+        "`UniformState.update` reads `context.defaultCubeMap` every frame, so the replacement Context MUST publish it (T089).",
+      { backend: "webgpu", upstreamModule: "Renderer/Context.js", requirementRef: "FR-030", entryPoint: "default-resources.createDefaultCubeMap", cause: error },
     );
   }
 }

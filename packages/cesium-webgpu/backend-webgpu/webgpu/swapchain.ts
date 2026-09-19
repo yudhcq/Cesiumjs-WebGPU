@@ -74,8 +74,17 @@ export function resolveDrawingBufferSize(
   };
 }
 
-export class Swapchain {
-  readonly #canvas: CanvasLike;
+/**
+ * The canvas pass's depth-stencil format.
+ *
+ * `depth24plus-stencil8` is the format the capability composition already publishes
+ * (`webgpu/capability.ts`: `stencilBuffer`/`stencilBits: 8`) and the one the replaced
+ * `Renderbuffer` maps `DEPTH_STENCIL` onto, so a canvas pass and an offscreen pass describe the same
+ * depth attachment — which is what lets the same `ShaderProgram` variant serve both.
+ */
+export const CANVAS_DEPTH_FORMAT: GPUTextureFormat = "depth24plus-stencil8";
+
+export class Swapchain {  readonly #canvas: CanvasLike;
   readonly #device: GPUDevice;
   readonly #context: GPUCanvasContext;
   readonly #format: GPUTextureFormat;
@@ -92,6 +101,8 @@ export class Swapchain {
   #sizeSource: "client-size" | "canvas-attributes" = "canvas-attributes";
   #multisampleTexture: GPUTexture | null = null;
   #multisampleView: GPUTextureView | null = null;
+  #depthTexture: GPUTexture | null = null;
+  #depthView: GPUTextureView | null = null;
   #frameOpen = false;
   #currentTexture: GPUTexture | null = null;
   #destroyed = false;
@@ -152,7 +163,10 @@ export class Swapchain {
       device: this.#device,
       format: this.#format,
       alphaMode: this.#alphaMode,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      // `COPY_SRC` is what makes the presented frame readable **on the GPU side** (the probe/T091
+      // read-back): `createImageBitmap` on a WebGPU canvas is a known platform blind spot (measured in
+      // W2), while `copyTextureToBuffer` of the resolved canvas texture is exact.
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
     this.#configured = true;
     this.#configureCount += 1;
@@ -194,6 +208,24 @@ export class Swapchain {
       });
       this.#multisampleView = this.#multisampleTexture.createView();
     }
+    // The **canvas depth-stencil attachment** (W5). Upstream's GL default framebuffer carries
+    // depth+stencil (`Context.js` requests `depth: true, stencil: true` by default), and the terrain
+    // draws rely on it: `GlobeSurfaceTileProvider` sets `depthTest.enabled` for every tile command, and
+    // a WebGPU pipeline with `depthStencil.format !== null` is a validation error unless the pass
+    // carries a matching attachment. Without this, the first real terrain frame failed with
+    // "the command carries no render pipeline" → a pass with no depth attachment.
+    this.#depthTexture?.destroy();
+    this.#depthTexture = this.#device.createTexture({
+      label: "cesium-webgpu:canvas-depth-stencil",
+      size: { width: this.#width, height: this.#height, depthOrArrayLayers: 1 },
+      format: CANVAS_DEPTH_FORMAT,
+      sampleCount: this.#sampleCount,
+      // `COPY_SRC` is what lets a suite read the depth buffer back (`copyTextureToBuffer`); a
+      // multisampled depth texture cannot be copied, which is why the read-back suites pin
+      // `sampleCount: 1` through `ContextOptions.msaaSamples`.
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
+    this.#depthView = this.#depthTexture.createView();
   }
 
   /** Take the swap-chain texture of this frame (called from `Context.beginFrame`). */
@@ -219,6 +251,28 @@ export class Swapchain {
   /** The swap-chain view that receives the resolved image (the presentation target). */
   currentView(): GPUTextureView | null {
     return this.#currentTexture === null ? null : this.#currentTexture.createView();
+  }
+
+  /**
+   * The canvas depth-stencil attachment of this frame (`null` before `configure()`).
+   *
+   * It shares the colour attachment's sample count, because every attachment of a WebGPU render pass
+   * MUST have the same sample count — the same platform rule that makes the slice-A `GlobeDepth`
+   * combination unsatisfiable (T097/T098a).
+   */
+  depthStencilTarget(): { view: GPUTextureView; format: GPUTextureFormat; sampleCount: 1 | 4 } | null {
+    if (this.#depthView === null) return null;
+    return { view: this.#depthView, format: CANVAS_DEPTH_FORMAT, sampleCount: this.#sampleCount };
+  }
+
+  /**
+   * The canvas depth-stencil texture itself (diagnostics / the depth read-back suites).
+   *
+   * `null` before `configure()`. A multisampled texture cannot be copied, so a caller that wants a
+   * read-back MUST pin `sampleCount: 1` (`ContextOptions.msaaSamples`).
+   */
+  depthTexture(): GPUTexture | null {
+    return this.#depthTexture;
   }
 
   /**
@@ -260,6 +314,9 @@ export class Swapchain {
     this.#multisampleTexture?.destroy();
     this.#multisampleTexture = null;
     this.#multisampleView = null;
+    this.#depthTexture?.destroy();
+    this.#depthTexture = null;
+    this.#depthView = null;
     this.#currentTexture = null;
     this.#destroyed = true;
   }

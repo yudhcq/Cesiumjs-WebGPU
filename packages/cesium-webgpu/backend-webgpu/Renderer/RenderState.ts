@@ -106,8 +106,21 @@ export const STENCIL_OPERATION_MAP: Readonly<Record<number, GPUStencilOperation>
   0x8508: "decrement-wrap",
 };
 
-/** GL winding order enum → `GPUFrontFace`. */
-export const FRONT_FACE_MAP: Readonly<Record<number, GPUFrontFace>> = { 0x0900: "cw", 0x0901: "ccw" };
+/**
+ * GL winding-order enum → `GPUFrontFace` — **the two orders are swapped, and that is the mapping.**
+ *
+ * GL decides the winding in **window coordinates**, whose y axis points up (`glFrontFace` is defined
+ * on the signed area in window space). WebGPU decides it in **framebuffer coordinates**, whose y axis
+ * points **down** (`GPURenderPipelineDescriptor.frontFace`: "the front face is determined by the sign
+ * of the signed area computed in framebuffer coordinates"). The two are therefore mirror images: a
+ * triangle that is CCW in GL is CW in WebGPU.
+ *
+ * Measured in W5: with the naive 1:1 mapping the whole terrain disappeared — a black frame with 91
+ * successful `drawIndexed` calls and zero validation errors, because every camera-facing (GL-CCW,
+ * `frontFace: 0x0901`) triangle was classified as a back face and culled by the globe's
+ * `cull: { enabled: true, face: CullFace.BACK }` render state.
+ */
+export const FRONT_FACE_MAP: Readonly<Record<number, GPUFrontFace>> = { 0x0900: "ccw", 0x0901: "cw" };
 
 /** GL cull-face enum → `GPUCullMode`. */
 export const CULL_MODE_MAP: Readonly<Record<number, GPUCullMode>> = { 0x0404: "front", 0x0405: "back", 0x0408: "none" };
@@ -559,8 +572,12 @@ export default class RenderState implements RenderStateLike {
         depthBiasClamp: 0,
         stencilFront: stencilFace(this.stencilTest.frontFunction, this.stencilTest.frontOperation),
         stencilBack: stencilFace(this.stencilTest.backFunction, this.stencilTest.backOperation),
-        stencilReadMask: this.stencilTest.mask,
-        stencilWriteMask: this.stencilMask,
+        // GL masks are bit patterns, and upstream's default is `~0` — a **negative** number in JS. The
+        // WebGPU descriptor types them as `unsigned long`, so the default failed the first real terrain
+        // pipeline with "Value is outside the 'unsigned long' value range" (W5). `>>> 0` is the
+        // 32-bit-unsigned reinterpretation GL itself performs.
+        stencilReadMask: this.stencilTest.mask >>> 0,
+        stencilWriteMask: this.stencilMask >>> 0,
       },
       multisample: { count: this.sampleCount },
       targets: this.colorFormats.map(() => ({ writeMask, blend })),

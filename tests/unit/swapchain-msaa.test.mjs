@@ -40,7 +40,8 @@ test("configure() runs once per device/size, with the measured format and usage"
   assert.equal(configureCall.device, device);
   assert.equal(configureCall.format, "bgra8unorm", "the measured preferred format on the reference machine");
   assert.equal(configureCall.alphaMode, "opaque");
-  assert.equal(configureCall.usage, globalThis.GPUTextureUsage.RENDER_ATTACHMENT);
+  // W5: `COPY_SRC` lets a suite read the presented frame back on the GPU (`copyTextureToBuffer`).
+  assert.equal(configureCall.usage, globalThis.GPUTextureUsage.RENDER_ATTACHMENT | globalThis.GPUTextureUsage.COPY_SRC);
   assert.equal(swapchain.width, 320);
   assert.equal(swapchain.height, 200);
   assert.equal(swapchain.sizeSource, "client-size");
@@ -60,7 +61,7 @@ test("sampleCount 4 always produces the multisampled attachment AND its resolveT
   assert.notEqual(target.view, target.resolveTarget, "the multisampled attachment and the presentation view are different objects");
 
   const msaa = device.__created.textures.filter((texture) => texture.descriptor?.sampleCount === 4);
-  assert.equal(msaa.length, 1, "exactly one multisampled colour texture");
+  assert.equal(msaa.length, 2, "one multisampled colour texture plus the canvas depth-stencil attachment (W5)");
   assert.equal(msaa[0].descriptor.format, "bgra8unorm");
   assert.deepEqual(msaa[0].descriptor.size, { width: 300, height: 150, depthOrArrayLayers: 1 });
   assert.equal(target.view, msaa[0].__views[0], "the attachment view comes from the multisampled texture");
@@ -95,7 +96,7 @@ test("the drawing buffer follows devicePixelRatio and a change rebuilds the atta
   assert.deepEqual([swapchain.width, swapchain.height], [600, 300]);
   assert.equal(swapchain.rebuildCount, 1);
   assert.equal(canvas.width, 600, "the canvas attributes stay in sync with the drawing buffer");
-  assert.equal(device.__created.textures.filter((texture) => texture.descriptor?.sampleCount === 4).length, 2, "the multisample attachment was rebuilt");
+  assert.equal(device.__created.textures.filter((texture) => texture.descriptor?.sampleCount === 4).length, 4, "the multisample attachment was rebuilt");
   assert.equal(swapchain.resizeIfNeeded(), false, "a stable size MUST NOT rebuild on every frame");
 
   canvas.clientWidth = 400;

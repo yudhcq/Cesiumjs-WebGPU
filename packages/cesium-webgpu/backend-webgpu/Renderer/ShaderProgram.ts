@@ -86,6 +86,7 @@ import { attributeLayoutFromContract } from "../webgpu/varying-contract.js";
 import type { AttributeBinding, VaryingContract, VaryingRef } from "../webgpu/varying-contract.js";
 import { WgslEmission } from "../webgpu/wgsl-emitter.js";
 import type { ShaderEmissionDiagnostic, WgslEmissionResult, WgslEmissionStructure } from "../webgpu/wgsl-emitter.js";
+import { createGpuUniformStaging, uniformBlockLayoutEntries, type GpuUniformStaging } from "../webgpu/uniform-gpu-staging.js";
 
 import createUniformImpl from "./createUniform.js";
 import createUniformArrayImpl from "./createUniformArray.js";
@@ -509,12 +510,29 @@ function requireText(value: unknown, name: string): string {
   return value;
 }
 
-/** The union of the two stages' define lists, plus any explicit list (order-stable, deduplicated). */
+/**
+ * The union of the two stages' define lists, plus any explicit list (order-stable, deduplicated).
+ *
+ * Upstream pushes **empty strings** for the optional globe defines
+ * (`GlobeSurfaceShaderSet.js:153,164,171`: `quantizationDefine = ""`,
+ * `cartographicLimitRectangleDefine = ""`, `imageryCutoutDefine = ""`, then pushed unconditionally at
+ * `:278-282`). In GLSL a `#define` with no body is harmless; in the emitter's define space it is a
+ * nameless entry that the allow-list correctly refuses, which stopped the first real terrain tile
+ * program in W5 with `unsupported define ""`. Empty entries carry no information, so they are dropped
+ * here — upstream's "define is absent" encoding, expressed once.
+ */
 function collectDefines(explicit: readonly string[] | undefined, ...sources: ShaderSourceLike[]): readonly string[] {
   const merged = new Set<string>();
-  if (explicit !== undefined) for (const define of explicit) merged.add(define);
-  for (const source of sources) for (const define of source.defines ?? []) merged.add(define);
+  if (explicit !== undefined) for (const define of explicit) addDefine(merged, define);
+  for (const source of sources) for (const define of source.defines ?? []) addDefine(merged, define);
   return Object.freeze([...merged]);
+}
+
+function addDefine(merged: Set<string>, define: unknown): void {
+  if (typeof define !== "string") return;
+  const trimmed = define.trim();
+  if (trimmed.length === 0) return;
+  merged.add(trimmed);
 }
 
 /** A stable, text-free variant label (`TEXTURE_UNITS 1|FOG`), used for diagnostics and artefacts. */
@@ -524,7 +542,11 @@ function variantKeyOf(defines: readonly string[]): string {
 }
 
 /** The `DeviceLimits` the layout is validated against, or `null` when no device is reachable. */
-function layoutLimitsOf(context: unknown): { maxBindingsPerBindGroup: number; maxUniformBufferBindingSize: number } | null {
+/** The context's frame counter, or `-1` when the context does not publish one (unit layer). */
+function frameNumberOf(context: unknown): number {
+  const frame = (context as { frameNumber?: unknown } | null | undefined)?.frameNumber;
+  return typeof frame === "number" ? frame : -1;
+}function layoutLimitsOf(context: unknown): { maxBindingsPerBindGroup: number; maxUniformBufferBindingSize: number } | null {
   const limits = (context as { device?: { limits?: Partial<GPUSupportedLimits> } } | null | undefined)?.device?.limits;
   const perGroup = limits?.maxBindingsPerBindGroup;
   const blockSize = limits?.maxUniformBufferBindingSize;
@@ -675,6 +697,9 @@ export default class ShaderProgram {
   #sceneMode: string;
   #uniformFactory: UniformFactory | undefined;
   #uniformWriter: unknown;
+  #gpuStaging: GpuUniformStaging | undefined;
+  #uniformDynamicOffset = 0;
+  #uniformFrame = -1;
   #lastPipeline: GPURenderPipeline | undefined;
   #lastPipelineKey: PipelineCacheKey | undefined;
 
@@ -802,10 +827,12 @@ export default class ShaderProgram {
    * (`Renderer/Context.ts` § `resolveDrawInputs`). Only real values ever appear here — a pipeline is
    * published after `createPipeline` built it, never invented.
    */
-  get __webgpu(): { readonly shaderProgramId: string; readonly pipeline?: GPURenderPipeline; readonly vertexLayout?: readonly VertexAttributeLike[] } {
+  get __webgpu(): { readonly shaderProgramId: string; readonly pipeline?: GPURenderPipeline; readonly vertexLayout?: readonly VertexAttributeLike[]; readonly bindGroups?: readonly GPUBindGroup[]; readonly dynamicOffsets?: readonly number[] } {
+    const staging = this.#gpuStaging;
     return {
       shaderProgramId: String(this.id),
       ...(this.#lastPipeline === undefined ? {} : { pipeline: this.#lastPipeline }),
+      ...(staging === undefined ? {} : { bindGroups: [staging.bindGroup], dynamicOffsets: [this.#uniformDynamicOffset] }),
     };
   }
 
@@ -856,7 +883,10 @@ export default class ShaderProgram {
       for (let i = 0; i < manualUniforms.length; ++i) {
         const mu = manualUniforms[i] as UniformSetterLike;
         if (!defined(uniformMap[mu.name])) throw new DeveloperError(`Unknown uniform: ${mu.name}`);
-        mu.value = (uniformMap[mu.name] as () => unknown)();
+        // Invoked **as a method of the map**: upstream's callbacks read `this` (`GlobeSurfaceTileProvider.js:1905`
+        // `u_initialColor: function () { return this.properties.initialColor; }`), so a detached call loses
+        // the receiver and throws inside the callback (measured in W5).
+        mu.value = (uniformMap as Record<string, () => unknown>)[mu.name]!();
       }
     }
 
@@ -871,6 +901,24 @@ export default class ShaderProgram {
     // "value unchanged ⇒ no write" semantic.
     const uniforms = this._uniforms ?? [];
     for (let i = 0; i < uniforms.length; ++i) (uniforms[i] as UniformSetterLike).set();
+
+    // ---- GPU half (W5): the ring's frame boundary, the command slot and the upload ---------------
+    // Upstream's `Context.draw` calls `_setUniforms` before every draw and then binds the uniform
+    // buffer. The replacement `Context.draw` does the same (it calls this method and then binds
+    // `__webgpu.bindGroups` with `__webgpu.dynamicOffsets`); what follows stages this frame's
+    // automatic block and, when the command carries a `uniformMap`, claims a per-command slot that is
+    // seeded from it.
+    const staging = this.#gpuStaging;
+    if (staging !== undefined) {
+      const frame = frameNumberOf(this.#context);
+      if (frame !== this.#uniformFrame) {
+        staging.beginFrame();
+        this.#uniformFrame = frame;
+      }
+      const manual = (uniformMap ?? null) as Record<string, unknown> | null;
+      this.#uniformDynamicOffset = manual === null || Object.keys(manual).length === 0 ? 0 : staging.writeCommand(manual);
+      staging.flush();
+    }
 
     if (validate === true) {
       // `gl.validateProgram` has no WebGPU counterpart; refusing is the only honest answer.
@@ -1008,6 +1056,28 @@ export default class ShaderProgram {
   get uniformWriter(): unknown {
     return this.#uniformWriter;
   }
+
+  /**
+   * The GPU staging area of this program's uniform block (W5 integration).
+   *
+   * Created on first use, because it needs a device and the shader front end is deliberately
+   * device-free. The bind group it owns is the one `Context.draw` binds to group 0 with this
+   * command's dynamic offset.
+   */
+  gpuUniformStaging(): GpuUniformStaging {
+    this.#gpuStaging ??= createGpuUniformStaging(this.device, this.layout, { label: `cesium-webgpu:program-${this.id}` });
+    return this.#gpuStaging;
+  }
+
+  /** The staging area, when one has been created (no device work). */
+  get hasGpuUniformStaging(): boolean {
+    return this.#gpuStaging !== undefined;
+  }
+
+  /** The dynamic offset the last `_setUniforms` selected (`0` = the automatic block). */
+  get uniformDynamicOffset(): number {
+    return this.#uniformDynamicOffset;
+  }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1019,9 +1089,13 @@ function initializeUniforms(shader: ShaderProgram): void {
 
   const layout = shader.layout;
   const factory = shader.uniformFactory;
+  // Production writes through the GPU staging area (the ring's slot 0 for automatic members); the unit
+  // layer injects its own sink, and a program without a device stays device-free. The sink is the
+  // `UniformStaging` itself — the GPU wrapper owns the buffer/bind group and delegates the encoding.
+  const writer = shader.uniformWriter ?? (shader.hasDevice ? shader.gpuUniformStaging().staging : undefined);
   const factoryOptions: UniformFactoryOptions = {
     layout,
-    ...(shader.uniformWriter === undefined ? {} : { writer: shader.uniformWriter }),
+    ...(writer === undefined ? {} : { writer }),
   };
 
   const uniformsByName: Record<string, UniformSetterLike> = {};
@@ -1076,17 +1150,19 @@ function reinitialize(shader: ShaderProgram): void {
   const vertexModule = device.createShaderModule({ label: `${label}:vs`, code: shader.wgsl.vertexModule });
   const fragmentModule = device.createShaderModule({ label: `${label}:fs`, code: shader.wgsl.fragmentModule });
 
-  const uniformEntries: GPUBindGroupLayoutEntry[] = [
-    { binding: 0, visibility: SHADER_STAGE_VERTEX_FRAGMENT, buffer: { type: "uniform", minBindingSize: shader.layout.structSize } },
-  ];
+  // Group 0 is the uniform block, and its layout comes from the staging area that owns the bind group:
+  // a pipeline layout and a bind group that disagree (e.g. `hasDynamicOffset`) would fail at draw time.
+  // The staging area also decides the per-command dynamic offsets `Context.draw` passes.
+  const staging = shader.gpuUniformStaging();
   const samplerEntries: GPUBindGroupLayoutEntry[] = [];
   for (const sampler of shader.layout.samplers) {
     samplerEntries.push({ binding: sampler.textureBinding, visibility: SHADER_STAGE_VERTEX_FRAGMENT, texture: { sampleType: "float", viewDimension: viewDimensionOf(sampler.textureType) } });
     samplerEntries.push({ binding: sampler.samplerBinding, visibility: SHADER_STAGE_VERTEX_FRAGMENT, sampler: { type: "filtering" } });
   }
 
-  const bindGroupLayouts: GPUBindGroupLayout[] = [device.createBindGroupLayout({ label: `${label}:group0`, entries: uniformEntries })];
+  const bindGroupLayouts: GPUBindGroupLayout[] = [staging.bindGroupLayout];
   if (samplerEntries.length > 0) bindGroupLayouts.push(device.createBindGroupLayout({ label: `${label}:group1`, entries: samplerEntries }));
+  void uniformBlockLayoutEntries;
 
   shader._program = {
     device,

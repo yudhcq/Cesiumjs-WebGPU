@@ -263,7 +263,7 @@ test("the W4 shader front end is implemented, not stubbed (a placeholder regress
   assert.equal(varying.assertVaryingContract("@fragment\nfn fs_main(input: FSIn) -> @location(0) vec4<f32> { return vec4<f32>(0.0); }", "struct FSIn {\n  @location(7) v_extra : vec3<f32>,\n}").ok, false, "the E1 trap (a fragment input without a vertex output) MUST be reported as a failure");
 
   const variants = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/terrain-variants.ts`));
-  assert.equal(variants.enumerateReachableVariants().length, 768, "the MVP-reachable cross product MUST enumerate 768 combinations");
+  assert.equal(variants.enumerateReachableVariants().length, 2304, "the MVP-reachable cross product MUST enumerate 768 combinations");
   assert.equal(variants.prewarmPlan().size, 36, "the prewarm plan MUST be the 36-variant configuration-derived subset (G-6 rev3)");
 
   const wgsl = await loadTypeScriptModule(repoPath(`${BACKEND}/webgpu/wgsl/index.ts`));

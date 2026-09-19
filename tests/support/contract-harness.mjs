@@ -38,6 +38,8 @@ export const SUITE_SCENARIOS = {
   "contract:device-lost": "device-lost",
   "contract:resources": "resources",
   "visual:texture-origin": "texture-origin",
+  "terrain:probe": "terrain-probe",
+  "terrain:canvas-depth-probe": "canvas-depth-probe",
 };
 
 /** The backend of this run — one run, one backend, never a list. */
@@ -132,9 +134,18 @@ export async function runContractSuite(suiteName, options = {}) {
   const consoleMessages = [];
   const pageErrors = [];
   const requestFailures = [];
+  const requests = [];
+  const badResponses = [];
   page.on("console", (message) => consoleMessages.push({ type: message.type(), text: message.text() }));
   page.on("pageerror", (error) => pageErrors.push({ name: error.name ?? "Error", message: error.message ?? String(error) }));
   page.on("requestfailed", (request) => requestFailures.push({ url: request.url(), failure: request.failure()?.errorText ?? null }));
+  // Every request this page made, plus every response the server refused. The offline contract
+  // (`contract:terrain-offline`, T087) asserts "zero *external* requests" against this list, so it is
+  // collected unconditionally rather than only for the suites that assert on it.
+  page.on("request", (request) => requests.push({ url: request.url(), resourceType: request.resourceType() }));
+  page.on("response", (response) => {
+    if (response.status() >= 400) badResponses.push({ url: response.url(), status: response.status() });
+  });
 
   const query = [
     `bundle=/${bundleRelativePath(backend)}`,
@@ -142,6 +153,9 @@ export async function runContractSuite(suiteName, options = {}) {
     `scenario=${scenario}`,
     `width=${viewport.width}`,
     `height=${viewport.height}`,
+    // Extra, suite-declared parameters (e.g. a diagnostic variant of the same scenario). They only
+    // ever narrow one run's fixed conditions; nothing here can enable a second backend (principle II).
+    ...Object.entries(options.query ?? {}).map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`),
   ].join("&");
   const url = `http://127.0.0.1:${port}/${PAGE_RELATIVE}?${query}`;
   const timeoutMs = options.timeoutMs ?? 240000;
@@ -158,6 +172,8 @@ export async function runContractSuite(suiteName, options = {}) {
     consoleMessages,
     pageErrors,
     requestFailures,
+    requests,
+    badResponses,
     report: null,
     error: null,
     startedAt: new Date().toISOString(),
@@ -171,7 +187,7 @@ export async function runContractSuite(suiteName, options = {}) {
     // compositor shows, i.e. the strongest evidence that the draw reached the screen. Suites that
     // assert on pixels ask for it explicitly; the two W2 suites always get it.
     const shouldCapture =
-      options.captureCanvas ?? (suiteName === "contract-backend-core" || suiteName === "smoke:present");
+      options.captureCanvas ?? /terrain|visual|present|backend-core/.test(suiteName);
     if (shouldCapture === true) {
       run.canvasScreenshot = await captureCanvasRegion(page, viewport, suiteName, backend, options.samplePoints ?? []);
     }
