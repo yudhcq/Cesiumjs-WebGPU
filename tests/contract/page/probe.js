@@ -1630,6 +1630,16 @@ function enableFrameReadback(bundle, canvas, context) {
         nonBlackPixels: nonBlack,
         nonTransparentPixels: nonTransparent,
         maxChannel,
+        // INSTRUMENT: the raw bytes of `copyTextureToBuffer` on the acquired canvas texture (bgra8unorm)
+        // — what the GPU rendered, **not** the compositor's PNG. Counting stops at `colourCountCap`, so a
+        // saturated count means ">= cap", never "exactly cap". This number MUST NOT be compared with the
+        // harness screenshot's `uniqueColours`: that one goes through the compositor's colour conversion
+        // (measured: a canvas texture that is a single colour, `uniqueColoursGpuReadback = 1`, yields a
+        // saturated `uniqueColoursComposite` in the PNG of the very same frame).
+        colourCountInstrument: "gpu-readback:copyTextureToBuffer(canvas texture, raw bgra8unorm bytes)",
+        colourCountCap: 256,
+        colourCountSaturated: colours.size >= 256,
+        uniqueColoursGpuReadback: colours.size,
         uniqueColours: colours.size,
         centre: [range[centreOffset], range[centreOffset + 1], range[centreOffset + 2], range[centreOffset + 3]],
         nonBlackBoundingBox: maxX < 0 ? null : { minX, minY, maxX, maxY },

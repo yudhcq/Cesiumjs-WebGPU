@@ -32,9 +32,32 @@ test("the terrain raster probe publishes the geometry, the uniform block and the
   const result = report.result["terrain-raster-probe"];
   const out = path.join(ARTIFACT_ROOT, "terrain-raster-probe");
   fs.mkdirSync(out, { recursive: true });
+  // The two colour counts measure **different instruments**, so they are named and reported apart —
+  // the same word never carries two meanings. The GPU read-back is the raw canvas texture; the
+  // composite is this run's screenshot of the same frame after the compositor's colour conversion
+  // (which saturates a 256-entry counter even when the canvas texture holds exactly one colour).
+  const frameStatistics = {
+    instrumentGpuReadback: {
+      name: "uniqueColoursGpuReadback",
+      source: "in-page copyTextureToBuffer of the acquired canvas texture (raw bgra8unorm bytes)",
+      value: result?.gpuFrame?.uniqueColoursGpuReadback ?? null,
+      cap: result?.gpuFrame?.colourCountCap ?? 256,
+      saturated: result?.gpuFrame?.colourCountSaturated ?? null,
+      centre: result?.gpuFrame?.centre ?? null,
+    },
+    instrumentComposite: {
+      name: "uniqueColoursComposite",
+      source: "playwright page.screenshot of the canvas element (compositor output, PNG; the same helper the WebGL2 reference run uses)",
+      value: run.canvasScreenshot?.uniqueColours ?? null,
+      cap: 256,
+      saturated: (run.canvasScreenshot?.uniqueColours ?? 0) >= 256,
+      centre: run.canvasScreenshot?.centre ?? null,
+    },
+    note: "different instruments: only same-instrument values are comparable across paths (the composite one is what the offline cross-path comparison uses)",
+  };
   fs.writeFileSync(
     path.join(out, `observation.${run.backend}.json`),
-    `${JSON.stringify({ run: { backend: run.backend, url: run.url, browserVersion: run.browserVersion, error: run.error }, result, canvasScreenshot: run.canvasScreenshot ?? null, pageErrors: run.pageErrors, pageReportedErrors: report.errors, consoleMessages: run.consoleMessages }, null, 2)}\n`,
+    `${JSON.stringify({ run: { backend: run.backend, url: run.url, browserVersion: run.browserVersion, error: run.error }, result, canvasScreenshot: run.canvasScreenshot ?? null, frameStatistics, pageErrors: run.pageErrors, pageReportedErrors: report.errors, consoleMessages: run.consoleMessages }, null, 2)}\n`,
     "utf8",
   );
   if (typeof result?.vertexModule === "string") {
