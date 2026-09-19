@@ -119,4 +119,9 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.message.textContent =
       "占位入口：设备丢失恢复流程尚未接入（需要先有可用的场景句柄）。";
   });
+  // The page exists to *show* the shipped entry working. Without this call the module only
+  // exported `start` and nothing invoked it, so `/apps/demo/` stayed on the Phase-1 placeholder
+  // text with no canvas at all (measured: no `canvas` element in the container, no requests for
+  // the fixture dataset). Wiring the call is what makes the example an example.
+  start();
 });
