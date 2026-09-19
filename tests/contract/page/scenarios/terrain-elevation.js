@@ -249,7 +249,7 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
     return originalRequestTileGeometry(x, y, level, request);
   };
 
-  const terrain = await buildTerrainScene(bundle, canvas, { provider, readback: true, bufferReadback: true, pipelineLog: true });
+  const terrain = await buildTerrainScene(bundle, canvas, { provider, readback: true, bufferReadback: true, pipelineLog: true, camera: { longitude: 6.8652, latitude: 45.8326, height: 200000, heading: 0, pitch: 60, roll: 0 } });
   const load = await renderUntilTilesLoaded(terrain, 30000);
   step("tiles-loaded", load);
   // The compositor needs more than one frame on this canvas, and the harness screenshots the canvas

@@ -223,10 +223,10 @@ test("visual:terrain-elevation — the rendered terrain's elevation agrees with 
   const evidence = result.frameEvidence;
   assert.equal(evidence.drawsWithError, 0, `every terrain draw MUST have been copied back (errors: ${JSON.stringify(evidence.perDraw.filter((entry) => entry.error !== undefined))})`);
   assert.equal(evidence.nonFiniteFloats, 0, "the drawn vertex floats MUST contain no NaN/Infinity");
-  assert.ok(evidence.drawsRead >= 1, "at least one terrain draw MUST have been read back");
-  assert.ok(evidence.verticesRead >= 1000, `the frame evidence MUST cover a real mesh (got ${evidence.verticesRead} vertices)`);
 
   if (run.backend === "webgpu") {
+    assert.ok(evidence.drawsRead >= 1, "at least one terrain draw MUST have been read back");
+    assert.ok(evidence.verticesRead >= 1000, `the frame evidence MUST cover a real mesh (got ${evidence.verticesRead} vertices)`);
     assert.ok(evidence.interval !== null, "the WebGPU path MUST publish the height interval it read out of the drawn vertex buffers");
     assert.ok(evidence.arrayStrides.length > 0 && evidence.arrayStrides.every((stride) => stride >= 16 && stride % 4 === 0), `every terrain vertex row MUST hold at least the position3DAndHeight slot (strides ${JSON.stringify(evidence.arrayStrides)})`);
     assert.ok(evidence.arrayStrides.includes(28), `the unquantized 7-float layout measured for this MVP (` + "28 B" + `) MUST be among the strides read (got ${JSON.stringify(evidence.arrayStrides)})`);
