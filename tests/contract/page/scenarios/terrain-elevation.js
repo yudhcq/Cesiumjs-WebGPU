@@ -589,20 +589,23 @@ export default async function terrainElevationScenario(bundle, canvas, ctx) {
     };
     const always = await indicatorFrame("always");
     const greaterOverTerrain = await indicatorFrame("greater");
-    // MEASURED, and the reason the control below is not "over a cleared buffer": a frame that only
-    // clears paints the full viewport through the `greater` marker on this platform (measured here:
-    // 153 600/153 600), i.e. the depth attachment does not hold the clear value the descriptor names at
-    // the moment the marker is tested. Rather than assert something the measurement contradicts, the
-    // observation is published and the discrimination is stated against the **unconditional** marker:
-    // `always` must cover the viewport, `greater` must cover no more than that, and the terrain-covered
-    // share is what `greater` reports while the terrain's own depth is still in the attachment (it is
-    // taken first, before any marker frame).
+    // The discriminating control. The terrain's own depth is in the attachment in this frame (the marker
+    // frames are `depthWriteEnabled: false`), so a `less` marker at clip depth 1.0 MUST paint **nothing**:
+    // if it painted, the attachment would be holding the clear value rather than rendered depth and the
+    // `greater` count above would mean nothing. (The clear-only arm is reported separately: on this
+    // platform it paints the full viewport, which is why the control is taken against the terrain's depth
+    // instead of against a cleared buffer.)
+    const lessOverTerrain = await indicatorFrame("less");
     const clearOnlyGreater = await indicatorFrame("greater", { clearOnly: true });
     depthIndicator = {
       instrument: "full-viewport triangle at clip depth 1.0 drawn through the same Context, counted in the canvas-texture read-back (probe.js:2407-2474)",
       always: always === null ? null : { markerPixels: always.markerPixels, viewportPixels: always.viewportPixels },
       greaterOverTerrain: greaterOverTerrain === null ? null : { markerPixels: greaterOverTerrain.markerPixels, viewportPixels: greaterOverTerrain.viewportPixels },
+      lessOverTerrain: lessOverTerrain === null ? null : { markerPixels: lessOverTerrain.markerPixels, viewportPixels: lessOverTerrain.viewportPixels },
       clearOnlyGreater: clearOnlyGreater === null ? null : { markerPixels: clearOnlyGreater.markerPixels, viewportPixels: clearOnlyGreater.viewportPixels },
+      // `less` paints zero over rendered depth and everything over the clear value: that difference is
+      // what makes the depth presence measurable here.
+      controlPaintsNothing: lessOverTerrain === null ? null : lessOverTerrain.markerPixels === 0,
       controlNote: "the clear-only frame is reported, not asserted: it painted the whole viewport here, so this platform does not expose the depth clear value to the marker the way the probe's `greater` over a cleared buffer would need",
       depthWrittenShare: greaterOverTerrain === null || always === null ? null : Number((greaterOverTerrain.markerPixels / always.viewportPixels).toFixed(6)),
       verdict: greaterOverTerrain === null ? "the indicator did not run" : `${greaterOverTerrain.markerPixels} of ${always?.viewportPixels ?? 0} viewport pixels hold depth written below the clear value`,

@@ -590,16 +590,22 @@ function writeEvidence(fileName, payload) {
 test("measured arm: 3 s of fixed-step rotate/zoom/pan holds (a) no >1000 ms stall, (b) no uncaught error, (c) the settled frame in the same interval, (d) a growing frame counter", async () => {
   const label = "measured arm";
   const run = await runContractSuite(SUITE, { viewport: { ...VIEWPORT }, timeoutMs: 420_000, captureCanvas: true });
-  const { result, distribution, stalls } = assertInteractionArm(run, label);
+  // Gather + persist FIRST: this arm's measurements must survive even when an assertion below throws
+  // (the harness artifact for this suite is overwritten by the counter-example arm's run).
+  const { result, distribution, stalls } = gatherArm(run);
   const evidence = armEvidence(run, label, result, distribution, stalls);
   const file = writeEvidence(`${run.backend}-interaction.json`, evidence);
+  const verdicts = evidence.verdicts;
+
+  assertInteractionArm(run, label);
   console.log(
     `${SUITE}[${run.backend}] ${label}: steps=${result.interaction.stepsApplied} duration=${result.interaction.realizedDurationMs}ms ` +
       `frames/window=${distribution.count} gap(min/p50/p95/p99/max)=${distribution.min}/${distribution.p50}/${distribution.p95}/${distribution.p99}/${distribution.max}ms ` +
       `stalls>${STALL_THRESHOLD_MS}ms=${stalls.length} coverage=${result.captures.pre.stats.nonBackgroundRatio}->${result.captures.post.stats.nonBackgroundRatio} ` +
       `colours=${result.captures.pre.stats.uniqueColorCount}->${result.captures.post.stats.uniqueColorCount} ` +
+      `drawCalls=${result.captures.pre.stats.drawCallCount}->${result.captures.post.stats.drawCallCount} ` +
       `tiles=${result.captures.pre.stats.tileCount}->${result.captures.post.stats.tileCount} ` +
-      `diagnostics=${result.diagnostics.length} uncaught=${result.uncaught.length} screenshotNonBackground=${run.canvasScreenshot?.nonBackground ?? null} ` +
+      `diagnostics=${result.diagnostics.length} uncaught=${result.uncaught.length} screenshotCoverage=${verdicts.c_compositorCoverage} ` +
       `evidence=${path.relative(REPO_ROOT, file).split(path.sep).join("/")}`,
   );
 });
@@ -622,11 +628,53 @@ test("counter-example arm: an injected 1200 ms main-thread freeze MUST be flagge
   // observes are recorded in its evidence rather than asserted here).
   assertCleanRun(run, assert);
 
-  const result = scenarioResult(run, label);
-  const samples = result.frameSamplesRaw;
-  const window = { fromMs: result.interaction.startMs, toMs: result.interaction.settleEndMs };
+  // Gather + persist first, so the detector's evidence survives any assertion below.
+  const { result, distribution, stalls } = gatherArm(run);
+  const samples = result === null ? [] : result.frameSamplesRaw;
+  const window = result === null ? null : { fromMs: result.interaction.startMs, toMs: result.interaction.settleEndMs };
+  const evidence = armEvidence(run, label, result, distribution, stalls);
+  const file = writeEvidence(`${run.backend}-negative-control.json`, evidence);
+  if (result === null) throw new Error(`${label}: the scenario never published a result, so the detector cannot be exercised`);
 
   const injected = result.interaction.injectedStall;
+  const panStalls = stalls.filter((entry) => entry.phases.includes("pan"));
+  const peakGapMs = panStalls.length === 0 ? null : Math.max(...panStalls.map((entry) => entry.peakGapMs));
+
+  // THE ACTUAL ASSERTION OF ARM 1, RUN AGAINST THESE SAMPLES. It MUST throw; the message is the
+  // "failure output summary" that proves the red state is reachable, and it is recorded verbatim.
+  const assertionMessage =
+    `${label}: the interaction produced ${stalls.length} continuous stall(s) longer than ${STALL_THRESHOLD_MS} ms. ` +
+    `Measured inter-frame gap distribution in [${window.fromMs}, ${window.toMs}] ms: ${JSON.stringify(distribution)}`;
+  let failure = null;
+  try {
+    assert.equal(findStallRuns(samples, STALL_THRESHOLD_MS, window).length, 0, assertionMessage);
+  } catch (error) {
+    failure = String(error?.message ?? error);
+  }
+
+  // Threshold sensitivity: the detector follows the threshold it is given, so "flagged" is not a
+  // constant. Runs are *maximal consecutive* over-threshold gaps, which is why the sensitivity is
+  // measured on the raw flagged-sample counts (a 1 ms threshold collapses into a single run).
+  const relaxedRuns = findStallRuns(samples, NEGATIVE_CONTROL_RELAXED_THRESHOLD_MS, window);
+  const flaggedAtContractThreshold = countFlagged(samples, STALL_THRESHOLD_MS, window);
+  const flaggedAtRelaxedThreshold = countFlagged(samples, NEGATIVE_CONTROL_RELAXED_THRESHOLD_MS, window);
+  const flaggedAtStrictThreshold = countFlagged(samples, NEGATIVE_CONTROL_STRICT_THRESHOLD_MS, window);
+
+  // Everything is measured; persist it before asserting so the detector's evidence survives a red arm.
+  evidence.detector = {
+    thresholdMs: STALL_THRESHOLD_MS,
+    runsAtContractThreshold: stalls,
+    flaggedSamplesAtContractThreshold: flaggedAtContractThreshold,
+    relaxedThresholdMs: NEGATIVE_CONTROL_RELAXED_THRESHOLD_MS,
+    runsAtRelaxedThreshold: relaxedRuns.length,
+    flaggedSamplesAtRelaxedThreshold: flaggedAtRelaxedThreshold,
+    strictThresholdMs: NEGATIVE_CONTROL_STRICT_THRESHOLD_MS,
+    flaggedSamplesAtStrictThreshold: flaggedAtStrictThreshold,
+  };
+  evidence.injectedStall = injected;
+  evidence.measuredArmAssertionFailureSummary = failure;
+  const finalFile = writeEvidence(`${run.backend}-negative-control.json`, evidence);
+
   assert.ok(injected !== null && injected !== undefined, `${label}: the page MUST record the injected freeze (got ${JSON.stringify(injected)})`);
   assert.equal(injected.requestedMs, INJECTED_STALL_MS, `${label}: the injected freeze MUST be the requested one`);
   assert.equal(injected.phase, "pan", `${label}: the freeze MUST land in the pan phase (the page reported "${injected.phase}")`);
@@ -637,40 +685,17 @@ test("counter-example arm: an injected 1200 ms main-thread freeze MUST be flagge
     result.interaction.stepsApplied >= 50 && result.interaction.stepsApplied <= 60,
     `${label}: the interaction applied ${result.interaction.stepsApplied} of 60 steps; steps up to the injected one (30 + ${injected.stepIndex} = ${30 + injected.stepIndex}) MUST all be applied`,
   );
-
-  const stalls = findStallRuns(samples, STALL_THRESHOLD_MS, window);
-  const distribution = summariseGaps(samples.filter((sample) => typeof sample.gapMs === "number" && sample.t >= window.fromMs && sample.t <= window.toMs).map((sample) => sample.gapMs));
   assert.ok(
     stalls.length >= 1,
     `${label}: the injected ${INJECTED_STALL_MS} ms freeze was NOT flagged as a stall > ${STALL_THRESHOLD_MS} ms — the measured arm's assertion would be unfalsifiable. ` +
-      `Distribution: ${JSON.stringify(distribution)}; samples around the freeze: ${JSON.stringify(samples.filter((sample) => sample.injectedStall === true).slice(0, 3))}`,
+      `Distribution: ${JSON.stringify(distribution)}`,
   );
-  const panStalls = stalls.filter((run_) => run_.phases.includes("pan"));
   assert.ok(panStalls.length >= 1, `${label}: no stall was attributed to the pan phase: ${JSON.stringify(stalls)}`);
-  const peakGapMs = Math.max(...panStalls.map((entry) => entry.peakGapMs));
   assert.ok(
     peakGapMs >= INJECTED_STALL_MS - INJECTED_STALL_TOLERANCE_MS,
     `${label}: the detected stall peaks at ${peakGapMs} ms, below the injected ${INJECTED_STALL_MS} ms (−${INJECTED_STALL_TOLERANCE_MS} ms)`,
   );
-
-  // THE ACTUAL ASSERTION OF ARM 1, RUN AGAINST THESE SAMPLES. It MUST throw; the message is the
-  // "failure output summary" that proves the red state is reachable.
-  const assertionMessage = `${label}: the interaction produced ${stalls.length} continuous stall(s) longer than ${STALL_THRESHOLD_MS} ms. Measured inter-frame gap distribution in [${window.fromMs}, ${window.toMs}] ms: ${JSON.stringify(distribution)}`;
-  let failure = null;
-  try {
-    assert.equal(findStallRuns(samples, STALL_THRESHOLD_MS, window).length, 0, assertionMessage);
-  } catch (error) {
-    failure = String(error?.message ?? error);
-  }
   assert.ok(failure !== null, `${label}: the measured arm's stall assertion PASSED on a run with an injected ${INJECTED_STALL_MS} ms freeze, i.e. it cannot fail`);
-
-  // Threshold sensitivity: the detector follows the threshold it is given, so "flagged" is not a
-  // constant. Runs are *maximal consecutive* over-threshold gaps, which is why the sensitivity is
-  // measured on the raw flagged-sample counts (a 1 ms threshold would collapse into a single run).
-  const relaxedRuns = findStallRuns(samples, NEGATIVE_CONTROL_RELAXED_THRESHOLD_MS, window);
-  const flaggedAtContractThreshold = countFlagged(samples, STALL_THRESHOLD_MS, window);
-  const flaggedAtRelaxedThreshold = countFlagged(samples, NEGATIVE_CONTROL_RELAXED_THRESHOLD_MS, window);
-  const flaggedAtStrictThreshold = countFlagged(samples, NEGATIVE_CONTROL_STRICT_THRESHOLD_MS, window);
   assert.equal(relaxedRuns.length, 0, `${label}: no gap should exceed ${NEGATIVE_CONTROL_RELAXED_THRESHOLD_MS} ms (got ${JSON.stringify(relaxedRuns)})`);
   assert.equal(flaggedAtRelaxedThreshold, 0, `${label}: no sample should be flagged at ${NEGATIVE_CONTROL_RELAXED_THRESHOLD_MS} ms`);
   assert.ok(
@@ -678,26 +703,10 @@ test("counter-example arm: an injected 1200 ms main-thread freeze MUST be flagge
     `${label}: a ${NEGATIVE_CONTROL_STRICT_THRESHOLD_MS} ms threshold flagged ${flaggedAtStrictThreshold} samples and the contract threshold flagged ${flaggedAtContractThreshold}; the sampler does not resolve individual frames`,
   );
 
-  const evidence = armEvidence(run, label, result, distribution, stalls, {
-    injectedStall: injected,
-    detector: {
-      thresholdMs: STALL_THRESHOLD_MS,
-      runsAtContractThreshold: stalls,
-      flaggedSamplesAtContractThreshold: flaggedAtContractThreshold,
-      relaxedThresholdMs: NEGATIVE_CONTROL_RELAXED_THRESHOLD_MS,
-      runsAtRelaxedThreshold: relaxedRuns.length,
-      flaggedSamplesAtRelaxedThreshold: flaggedAtRelaxedThreshold,
-      strictThresholdMs: NEGATIVE_CONTROL_STRICT_THRESHOLD_MS,
-      flaggedSamplesAtStrictThreshold: flaggedAtStrictThreshold,
-    },
-    measuredArmAssertionFailureSummary: failure,
-  });
-  evidence.comparison = result.comparison;
-  const file = writeEvidence(`${run.backend}-negative-control.json`, evidence);
   console.log(
     `${SUITE}[${run.backend}] ${label}: injected=${injected.requestedMs}ms@${injected.phase} detectedRuns=${stalls.length} peakGap=${peakGapMs}ms ` +
       `flagged(5000ms)=${flaggedAtRelaxedThreshold} flagged(1000ms)=${flaggedAtContractThreshold} flagged(1ms)=${flaggedAtStrictThreshold} ` +
-      `measuredArmAssertionFailed=${failure !== null} evidence=${path.relative(REPO_ROOT, file).split(path.sep).join("/")}`,
+      `measuredArmAssertionFailed=${failure !== null} evidence=${path.relative(REPO_ROOT, finalFile).split(path.sep).join("/")}`,
   );
   console.log(`${SUITE}[${run.backend}] failure summary of the measured arm's assertion on this run: ${failure}`);
 });

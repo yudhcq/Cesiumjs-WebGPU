@@ -592,6 +592,8 @@ export default async function deviceLostTerrainScenario(bundle, canvas, ctx) {
     },
     /** The `device-lost` category as the backend itself produced it, captured at `Context#draw`. */
     drawFailures: drawFailures.slice(0, 32),
+    /** The other half of `residualDraws`: submission-stopped clears, which are counted but do not throw. */
+    clearRefusals: clearRefusals.slice(0, 32),
     /** Every console error the page produced, verbatim, with its count and when the first one appeared. */
     consoleErrors: { entries: consoleErrors.map((entry) => ({ ...entry })), total: consoleErrorTotal(), beforeProbe: consoleErrorsBeforeProbe, afterDestroy: consoleErrorsAfterDestroy },
     deviceLoss: {

@@ -158,6 +158,8 @@ test("the terrain scene recovers from device.destroy() without a refresh, and ke
   //     `Renderbuffer` record the replaced resource classes registered (`register` on creation, `release`
   //     from `Buffer#destroy` / `Texture#destroy` / `Renderbuffer#destroy`).
   assert.ok(result.resources.ledgerBefore.live > 0, `the first backend owned registered GPU resources: ${JSON.stringify(result.resources.ledgerBefore)}`);
+  assert.equal(result.resources.ledgerBeforeScene.live, 0, "the ledger starts empty (nothing is registered before the scene exists)");
+  assert.equal(result.resources.ledgerBeforeProbe.live, 0, "the probe itself registers nothing");
   assert.equal(result.resources.contextAfterDispose.liveResourceCount, 0, "the destroyed context owns no GPU attachment");
   assert.equal(result.resources.contextAfterDispose.destroyed, true, "the old context is destroyed");
   assert.ok(result.resources.ledgerAfterRebuild.live > 0, "the rebuilt device's resources are on the ledger");
@@ -177,10 +179,17 @@ test("the terrain scene recovers from device.destroy() without a refresh, and ke
     "OPEN: the destroyed device's live ledger records survive dispose() unchanged",
   );
   assert.equal(result.attribution.forcedTrim.ok ?? false, true, `the tile-replacement queue MUST be reachable for the attribution: ${JSON.stringify(result.attribution.forcedTrim)}`);
-  assert.equal(
-    result.attribution.ledgerAfterForcedTrim.live,
-    0,
-    `one trim releases the residue, so it is the lazily freed tile buffers: ${JSON.stringify(result.attribution.ledgerAfterForcedTrim)}`,
+  // The experiment *disproves* the easy explanation ("the tiles were merely not trimmed yet"): a forced
+  // `trimTiles(0)` on the destroyed surface releases nothing, so the records are simply never released.
+  // Asserted as an OPEN characterization so a fix cannot pass unnoticed.
+  assert.ok(
+    result.attribution.ledgerAfterForcedTrim.live > 0,
+    `OPEN: the ledger still counts the destroyed device's objects after dispose() and a forced tile trim — ${JSON.stringify({
+      afterDispose: result.resources.ledgerAfterDispose.live,
+      beforeTrim: result.attribution.ledgerBeforeForcedTrim.live,
+      afterTrim: result.attribution.ledgerAfterForcedTrim.live,
+      queue: result.attribution.queueCounts,
+    })}`,
   );
   // The rebuilt device's tiles really were fetched again instead of being reused from the dead one.
   assert.ok(
@@ -207,7 +216,13 @@ test("the terrain scene recovers from device.destroy() without a refresh, and ke
   // loss with it) — the refusal is the guard, not a failure.
   const refused = result.drawFailures.filter((failure) => failure.category === "device-lost");
   assert.ok(refused.length >= 1, `Context#draw MUST refuse a draw with category "device-lost" after the loss: ${JSON.stringify(result.drawFailures)}`);
-  assert.equal(result.deviceLoss.residualDrawsAfterStop, refused.length, "every refusal is counted by the context's own residual counter");
+  // `residualDraws` counts both kinds of refusal the stopped context performs: the draws that throw
+  // `device-lost` and the clears that quietly return the `loadOp` mechanism instead of clearing.
+  assert.equal(
+    result.deviceLoss.residualDrawsAfterStop,
+    refused.length + result.clearRefusals.length,
+    `residualDraws MUST equal the recorded refusals (draws ${refused.length} + clears ${result.clearRefusals.length}): ${JSON.stringify(result.clearRefusals)}`,
+  );
   // ...and the loss MUST reach the caller through `diagnostics.onError` instead of being dropped (the
   // defect this suite measured in HEAD `1811d58`: `isDiagnosticError` required `name === "DiagnosticError"`,
   // rejected the entry's structurally-valid diagnostics, and substituted an `internal` console error).
@@ -219,9 +234,13 @@ test("the terrain scene recovers from device.destroy() without a refresh, and ke
   );
 
   // "MUST NOT keep the old device's drawing" --------------------------------------------------------
-  const keyOf = (counters) => `${counters.frames}/${counters.draws}/${counters.passes}/${counters.submittedCommandBuffers}`;
   // The old context is frozen from the moment it stops submitting: it neither dispatched a draw that
   // reached the device nor submitted a command buffer again, and nothing was submitted during the rebuild.
+  // `frames` is deliberately NOT part of the key: beginning one more frame is how the context *discovers*
+  // that submission has stopped (that is exactly where the refusal happens, measured), so only the
+  // counters that describe work actually sent to the device MUST stay frozen.
+  const keyOf = (counters) =>
+    `draws=${counters.draws}/drawIndexed=${counters.drawIndexedCalls}/passes=${counters.passes}/submitted=${counters.submittedCommandBuffers}`;
   assert.equal(
     keyOf(result.deviceIdentity.oldContextCountersAtStop),
     keyOf(result.deviceIdentity.oldContextCountersAfterDispose),
@@ -295,10 +314,11 @@ test("the terrain scene recovers from device.destroy() without a refresh, and ke
       },
       {
         arm: "(c) FR-017 ledger returns to zero for the destroyed device",
-        measured: `live stays at ${result.resources.ledgerAfterDispose.live} (released ${result.resources.ledgerAfterDispose.released})`,
-        why: "upstream frees terrain tile resources only while rendering; QuadtreePrimitive#destroy destroys only the tile provider",
+        measured: `live stays at ${result.resources.ledgerAfterDispose.live} (released ${result.resources.ledgerAfterDispose.released}) and a forced tile trim releases nothing either (${JSON.stringify(result.attribution.queueCounts)})`,
+        why:
+          "`release()` is only called from `Buffer#destroy` / `Texture#destroy` / `Renderbuffer#destroy`, and the destroyed scene never reaches those for its remaining records: `QuadtreePrimitive#destroy` destroys only the tile provider, and the tile replacement queue no longer frees anything after the scene is gone (measured — the quick explanation 'the tiles were merely not trimmed yet' is disproved)",
         requiredChange:
-          "reset the ledger when the post-loss device is installed (GpuResourceRegistry.reset()'s documented 'a new device means a new ledger', called from the W6 probe) or release terrain tile resources before scene.destroy()",
+          "reset the ledger when the post-loss device is installed (`GpuResourceRegistry.reset()`'s documented 'a new device means a new ledger', called from the W6 probe) or release the terrain tile resources before `scene.destroy()`",
       },
       {
         arm: "OUT OF SCOPE — the control page's camera changes (`setView`) render",

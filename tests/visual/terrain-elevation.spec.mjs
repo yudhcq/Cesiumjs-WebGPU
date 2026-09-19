@@ -328,16 +328,19 @@ test("visual:terrain-elevation — the rendered terrain's elevation agrees with 
     const indicator = result.depth.indicator;
     assert.ok(indicator.always !== null && indicator.always.markerPixels === indicator.always.viewportPixels, `the marker MUST cover the whole viewport when it ignores depth (${indicator.always?.markerPixels}/${indicator.always?.viewportPixels}): without that, a small depth-tested count would prove nothing`);
     assert.ok(indicator.greaterOverTerrain.markerPixels > 0, "the terrain MUST have written depth below the clear value somewhere: the depth test paints exactly where geometry rasterised");
+    assert.equal(
+      indicator.controlPaintsNothing,
+      true,
+      `a \`less\` marker at clip depth 1.0 MUST paint nothing over the terrain's depth (measured ${indicator.lessOverTerrain?.markerPixels} px): if it painted, the attachment would hold the clear value and the \`greater\` count above would mean nothing`,
+    );
     assert.ok(
       indicator.greaterOverTerrain.markerPixels <= indicator.always.viewportPixels,
       `the depth-tested marker MUST NOT cover more than the unconditional one (${indicator.greaterOverTerrain.markerPixels} vs ${indicator.always.viewportPixels})`,
     );
     // Published, not asserted: the clear-only frame painted the whole viewport on this platform, which is
-    // an instrument limitation (the clear value the pass machine names is not what the marker tests), so
-    // this suite states the depth evidence it does have — geometry wrote depth over the whole viewport —
-    // and records the limitation instead of claiming a control it does not have.
+    // the instrument limitation that made the `less` control the discriminating one.
     console.log(
-      `terrain-elevation[${run.backend}]: depth indicator — always ${indicator.always.markerPixels}/${indicator.always.viewportPixels}, greater-over-terrain ${indicator.greaterOverTerrain.markerPixels}, clear-only-greater ${indicator.clearOnlyGreater.markerPixels} (instrument limitation, reported not asserted)`,
+      `terrain-elevation[${run.backend}]: depth indicator — always ${indicator.always.markerPixels}/${indicator.always.viewportPixels}, greater-over-terrain ${indicator.greaterOverTerrain.markerPixels}, less-over-terrain ${indicator.lessOverTerrain.markerPixels} (control), clear-only-greater ${indicator.clearOnlyGreater.markerPixels} (instrument limitation, reported not asserted)`,
     );
   } else {
     assert.ok(result.depth.indicator.skipped !== undefined, "a backend without the depth indicator MUST say so");

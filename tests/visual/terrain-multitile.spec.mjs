@@ -543,7 +543,9 @@ function fixedConditions(result, backend) {
     settle: result.settle,
     context: result.context,
     sceneConfiguration: result.sceneConfiguration,
-    pageOverlayText: result.pageOverlayText ?? null,
+    // The screenshot is a page screenshot clipped to the canvas, so the credit overlay inside the
+    // container is part of the compared frame — and its text is therefore part of the case's identity.
+    pageOverlayText: result.probe?.pageOverlayText ?? null,
   };
 }
 
