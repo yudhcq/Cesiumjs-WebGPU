@@ -32,6 +32,9 @@ experiments/gates/out/*
 !experiments/gates/out/g6-precision.json
 !experiments/gates/out/g6-variants.json
 !experiments/gates/out/g6-override-probe.json
+# G-7 precursor measurement (slice B's design space). A slug, not `g7.json`, because the G-7 **verdict**
+# belongs to T127 and MUST NOT be implied by this evidence file.
+!experiments/gates/out/g7-depth-msaa.json
 # Negative controls — proof that each gate CAN fail (small verdicts only)
 !experiments/gates/out/g1-control-no-rewrite.json
 !experiments/gates/out/g2-control-no-handoff.json

@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>G-7 precursor: depth × MSAA legality (slice B design space)</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <canvas id="g7-canvas" width="64" height="64"></canvas>
+    <p id="g7-note">
+      Measures which offscreen-depth designs are <em>legal</em> in this browser, so slice B (T097/T098a)
+      is chosen from measurement rather than from the WebGL idiom. Publishes
+      <code>globalThis.g7DepthMsaa</code>.
+    </p>
+    <script type="module">
+      /**
+       * G-7 precursor — the depth-texture × MSAA design space, measured.
+       *
+       * Why this page exists: slice A ships `context.depthTexture === false`, and the patch layer's
+       * refusal names the cause (`FramebufferManager.ts`: "every attachment of a WebGPU render pass
+       * shares one sample count"). But *which* design slice B can legally build is not derivable from
+       * that sentence alone — the WebGL idiom (a multisampled depth **renderbuffer** as the attachment
+       * plus a single-sampled depth **texture** as the resolve target) has no WebGPU counterpart unless
+       * a depth resolve exists. So each candidate mechanism is measured here, each with the control arm
+       * that makes its error attributable.
+       *
+       * Every measurement reports the browser's own message verbatim: a design decision this load-bearing
+       * MUST NOT rest on a paraphrase.
+       */
+      const report = {
+        probe: "g7-depth-msaa",
+        ready: false,
+        environment: null,
+        measurements: [],
+        notes: [],
+        errors: [],
+      };
+      globalThis.g7DepthMsaa = report;
+
+      const record = (name, why, outcome) => {
+        report.measurements.push({ name, why, ...outcome });
+        const state = outcome.error === null ? "LEGAL" : "rejected";
+        console.log(`[g7] ${state.padEnd(8)} ${name}${outcome.error === null ? "" : ` :: ${outcome.error}`}`);
+      };
+
+      /**
+       * Run one measurement inside its own validation scope.
+       *
+       * Both failure channels are captured, because they are not interchangeable: a descriptor mistake
+       * throws synchronously (TypeError), while a device-side rule violation surfaces through the error
+       * scope — and the *text* of the second kind is the evidence this gate is after.
+       */
+      async function measure(device, name, why, body) {
+        let thrown = null;
+        let scoped = null;
+        device.pushErrorScope("validation");
+        try {
+          await body();
+          await device.queue.onSubmittedWorkDone();
+        } catch (error) {
+          thrown = `${error?.name ?? "Error"}: ${error?.message ?? String(error)}`;
+        }
+        try {
+          const scopedError = await device.popErrorScope();
+          scoped = scopedError === null ? null : `${scopedError.name ?? "Error"}: ${scopedError.message ?? String(scopedError)}`;
+        } catch (error) {
+          scoped = `popErrorScope failed: ${error?.message ?? String(error)}`;
+        }
+        record(name, why, { error: thrown ?? scoped, thrown, scoped });
+        return thrown ?? scoped;
+      }
+
+      const FS_SAMPLE_DEPTH = `
+        @group(0) @binding(0) var depthTexture : texture_depth_2d;
+        @fragment
+        fn fs_main(@builtin(position) position : vec4f) -> @location(0) vec4f {
+          let d = textureLoad(depthTexture, vec2i(position.xy), 0);
+          return vec4f(d, d, d, 1.0);
+        }`;
+
+      /**
+       * The in-shader resolve: a multisampled depth texture is only reachable as
+       * `texture_depth_multisampled_2d`, and only through `textureLoad` with an explicit sample index —
+       * there is no `textureSample` for it. Averaging the four samples here is exactly what a manual
+       * depth resolve would have to do.
+       */
+      const FS_LOAD_MULTISAMPLED_DEPTH = `
+        @group(0) @binding(0) var depthMultisampled : texture_depth_multisampled_2d;
+        @fragment
+        fn fs_main(@builtin(position) position : vec4f) -> @location(0) vec4f {
+          let coord = vec2i(position.xy);
+          var total = 0.0;
+          for (var index = 0; index < 4; index = index + 1) {
+            total = total + textureLoad(depthMultisampled, coord, index);
+          }
+          let d = total / 4.0;
+          return vec4f(d, d, d, 1.0);
+        }`;
+
+      const VS_FULL = `
+        @vertex
+        fn vs_main(@builtin(vertex_index) index : u32) -> @builtin(position) vec4f {
+          var corners = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+          return vec4f(corners[index], 0.0, 1.0);
+        }`;
+
+      const FS_WRITE_DEPTH = `
+        struct FsOut {
+          @builtin(frag_depth) depth : f32,
+          @location(0) color : vec4f,
+        };
+        @fragment
+        fn fs_main() -> FsOut {
+          var out : FsOut;
+          out.depth = 0.25;
+          out.color = vec4f(1.0, 0.0, 1.0, 1.0);
+          return out;
+        }`;
+
+      function shader(device, code, label) {
+        return device.createShaderModule({ label, code });
+      }
+
+      async function main() {
+        try {
+          if (navigator.gpu === undefined) throw new Error("navigator.gpu is unavailable");
+          const adapter = await navigator.gpu.requestAdapter();
+          if (adapter === null) throw new Error("no adapter");
+          const device = await adapter.requestDevice();
+          const canvas = document.getElementById("g7-canvas");
+          const format = navigator.gpu.getPreferredCanvasFormat();
+          report.environment = {
+            adapterInfo: adapter.info ?? null,
+            preferredFormat: format,
+            userAgent: navigator.userAgent,
+            maxColorAttachmentBytesPerSample: adapter.limits.maxColorAttachmentBytesPerSample,
+          };
+
+          const depthOnlyFormats = ["depth32float", "depth24plus", "depth16unorm", "depth24plus-stencil8"];
+
+          // ---------------------------------------------------------------- M1/M2: sample-count rule
+          // M1 is the rule the patch layer cites. M2 is its control: the *same* pass shape with a
+          // matching 4-sample depth attachment. Without M2, M1's error could be caused by anything
+          // else in the descriptor — which is exactly how a "measured" constraint turns out to be a
+          // measurement of the author's mistake.
+          const color4 = device.createTexture({ label: "color-4x", size: [64, 64], format, sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+          const depth1 = device.createTexture({ label: "depth-1x", size: [64, 64], format: "depth32float", sampleCount: 1, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+          const depth4 = device.createTexture({ label: "depth-4x", size: [64, 64], format: "depth32float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+
+          const runEmptyPass = async (color, depth) => {
+            const encoder = device.createCommandEncoder();
+            const pass = encoder.beginRenderPass({
+              colorAttachments: [{ view: color.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }],
+              depthStencilAttachment: { view: depth.createView(), depthLoadOp: "clear", depthStoreOp: "store", depthClearValue: 1.0 },
+            });
+            pass.end();
+            device.queue.submit([encoder.finish()]);
+          };
+
+          await measure(device, "mixed-sample-attachments", "the rule the patch layer cites: can a 4-sample colour attachment live next to a 1-sample depth attachment?", () =>
+            runEmptyPass(color4, depth1),
+          );
+          await measure(device, "matched-sample-attachments", "CONTROL for the measurement above: the same pass with a 4-sample depth attachment MUST be legal, otherwise that error is not attributable to the mismatch", () =>
+            runEmptyPass(color4, depth4),
+          );
+
+          // ---------------------------------------------------------------- M3: sampling multisampled depth
+          //
+          // Two arms, because they answer different questions and only the second one decides MSAA's fate:
+          //   - the naive attempt binds the 4-sample view to a `texture_depth_2d` binding;
+          //   - the interesting attempt binds it to `texture_depth_multisampled_2d` and does the resolve
+          //     **in the shader** (`textureLoad` per sample). If that is legal, a samplable 1-sample
+          //     depth texture can be produced from a multisampled pass without any hardware resolve —
+          //     and slice B would not have to sacrifice MSAA.
+          const samplable4x = device.createTexture({
+            label: "samplable-4x-depth",
+            size: [64, 64],
+            format: "depth32float",
+            sampleCount: 4,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+          });
+          await measure(device, "create-samplable-4x-depth", "does this Chrome even allow a 4-sample depth texture to carry TEXTURE_BINDING usage?", () => {
+            void samplable4x;
+          });
+          const color1 = device.createTexture({ label: "color-1x", size: [64, 64], format, sampleCount: 1, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+
+          const drawDepthSamplePass = async (fragmentCode) => {
+            const pipeline = device.createRenderPipeline({
+              layout: "auto",
+              vertex: { module: shader(device, VS_FULL, "vs"), entryPoint: "vs_main" },
+              fragment: { module: shader(device, fragmentCode, "fs"), entryPoint: "fs_main", targets: [{ format }] },
+              primitive: { topology: "triangle-list" },
+            });
+            const bindGroup = device.createBindGroup({
+              layout: pipeline.getBindGroupLayout(0),
+              entries: [{ binding: 0, resource: samplable4x.createView() }],
+            });
+            const encoder = device.createCommandEncoder();
+            const pass = encoder.beginRenderPass({
+              colorAttachments: [{ view: color1.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }],
+            });
+            pass.setPipeline(pipeline);
+            pass.setBindGroup(0, bindGroup);
+            pass.draw(3);
+            pass.end();
+            device.queue.submit([encoder.finish()]);
+          };
+
+          await measure(device, "sample-4x-depth-with-2d-binding", "the naive attempt: a 4-sample depth view bound to a plain `texture_depth_2d` binding", () =>
+            drawDepthSamplePass(FS_SAMPLE_DEPTH),
+          );
+
+          await measure(device, "sample-4x-depth-with-multisampled-binding", "the design-deciding attempt: `texture_depth_multisampled_2d` + textureLoad, i.e. resolving inside the shader", () =>
+            drawDepthSamplePass(FS_LOAD_MULTISAMPLED_DEPTH),
+          );
+
+          // ---------------------------------------------------------------- M4: hardware depth resolve
+          //
+          // An absent error is NOT evidence here. `GPURenderPassDepthStencilAttachment` is a WebIDL
+          // dictionary, so an unrecognised `resolveTarget` member is **silently ignored** — a descriptor
+          // that "passes validation" therefore proves nothing on its own.
+          //
+          // The discriminating form clears the multisampled depth to a known 0.5, resolves into a
+          // single-sampled `depth32float` target (a format F4 proved copyable), copies that target to a
+          // buffer and reads it back:
+          //   - values ≈ 0.5  → the resolve really happened;
+          //   - values ≈ 0    → the member was ignored (or never written), i.e. no resolve exists.
+          await measure(device, "depth-resolve-target", "does a multisampled depth attachment really resolve into a single-sampled depth texture (established by read-back, not by the absence of an error)?", async () => {
+            const DEPTH_RESOLVE_VALUE = 0.5;
+            const source = device.createTexture({ label: "depth-4x-resolve-src", size: [64, 64], format: "depth32float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+            const resolveTarget = device.createTexture({ label: "depth-resolve-target", size: [64, 64], format: "depth32float", sampleCount: 1, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+            const encoder = device.createCommandEncoder();
+            const pass = encoder.beginRenderPass({
+              colorAttachments: [{ view: color4.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }],
+              depthStencilAttachment: {
+                view: source.createView(),
+                depthLoadOp: "clear",
+                depthStoreOp: "store",
+                depthClearValue: DEPTH_RESOLVE_VALUE,
+                resolveTarget: resolveTarget.createView(),
+              },
+            });
+            pass.end();
+            const bytesPerRow = 256;
+            const buffer = device.createBuffer({ label: "depth-resolve-readback", size: bytesPerRow * 64, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+            encoder.copyTextureToBuffer({ texture: resolveTarget, aspect: "depth-only" }, { buffer, bytesPerRow, rowsPerImage: 64 }, [64, 64, 1]);
+            device.queue.submit([encoder.finish()]);
+            await buffer.mapAsync(GPUMapMode.READ);
+            const view = new DataView(buffer.getMappedRange().slice(0));
+            const samples = [];
+            for (let index = 0; index < 5; index += 1) samples.push(Number(view.getFloat32(index * bytesPerRow, true).toFixed(6)));
+            const resolved = samples.every((value) => Math.abs(value - DEPTH_RESOLVE_VALUE) < 1e-4);
+            buffer.unmap();
+            buffer.destroy();
+            source.destroy();
+            resolveTarget.destroy();
+            report.measurements.push({
+              name: "depth-resolve-readback-values",
+              why: "the read-back that makes the resolve question decidable: cleared depth was 0.5, so ≈0.5 means resolved and ≈0 means the resolveTarget member was ignored",
+              error: resolved ? null : `resolve target holds ${JSON.stringify(samples)} instead of ${DEPTH_RESOLVE_VALUE}`,
+              resolved,
+              samples,
+            });
+            if (!resolved) {
+              throw new Error(`depth resolve did not happen: target holds ${JSON.stringify(samples)}, expected ${DEPTH_RESOLVE_VALUE}`);
+            }
+          });
+
+          await measure(device, "copy-texture-4x-to-1x-depth", "a manual resolve: copyTextureToTexture from a multisampled depth texture into a single-sampled one", async () => {
+            const source = device.createTexture({ label: "depth-copy-src", size: [64, 64], format: "depth32float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+            const destination = device.createTexture({ label: "depth-copy-dst", size: [64, 64], format: "depth32float", sampleCount: 1, usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING });
+            const encoder = device.createCommandEncoder();
+            encoder.copyTextureToTexture({ texture: source, aspect: "depth-only" }, { texture: destination, aspect: "depth-only" }, [64, 64, 1]);
+            device.queue.submit([encoder.finish()]);
+          });
+
+          // ---------------------------------------------------------------- M5: depth aspect copy to buffer
+          // The only read-back route that needs no resolve. Measured per **format**, because the
+          // combined format's failure was already observed and MUST NOT be generalised to the others.
+          const copyDepthToBuffer = async (formatName, aspect) => {
+            const texture = device.createTexture({ label: `readback-${formatName}`, size: [64, 64], format: formatName, sampleCount: 1, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+            const bytesPerRow = 256;
+            const buffer = device.createBuffer({ label: "depth-readback", size: bytesPerRow * 64, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+            const encoder = device.createCommandEncoder();
+            encoder.copyTextureToBuffer({ texture, aspect }, { buffer, bytesPerRow, rowsPerImage: 64 }, [64, 64, 1]);
+            device.queue.submit([encoder.finish()]);
+            buffer.destroy();
+            texture.destroy();
+          };
+          for (const depthFormat of depthOnlyFormats) {
+            const aspect = depthFormat === "depth24plus-stencil8" ? "depth-only" : "depth-only";
+            await measure(device, `copy-${depthFormat}-depth-to-buffer`, `is the depth aspect of ${depthFormat} copyable on this Chrome? (the canvas texture of this format was already measured as NOT copyable — this A/B says whether that is a format rule or a texture rule)`, () =>
+              copyDepthToBuffer(depthFormat, aspect),
+            );
+          }
+
+          // ---------------------------------------------------------------- M6: shader-written depth
+          // Turns the MSAA trade-off into a real question: if a full-screen quad can write depth into a
+          // multisampled pass, a depth *copy* needs no resolve at all — and MSAA stays on.
+          await measure(device, "shader-writes-depth-into-4x-pass", "can a fragment shader write frag_depth inside a 4-sample pass (the mechanism a resolve-free depth copy would use)?", async () => {
+            const pipeline = device.createRenderPipeline({
+              layout: "auto",
+              vertex: { module: shader(device, VS_FULL, "vs"), entryPoint: "vs_main" },
+              fragment: { module: shader(device, FS_WRITE_DEPTH, "fs"), entryPoint: "fs_main", targets: [{ format }] },
+              primitive: { topology: "triangle-list" },
+              depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "always" },
+              // Same reason as the sampling pipeline above: declare the pass's sample count so a mismatch
+              // cannot masquerade as "a shader may not write depth".
+              multisample: { count: 4 },
+            });
+            const encoder = device.createCommandEncoder();
+            const pass = encoder.beginRenderPass({
+              colorAttachments: [{ view: color4.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }],
+              depthStencilAttachment: { view: depth4.createView(), depthLoadOp: "load", depthStoreOp: "store" },
+            });
+            pass.setPipeline(pipeline);
+            pass.draw(3);
+            pass.end();
+            device.queue.submit([encoder.finish()]);
+          });
+
+          report.notes.push(
+            "LEGAL/rejected is decided by the device's own validation scope; every rejected row carries the verbatim message.",
+          );
+        } catch (error) {
+          report.errors.push(`${error?.name ?? "Error"}: ${error?.message ?? String(error)}`);
+        } finally {
+          report.ready = true;
+        }
+      }
+
+      await main();
+    </script>
+  </body>
+</html>

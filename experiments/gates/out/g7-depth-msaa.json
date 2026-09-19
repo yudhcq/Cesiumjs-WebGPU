@@ -1,0 +1,178 @@
+{
+  "gate": "g7-depth-msaa",
+  "kind": "evidence",
+  "title": "切片 B 设计空间实测：离屏深度纹理 × MSAA 的合法性（Chrome 153）",
+  "ranAt": "2026-09-19T02:37:21.325Z",
+  "runner": "experiments/gates/g7-slice-b/run-gpu.mjs",
+  "page": "experiments/gates/g7-slice-b/depth-msaa.html",
+  "browserVersion": "153.0.8010.36",
+  "environment": {
+    "adapterInfo": {},
+    "preferredFormat": "bgra8unorm",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "maxColorAttachmentBytesPerSample": 128
+  },
+  "measurements": [
+    {
+      "name": "mixed-sample-attachments",
+      "why": "the rule the patch layer cites: can a 4-sample colour attachment live next to a 1-sample depth attachment?",
+      "error": "Error: The depth stencil attachment [TextureView of Texture \"depth-1x\"] sample count (1) does not match the sample count of the other attachments (4).\n - While validating depthStencilAttachment.\n - While encoding [CommandEncoder (unlabeled)].BeginRenderPass([RenderPassDescriptor]).\n - While finishing [CommandEncoder (unlabeled)].\n",
+      "thrown": null,
+      "scoped": "Error: The depth stencil attachment [TextureView of Texture \"depth-1x\"] sample count (1) does not match the sample count of the other attachments (4).\n - While validating depthStencilAttachment.\n - While encoding [CommandEncoder (unlabeled)].BeginRenderPass([RenderPassDescriptor]).\n - While finishing [CommandEncoder (unlabeled)].\n"
+    },
+    {
+      "name": "matched-sample-attachments",
+      "why": "CONTROL for the measurement above: the same pass with a 4-sample depth attachment MUST be legal, otherwise that error is not attributable to the mismatch",
+      "error": null,
+      "thrown": null,
+      "scoped": null
+    },
+    {
+      "name": "create-samplable-4x-depth",
+      "why": "does this Chrome even allow a 4-sample depth texture to carry TEXTURE_BINDING usage?",
+      "error": null,
+      "thrown": null,
+      "scoped": null
+    },
+    {
+      "name": "sample-4x-depth-with-2d-binding",
+      "why": "the naive attempt: a 4-sample depth view bound to a plain `texture_depth_2d` binding",
+      "error": "Error: Sample count (4) of [Texture \"samplable-4x-depth\"] doesn't match expectation (multisampled: 0).\n - While validating entries[0] against { binding: 0, visibility: ShaderStage::Fragment, texture: {sampleType: TextureSampleType::Depth, viewDimension: TextureViewDimension::e2D, multisampled: 0} }.\n - While validating [BindGroupDescriptor] against [BindGroupLayout (unlabeled)]\n - While calling [Device].CreateBindGroup([BindGroupDescriptor]).\n",
+      "thrown": null,
+      "scoped": "Error: Sample count (4) of [Texture \"samplable-4x-depth\"] doesn't match expectation (multisampled: 0).\n - While validating entries[0] against { binding: 0, visibility: ShaderStage::Fragment, texture: {sampleType: TextureSampleType::Depth, viewDimension: TextureViewDimension::e2D, multisampled: 0} }.\n - While validating [BindGroupDescriptor] against [BindGroupLayout (unlabeled)]\n - While calling [Device].CreateBindGroup([BindGroupDescriptor]).\n"
+    },
+    {
+      "name": "sample-4x-depth-with-multisampled-binding",
+      "why": "the design-deciding attempt: `texture_depth_multisampled_2d` + textureLoad, i.e. resolving inside the shader",
+      "error": null,
+      "thrown": null,
+      "scoped": null
+    },
+    {
+      "name": "depth-resolve-readback-values",
+      "why": "the read-back that makes the resolve question decidable: cleared depth was 0.5, so ≈0.5 means resolved and ≈0 means the resolveTarget member was ignored",
+      "error": "resolve target holds [0,0,0,0,0] instead of 0.5",
+      "resolved": false,
+      "samples": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "depth-resolve-target",
+      "why": "does a multisampled depth attachment really resolve into a single-sampled depth texture (established by read-back, not by the absence of an error)?",
+      "error": "Error: depth resolve did not happen: target holds [0,0,0,0,0], expected 0.5",
+      "thrown": "Error: depth resolve did not happen: target holds [0,0,0,0,0], expected 0.5",
+      "scoped": null
+    },
+    {
+      "name": "copy-texture-4x-to-1x-depth",
+      "why": "a manual resolve: copyTextureToTexture from a multisampled depth texture into a single-sampled one",
+      "error": "Error: Source [Texture \"depth-copy-src\"] sample count (4) and destination [Texture \"depth-copy-dst\"] sample count (1) does not match.\n - While [Failed to format error message: \"encoding %s.CopyTextureToTexture(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n",
+      "thrown": null,
+      "scoped": "Error: Source [Texture \"depth-copy-src\"] sample count (4) and destination [Texture \"depth-copy-dst\"] sample count (1) does not match.\n - While [Failed to format error message: \"encoding %s.CopyTextureToTexture(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n"
+    },
+    {
+      "name": "copy-depth32float-depth-to-buffer",
+      "why": "is the depth aspect of depth32float copyable on this Chrome? (the canvas texture of this format was already measured as NOT copyable — this A/B says whether that is a format rule or a texture rule)",
+      "error": null,
+      "thrown": null,
+      "scoped": null
+    },
+    {
+      "name": "copy-depth24plus-depth-to-buffer",
+      "why": "is the depth aspect of depth24plus copyable on this Chrome? (the canvas texture of this format was already measured as NOT copyable — this A/B says whether that is a format rule or a texture rule)",
+      "error": "Error: The depth aspect of [Texture \"readback-depth24plus\"] format TextureFormat::Depth24Plus cannot be selected in a texture to buffer copy.\n - While [Failed to format error message: \"encoding %s.CopyTextureToBuffer(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n",
+      "thrown": null,
+      "scoped": "Error: The depth aspect of [Texture \"readback-depth24plus\"] format TextureFormat::Depth24Plus cannot be selected in a texture to buffer copy.\n - While [Failed to format error message: \"encoding %s.CopyTextureToBuffer(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n"
+    },
+    {
+      "name": "copy-depth16unorm-depth-to-buffer",
+      "why": "is the depth aspect of depth16unorm copyable on this Chrome? (the canvas texture of this format was already measured as NOT copyable — this A/B says whether that is a format rule or a texture rule)",
+      "error": null,
+      "thrown": null,
+      "scoped": null
+    },
+    {
+      "name": "copy-depth24plus-stencil8-depth-to-buffer",
+      "why": "is the depth aspect of depth24plus-stencil8 copyable on this Chrome? (the canvas texture of this format was already measured as NOT copyable — this A/B says whether that is a format rule or a texture rule)",
+      "error": "Error: The depth aspect of [Texture \"readback-depth24plus-stencil8\"] format TextureFormat::Depth24PlusStencil8 cannot be selected in a texture to buffer copy.\n - While [Failed to format error message: \"encoding %s.CopyTextureToBuffer(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n",
+      "thrown": null,
+      "scoped": "Error: The depth aspect of [Texture \"readback-depth24plus-stencil8\"] format TextureFormat::Depth24PlusStencil8 cannot be selected in a texture to buffer copy.\n - While [Failed to format error message: \"encoding %s.CopyTextureToBuffer(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n"
+    },
+    {
+      "name": "shader-writes-depth-into-4x-pass",
+      "why": "can a fragment shader write frag_depth inside a 4-sample pass (the mechanism a resolve-free depth copy would use)?",
+      "error": null,
+      "thrown": null,
+      "scoped": null
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "statement": "a render pass MUST use one sample count for all its attachments",
+      "established": true,
+      "evidence": {
+        "rejected": "Error: The depth stencil attachment [TextureView of Texture \"depth-1x\"] sample count (1) does not match the sample count of the other attachments (4).\n - While validating depthStencilAttachment.\n - While encoding [CommandEncoder (unlabeled)].BeginRenderPass([RenderPassDescriptor]).\n - While finishing [CommandEncoder (unlabeled)].\n",
+        "control": null
+      },
+      "consequence": "the WebGL idiom (multisampled depth attachment + single-sampled depth texture) cannot be built as-is"
+    },
+    {
+      "id": "F2",
+      "statement": "this Chrome has no usable depth resolve: neither a pass `resolveTarget` that actually writes, nor a manual multisample depth copy",
+      "established": true,
+      "evidence": {
+        "resolveTargetReadback": "resolve target holds [0,0,0,0,0] instead of 0.5",
+        "copyTextureToTexture": "Error: Source [Texture \"depth-copy-src\"] sample count (4) and destination [Texture \"depth-copy-dst\"] sample count (1) does not match.\n - While [Failed to format error message: \"encoding %s.CopyTextureToTexture(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n"
+      },
+      "consequence": "a samplable depth texture cannot be produced from a multisampled pass on this platform"
+    },
+    {
+      "id": "F3",
+      "statement": "a fragment shader can write depth inside a multisampled pass",
+      "established": true,
+      "evidence": {
+        "error": null
+      },
+      "consequence": "a resolve-free depth copy (full-screen quad writing sampled depth) remains a legal design, so MSAA is not automatically lost"
+    },
+    {
+      "id": "F5",
+      "statement": "a multisampled depth texture is readable through `texture_depth_multisampled_2d` + textureLoad, so a depth resolve can be written in a shader",
+      "established": true,
+      "evidence": {
+        "plainDepth2dBinding": "Error: Sample count (4) of [Texture \"samplable-4x-depth\"] doesn't match expectation (multisampled: 0).\n - While validating entries[0] against { binding: 0, visibility: ShaderStage::Fragment, texture: {sampleType: TextureSampleType::Depth, viewDimension: TextureViewDimension::e2D, multisampled: 0} }.\n - While validating [BindGroupDescriptor] against [BindGroupLayout (unlabeled)]\n - While calling [Device].CreateBindGroup([BindGroupDescriptor]).\n",
+        "multisampledDepthBinding": null
+      },
+      "consequence": "MSAA can be kept: resolve depth in a full-screen pass into a single-sampled depth32float texture"
+    },
+    {
+      "id": "F4",
+      "statement": "the copyability of a depth aspect is a property of the **format**, not of the canvas texture",
+      "established": true,
+      "evidence": {
+        "depth32float": null,
+        "depth24plus": "Error: The depth aspect of [Texture \"readback-depth24plus\"] format TextureFormat::Depth24Plus cannot be selected in a texture to buffer copy.\n - While [Failed to format error message: \"encoding %s.CopyTextureToBuffer(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n",
+        "depth16unorm": null,
+        "depth24plus-stencil8": "Error: The depth aspect of [Texture \"readback-depth24plus-stencil8\"] format TextureFormat::Depth24PlusStencil8 cannot be selected in a texture to buffer copy.\n - While [Failed to format error message: \"encoding %s.CopyTextureToBuffer(%s, %s, %s).\"].\n - While finishing [CommandEncoder (unlabeled)].\n"
+      },
+      "consequence": "depth readback/copy is possible for depth32float, depth16unorm; slice B MUST use one of those formats for any depth texture that has to leave the pass"
+    }
+  ],
+  "copyableDepthFormats": [
+    "depth32float",
+    "depth16unorm"
+  ],
+  "msaaTradeOffIsReal": false,
+  "recommendation": "slice B can keep MSAA: produce the single-sampled depth texture with a full-screen depth pass (shader-written depth and/or an in-shader resolve of the multisampled depth), then let GlobeDepth consume it",
+  "missingMeasurements": [],
+  "runtimeError": null,
+  "pageErrors": [],
+  "reportedErrors": [],
+  "passed": true
+}
