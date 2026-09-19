@@ -59,4 +59,21 @@
 
 工作区 `E:\work\CesiumjsWebGpu`（git，分支 `main`）；脚本 `.specify/scripts/powershell/*.ps1`；
 `specify` 在 PATH（1.0.8）；`.specify/feature.json` 记录当前 feature（本机状态，已 gitignore）。
-自检：`specify integration status`、`git status`。
+自检：`specify integration status`、`git status`。测试环境：Chrome 153 + RTX 4080 SUPER，
+headless 下零参数即拿到硬件 WebGPU 适配器；Node 22；单测必须用
+`node --test "tests/unit/**/*.test.mjs"`（`node --test tests/unit` 裸目录在 Node 22.20 不可用）。
+
+## 7. 并行与共享工作区（W5 起的硬规则）
+
+- **同一时刻只允许一个"改产品代码"的代理在飞**：凡会改 `packages/cesium-webgpu/src/**`
+  或 `backend-webgpu/**` 的任务 MUST 串行；只写测试文件的代理可以并行。
+  原因：`tests/contract/page/entry.js` 把 `src/index.ts` 编进契约 bundle，于是**任何** `src/**` 的
+  在飞状态（哪怕只是暂时的 TS 错误）都会让**所有**契约套件构建失败，白白烧掉其他代理的预算。
+- **套件执行天然串行**：`tests/support/backend-runner.mjs` 用 `tests/support/suite-lock.mjs` 做跨进程锁
+  （同一台机器同一时刻只跑一个套件）；等锁不是故障。`SUITE_LOCK_WAIT_MS` / `SUITE_LOCK_STALE_MS` 可调。
+- **一场景一文件**：页面侧场景放 `tests/contract/page/scenarios/<scenario>.js`，default-export
+  `(bundle, canvas, ctx)`，**不得 import 任何东西**（import `probe.js` 会重跑它的 `main()`）；
+  helper 由 `ctx` 显式传入，套件→场景映射在 `tests/support/contract-harness.mjs` 的 `SUITE_SCENARIOS`。
+- **别人的在飞状态导致的失败**：不要改别人的文件、不要放宽自己的断言；等 60–90 s 原样重试（≤3 次），
+  并把"该臂未取得独立证据 + 原因"如实写进汇报，**不得**标成通过。
+

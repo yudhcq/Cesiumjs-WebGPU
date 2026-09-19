@@ -12,6 +12,11 @@
  *   node tests/support/backend-runner.mjs --backend=webgpu --suite=contract:terrain
  *   node tests/support/backend-runner.mjs --backend=webgl2 --suite-file=tests/contract/x.spec.mjs
  *
+ * One run at a time **per machine**: the runner takes `tests/support/suite-lock.mjs` around its suite
+ * loop. The invariant above is about a single run, but two runs sharing one GPU distort exactly what
+ * the interaction and benchmark suites measure, and both would rebuild the same bundle path — so
+ * concurrency is arbitrated rather than merely discouraged.
+ *
  * Exit codes: 0 pass, 1 suite failure, 2 invalid invocation / missing suite file.
  */
 import { spawnSync } from "node:child_process";
@@ -19,8 +24,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { acquireSuiteLock } from "./suite-lock.mjs";
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, "..", "..");
+
+/** Where the suite lock lives; inside `artifacts/` because it is runner state, not a source file. */
+export function suiteLockPath(root = REPO_ROOT) {
+  return path.join(root, "artifacts", ".suite-lock.json");
+}
 
 export const BACKENDS = ["webgpu", "webgl2"];
 
@@ -176,9 +188,18 @@ function main(argv) {
     console.log(`  - ${suiteFile}`);
   }
   let status = 0;
-  for (const suiteFile of descriptor.suiteFiles) {
-    const code = runOneSuite(descriptor, suiteFile, parsed.passthrough);
-    if (code !== 0 && status === 0) status = code;
+  const lock = acquireSuiteLock({
+    file: suiteLockPath(),
+    label: `${descriptor.backend} ${descriptor.suiteFiles.join(" ")}`,
+  });
+  try {
+    if (lock.waitedMs > 0) console.log(`backend-runner: waited ${lock.waitedMs} ms for another suite run to finish`);
+    for (const suiteFile of descriptor.suiteFiles) {
+      const code = runOneSuite(descriptor, suiteFile, parsed.passthrough);
+      if (code !== 0 && status === 0) status = code;
+    }
+  } finally {
+    lock.release();
   }
   return status;
 }
