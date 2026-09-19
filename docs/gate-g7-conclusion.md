@@ -6,8 +6,15 @@
 
 ```text
 node experiments/gates/g7-slice-b/run-gpu.mjs      # 实测（真实设备，headless，零浏览器参数）
-node tools/scripts/check-gate.mjs --gate g7        # 判定器校验（g7 不属 Phase-2 必查集合）
+node tools/scripts/check-gate.mjs --all            # 判定器校验：6/6（本证据文件按 slug 被排除在"判定发现"之外）
 ```
+
+**校验命令的准确口径（勘误）**：本文件原先写的 `check-gate.mjs --gate g7` **不成立**——它现在必然 FAIL
+（`experiments/gates/out/g7.json` 尚不存在，因为 G-7 的**判定**属 T127）。同理
+`--gate g7-depth-msaa` 也会 FAIL：`check-gate.mjs` 按 `JUDGEMENT_FILE` 正则发现判定文档，slug 证据文件
+被排除在**发现**之外；一旦被**显式点名**，它就会被当成判定文档校验，因缺 `verdict`/`notes` 而报错。
+**这两条都不是缺陷**，而是"证据 ≠ 判定"的正确表现：证据文件不能替代 T127 的 G-7 判定
+（本文件的立场正是不宣告 G-7 通过）。正确的通用校验是 `--all`（6/6，exit 0）。
 
 > **本文件不宣告 G-7 通过。** G-7 的**判定**属于 tasks.md **T127**，须在切片 B（T097/T098a/T098b）落地、
 > 并消费本文件的实测结论之后由 T127 写入。此处只记录"切片 B 能怎么建"这一件事的**实测**答案，
